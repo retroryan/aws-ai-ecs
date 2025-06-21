@@ -1,0 +1,179 @@
+AWSTemplateFormatVersion: "2010-09-09"
+Description: Python Client-Server Template - ECS Services
+
+Parameters:
+  BaseStackName:
+    Type: String
+    Default: python-agent-ecs-base
+    Description: Name of the base infrastructure stack
+  
+  ServerImageTag:
+    Type: String
+    Default: latest
+    Description: Docker image tag for the Python server
+  
+  ClientImageTag:
+    Type: String
+    Default: latest
+    Description: Docker image tag for the Python client
+  
+  ClientStartupDelay:
+    Type: Number
+    Default: 1
+    Description: Initial desired count for client service
+    MinValue: 0
+    MaxValue: 3
+
+Resources:
+  ClientLogGroup:
+    Type: AWS::Logs::LogGroup
+    Properties:
+      LogGroupName: /ecs/python-agent-ecs-client
+      RetentionInDays: 7
+
+  ServerLogGroup:
+    Type: AWS::Logs::LogGroup
+    Properties:
+      LogGroupName: /ecs/python-agent-ecs-server
+      RetentionInDays: 7
+
+  PythonServerTaskDefinition:
+    Type: AWS::ECS::TaskDefinition
+    Properties:
+      Family: !Sub ${AWS::StackName}-server-task
+      Cpu: '256'
+      Memory: '512'
+      NetworkMode: awsvpc
+      RequiresCompatibilities:
+        - FARGATE
+      ExecutionRoleArn: 
+        Fn::ImportValue: !Sub ${BaseStackName}-server-exec-role
+      ContainerDefinitions:
+        - Name: python-agent-ecs-server
+          Image: !Sub ${AWS::AccountId}.dkr.ecr.${AWS::Region}.amazonaws.com/python-agent-ecs-server:${ServerImageTag}
+          PortMappings:
+            - Name: http
+              ContainerPort: 8081
+              Protocol: tcp
+          LogConfiguration:
+            LogDriver: awslogs
+            Options:
+              awslogs-group: !Ref ServerLogGroup
+              awslogs-region: !Ref AWS::Region
+              awslogs-stream-prefix: ecs
+
+  PythonClientTaskDefinition:
+    Type: AWS::ECS::TaskDefinition
+    Properties:
+      Family: !Sub ${AWS::StackName}-client-task
+      Cpu: '256'
+      Memory: '512'
+      NetworkMode: awsvpc
+      RequiresCompatibilities:
+        - FARGATE
+      ExecutionRoleArn: 
+        Fn::ImportValue: !Sub ${BaseStackName}-client-exec-role
+      TaskRoleArn: 
+        Fn::ImportValue: !Sub ${BaseStackName}-task-role
+      ContainerDefinitions:
+        - Name: python-agent-ecs-client
+          Image: !Sub ${AWS::AccountId}.dkr.ecr.${AWS::Region}.amazonaws.com/python-agent-ecs-client:${ClientImageTag}
+          PortMappings:
+            - ContainerPort: 8080
+          Environment:
+            - Name: SERVER_URL
+              Value: http://python-server.python-agent-ecs-base:8081
+          LogConfiguration:
+            LogDriver: awslogs
+            Options:
+              awslogs-group: !Ref ClientLogGroup
+              awslogs-region: !Ref AWS::Region
+              awslogs-stream-prefix: ecs
+
+  PythonServerECSService:
+    Type: AWS::ECS::Service
+    Properties:
+      ServiceName: !Sub ${AWS::StackName}-server
+      Cluster: 
+        Fn::ImportValue: !Sub ${BaseStackName}-cluster-name
+      TaskDefinition: !Ref PythonServerTaskDefinition
+      DesiredCount: 1
+      LaunchType: FARGATE
+      ServiceConnectConfiguration:
+        Enabled: true
+        Namespace: 
+          Fn::ImportValue: !Sub ${BaseStackName}-namespace-arn
+        Services:
+          - PortName: http
+            DiscoveryName: python-server
+            ClientAliases:
+              - Port: 8081
+      NetworkConfiguration:
+        AwsvpcConfiguration:
+          AssignPublicIp: ENABLED
+          SecurityGroups:
+            - Fn::ImportValue: !Sub ${BaseStackName}-server-sg
+          Subnets:
+            - Fn::ImportValue: !Sub ${BaseStackName}-subnet1-id
+            - Fn::ImportValue: !Sub ${BaseStackName}-subnet2-id
+
+  PythonClientECSService:
+    Type: AWS::ECS::Service
+    DependsOn: PythonServerECSService
+    Properties:
+      ServiceName: !Sub ${AWS::StackName}-client
+      Cluster: 
+        Fn::ImportValue: !Sub ${BaseStackName}-cluster-name
+      TaskDefinition: !Ref PythonClientTaskDefinition
+      DesiredCount: !Ref ClientStartupDelay
+      LaunchType: FARGATE
+      ServiceConnectConfiguration:
+        Enabled: true
+        Namespace: 
+          Fn::ImportValue: !Sub ${BaseStackName}-namespace-arn
+      NetworkConfiguration:
+        AwsvpcConfiguration:
+          AssignPublicIp: ENABLED
+          SecurityGroups:
+            - Fn::ImportValue: !Sub ${BaseStackName}-client-sg
+          Subnets:
+            - Fn::ImportValue: !Sub ${BaseStackName}-subnet1-id
+            - Fn::ImportValue: !Sub ${BaseStackName}-subnet2-id
+      LoadBalancers:
+        - ContainerName: "python-agent-ecs-client"
+          ContainerPort: 8080
+          LoadBalancerName: !Ref AWS::NoValue
+          TargetGroupArn: 
+            Fn::ImportValue: !Sub ${BaseStackName}-target-group
+
+Outputs:
+  ServerServiceArn:
+    Description: Python Server Service ARN
+    Value: !Ref PythonServerECSService
+
+  ClientServiceArn:
+    Description: Python Client Service ARN
+    Value: !Ref PythonClientECSService
+
+  ServerServiceName:
+    Description: Python Server Service Name
+    Value: !GetAtt PythonServerECSService.Name
+
+  ClientServiceName:
+    Description: Python Client Service Name
+    Value: !GetAtt PythonClientECSService.Name
+
+  ServerLogGroup:
+    Description: Server CloudWatch Log Group
+    Value: !Ref ServerLogGroup
+
+  ClientLogGroup:
+    Description: Client CloudWatch Log Group
+    Value: !Ref ClientLogGroup
+
+  LoadBalancerURL:
+    Description: Load Balancer URL
+    Value: !Sub 
+      - "http://${LoadBalancerDNS}"
+      - LoadBalancerDNS: 
+          Fn::ImportValue: !Sub ${BaseStackName}-lb-dns

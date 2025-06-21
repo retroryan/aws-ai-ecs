@@ -1,0 +1,18 @@
+POST http://localhost:8080/inquire
+Content-Type: application/json
+
+{"question": "Get employees that have skills related to Java, but not Java"}
+
+###
+
+POST http://localhost:8080/inquire
+Content-Type: application/json
+
+{"question": "what skills do our employees have?"}
+
+###
+
+POST http://localhost:8080/inquire
+Content-Type: application/json
+
+{"question": "list our employees with React skills"}
