@@ -326,6 +326,11 @@ All local development scripts are in the `scripts/` directory:
 
 - **`stop_servers.sh`** - Stop local MCP servers
 
+- **`run_tests.sh`** - Run the test suite
+  - Runs all unit and integration tests
+  - Tests MCP servers, agent functionality, and coordinate handling
+  - Optional `--with-docker` flag for Docker integration tests
+
 ### Environment Configuration
 
 Local development requires AWS credentials for Bedrock access:
@@ -378,6 +383,33 @@ export BEDROCK_MODEL_ID="meta.llama3-70b-instruct-v1:0"
 ```
 
 **Note:** The application will exit with an error if `BEDROCK_MODEL_ID` is not set.
+
+### Running Tests
+
+The project includes a comprehensive test suite covering MCP servers, agent functionality, and coordinate handling:
+
+```bash
+# Run all tests (requires MCP servers to be started)
+python tests/run_all_tests.py
+
+# Or use the convenience script
+./scripts/run_tests.sh
+
+# Run with Docker integration tests (requires Docker running)
+./scripts/run_tests.sh --with-docker
+
+# Run individual test suites
+python tests/test_mcp_servers.py      # Test MCP server functionality
+python tests/test_mcp_agent.py        # Test agent and LangGraph integration
+python tests/test_coordinates_consolidated.py  # Test coordinate handling
+python tests/test_structured_output_demo.py    # Demo structured outputs
+```
+
+Test suite includes:
+- **MCP Server Tests**: JSON response validation, error handling, data quality
+- **Agent Tests**: Initialization, query processing, memory, structured outputs
+- **Coordinate Tests**: Direct coordinates vs geocoding, performance comparison
+- **Integration Tests**: End-to-end testing with all components running
 
 ## AWS Setup and Configuration
 
