@@ -1,11 +1,11 @@
 #!/bin/bash
 
-# Initial setup script for AWS Bedrock configuration
+# Initial setup script for local development
 
-echo "Setting up AWS Bedrock configuration..."
+echo "Setting up local development environment..."
 
-# Run AWS setup
-./scripts/aws-setup.sh
+# Run AWS setup from infra directory
+./infra/aws-setup.sh
 
 # Copy bedrock.env to server/.env if it doesn't exist
 if [ -f bedrock.env ] && [ ! -f server/.env ]; then

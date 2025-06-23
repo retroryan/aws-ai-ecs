@@ -279,3 +279,5 @@ credentials/
 *.key
 *.cert
 *.crt
+
+bedrock.env

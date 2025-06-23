@@ -15,9 +15,8 @@ source "${SCRIPT_DIR}/ecs-utils.sh"
 export_common_env
 
 # Configuration
-ENVIRONMENT=${ENVIRONMENT:-dev}
-BASE_STACK_NAME="agriculture-agent-base-${ENVIRONMENT}"
-SERVICES_STACK_NAME="agriculture-agent-services-${ENVIRONMENT}"
+BASE_STACK_NAME="agriculture-agent-base"
+SERVICES_STACK_NAME="agriculture-agent-services"
 REGION="${AWS_REGION:-us-east-1}"
 
 # Bedrock configuration
@@ -50,7 +49,7 @@ deploy_services() {
     rain deploy "${SCRIPT_DIR}/services.cfn" $SERVICES_STACK_NAME \
         --region $REGION \
         --yes \
-        --params BaseStackName=$BASE_STACK_NAME,Environment=$ENVIRONMENT,BedrockModelId=$BEDROCK_MODEL_ID,BedrockRegion=$BEDROCK_REGION,BedrockTemperature=$BEDROCK_TEMPERATURE,LogLevel=$LOG_LEVEL
+        --params BaseStackName=$BASE_STACK_NAME,BedrockModelId=$BEDROCK_MODEL_ID,BedrockRegion=$BEDROCK_REGION,BedrockTemperature=$BEDROCK_TEMPERATURE,LogLevel=$LOG_LEVEL
     
     log_info "Services deployed successfully!"
 }

@@ -7,11 +7,6 @@ Parameters:
     Default: agriculture-agent-base
     Description: Name of the base infrastructure stack
   
-  Environment:
-    Type: String
-    Default: dev
-    Description: Environment name
-    AllowedValues: [dev, staging, prod]
   
   MainImageTag:
     Type: String

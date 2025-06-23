@@ -179,7 +179,7 @@ This shows:
 After deployment, the application URL will be displayed:
 
 ```
-Application URL: http://agriculture-agent-dev-123456789.us-east-1.elb.amazonaws.com
+Application URL: http://agriculture-agent-123456789.us-east-1.elb.amazonaws.com
 ```
 
 Test endpoints:
@@ -302,11 +302,11 @@ Container Insights is enabled by default. Access via:
 
 ```bash
 # List running tasks
-aws ecs list-tasks --cluster agriculture-agent-dev
+aws ecs list-tasks --cluster agriculture-agent
 
 # Describe a service
 aws ecs describe-services \
-  --cluster agriculture-agent-dev \
+  --cluster agriculture-agent \
   --services agriculture-agent-main
 
 # Check task definition

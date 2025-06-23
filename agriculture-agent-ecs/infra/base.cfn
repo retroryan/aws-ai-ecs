@@ -73,7 +73,7 @@ Resources:
   ECSCluster:
     Type: AWS::ECS::Cluster
     Properties:
-      ClusterName: !Sub agriculture-agent-dev
+      ClusterName: agriculture-agent
       ClusterSettings:
         - Name: containerInsights
           Value: enabled
@@ -90,7 +90,7 @@ Resources:
   TaskExecutionRole:
     Type: AWS::IAM::Role
     Properties:
-      RoleName: !Sub agriculture-agent-dev-execution-role
+      RoleName: agriculture-agent-execution-role
       AssumeRolePolicyDocument:
         Version: "2012-10-17"
         Statement:
@@ -116,7 +116,7 @@ Resources:
   TaskRole:
     Type: AWS::IAM::Role
     Properties:
-      RoleName: !Sub agriculture-agent-dev-task-role
+      RoleName: agriculture-agent-task-role
       AssumeRolePolicyDocument:
         Version: "2012-10-17"
         Statement:
@@ -149,7 +149,7 @@ Resources:
   ALBSecurityGroup:
     Type: AWS::EC2::SecurityGroup
     Properties:
-      GroupName: !Sub agriculture-agent-dev-alb-sg
+      GroupName: agriculture-agent-alb-sg
       GroupDescription: Security group for Application Load Balancer
       VpcId: !Ref ApplicationVPC
       SecurityGroupIngress:
@@ -163,12 +163,12 @@ Resources:
           CidrIp: 0.0.0.0/0
       Tags:
         - Key: Name
-          Value: !Sub agriculture-agent-dev-alb-sg
+          Value: agriculture-agent-alb-sg
 
   ServiceSecurityGroup:
     Type: AWS::EC2::SecurityGroup
     Properties:
-      GroupName: !Sub agriculture-agent-dev-service-sg
+      GroupName: agriculture-agent-service-sg
       GroupDescription: Security group for ECS services
       VpcId: !Ref ApplicationVPC
       SecurityGroupIngress:
@@ -184,13 +184,13 @@ Resources:
           CidrIp: 10.0.0.0/16
       Tags:
         - Key: Name
-          Value: !Sub agriculture-agent-dev-service-sg
+          Value: agriculture-agent-service-sg
 
   # Application Load Balancer
   ApplicationLoadBalancer:
     Type: AWS::ElasticLoadBalancingV2::LoadBalancer
     Properties:
-      Name: !Sub agriculture-agent-dev
+      Name: agriculture-agent
       Type: application
       Scheme: internet-facing
       SecurityGroups:
@@ -200,12 +200,12 @@ Resources:
         - !Ref PrivateSubnet2
       Tags:
         - Key: Name
-          Value: !Sub agriculture-agent-dev-alb
+          Value: agriculture-agent-alb
 
   ALBTargetGroup:
     Type: AWS::ElasticLoadBalancingV2::TargetGroup
     Properties:
-      Name: !Sub agriculture-agent-dev
+      Name: agriculture-agent
       Port: 8000
       Protocol: HTTP
       VpcId: !Ref ApplicationVPC
