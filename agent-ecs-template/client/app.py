@@ -45,15 +45,24 @@ def health():
     
     return jsonify(health_status), 200
 
-@app.route('/inquire', methods=['POST'])
-def inquire():
-    """Forward requests to the server"""
+@app.route('/employees', methods=['GET'])
+def get_employees():
+    """Get all knowledge specialists from the server"""
+    try:
+        response = requests.get(f"{SERVER_URL}/api/employees")
+        return jsonify(response.json()), response.status_code
+    except Exception as e:
+        return jsonify({"error": str(e)}), 500
+
+@app.route('/ask/<employee_id>', methods=['POST'])
+def ask_employee(employee_id):
+    """Ask a specific employee a question"""
     try:
         # Get the request data
         data = request.get_json()
         
         # Forward to server
-        response = requests.post(f"{SERVER_URL}/api/process", json=data)
+        response = requests.post(f"{SERVER_URL}/api/employee/{employee_id}/ask", json=data)
         
         # Return server response
         return jsonify(response.json()), response.status_code
@@ -64,7 +73,7 @@ def inquire():
 def home():
     return jsonify({
         "service": "client",
-        "endpoints": ["/health", "/inquire"],
+        "endpoints": ["/health", "/employees", "/ask/{employee_id}"],
         "server_url": SERVER_URL
     }), 200
 

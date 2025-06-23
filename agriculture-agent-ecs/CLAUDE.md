@@ -1,6 +1,6 @@
-# LangGraph + FastMCP Weather Agent Demo
+# LangGraph + FastMCP Weather Agent Demo (Model-Agnostic with AWS Bedrock)
 
-This project demonstrates how to build an AI agent system using LangGraph for orchestration and FastMCP for distributed tool servers. It showcases a weather and agricultural data agent that can answer questions about weather conditions, forecasts, and agricultural recommendations.
+This project demonstrates how to build a model-agnostic AI agent system using LangGraph for orchestration and FastMCP for distributed tool servers. It showcases a weather and agricultural data agent that can answer questions about weather conditions, forecasts, and agricultural recommendations using any AWS Bedrock foundation model.
 
 ## Architecture Overview
 
@@ -11,12 +11,19 @@ This project demonstrates how to build an AI agent system using LangGraph for or
   - Conversation memory with checkpointing
   - Structured output transformation
   - Multi-turn conversation support
+  - Model-agnostic design via `init_chat_model`
 
 - **FastMCP**: Implements Model Context Protocol servers with:
   - HTTP-based tool serving
   - Async request handling
   - JSON-RPC communication
   - Easy tool discovery and registration
+
+- **AWS Bedrock**: Provides access to foundation models with:
+  - Unified API through Converse interface
+  - Multiple model options (Claude, Llama, Cohere, etc.)
+  - Consistent tool calling across models
+  - Cost-effective scalability
 
 ### System Components
 
@@ -51,7 +58,8 @@ This project demonstrates how to build an AI agent system using LangGraph for or
 
 ### Prerequisites
 - Python 3.11+
-- Anthropic API key (for the LangGraph agent)
+- AWS account with Bedrock access enabled
+- AWS credentials configured
 
 ### Installation
 ```bash
@@ -60,7 +68,7 @@ pip install -r requirements.txt
 
 # Copy and configure environment variables
 cp .env.example .env
-# Edit .env and add your ANTHROPIC_API_KEY
+# Edit .env and set your BEDROCK_MODEL_ID (required)
 ```
 
 ### Running the System
@@ -143,9 +151,17 @@ python -m pytest tests/test_weather_agent.py -v
 ## Environment Variables
 
 Key environment variables (configured in `.env`):
-- `ANTHROPIC_API_KEY`: Your Anthropic API key for the agent
+- `BEDROCK_MODEL_ID`: AWS Bedrock model to use (required)
+- `BEDROCK_REGION`: AWS region for Bedrock (default: us-west-2)
+- `BEDROCK_TEMPERATURE`: Model temperature setting (default: 0)
 - `LOG_LEVEL`: Logging verbosity (default: INFO)
 - MCP server ports are configured in the server files
+
+### Supported Bedrock Models
+- `anthropic.claude-3-5-sonnet-20240620-v1:0` (Recommended)
+- `anthropic.claude-3-haiku-20240307-v1:0` (Fast & cost-effective)
+- `meta.llama3-70b-instruct-v1:0`
+- `cohere.command-r-plus-v1:0`
 
 ## Extending the System
 

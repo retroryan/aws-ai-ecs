@@ -1,6 +1,6 @@
 #!/bin/bash
 
-# Agent ECS Template Infrastructure Status Script
+# Spring AI MCP Agent Infrastructure Status Script
 
 set -e
 
@@ -88,10 +88,10 @@ check_status() {
             
             # If log group outputs don't exist, use default names
             if [ -z "$CLIENT_LOG_GROUP" ] || [ "$CLIENT_LOG_GROUP" = "null" ]; then
-                CLIENT_LOG_GROUP="/ecs/agent-ecs-client"
+                CLIENT_LOG_GROUP="/ecs/spring-ai-mcp-agent-client"
             fi
             if [ -z "$SERVER_LOG_GROUP" ] || [ "$SERVER_LOG_GROUP" = "null" ]; then
-                SERVER_LOG_GROUP="/ecs/agent-ecs-server"
+                SERVER_LOG_GROUP="/ecs/spring-ai-mcp-agent-server"
             fi
             
             # Display log groups
@@ -146,7 +146,7 @@ check_status() {
             print_section "Service Health Check"
             if [ -n "$LB_DNS" ]; then
                 echo "  Testing client endpoint..."
-                HEALTH_CHECK=$(curl -s -o /dev/null -w "%{http_code}" "http://$LB_DNS/health" 2>/dev/null || echo "000")
+                HEALTH_CHECK=$(curl -s -o /dev/null -w "%{http_code}" "http://$LB_DNS/actuator/health" 2>/dev/null || echo "000")
                 if [ "$HEALTH_CHECK" = "200" ]; then
                     echo -e "  Client: ${GREEN}HEALTHY${NC}"
                 else
@@ -221,9 +221,9 @@ check_status() {
     print_section "Next Steps"
     if [ -n "$LB_DNS" ]; then
         echo "  Test the API:"
-        echo "    curl -X POST --location \"http://$LB_DNS/ask/1\" \\"
+        echo "    curl -X POST --location \"http://$LB_DNS/inquire\" \\"
         echo "        -H \"Content-Type: application/json\" \\"
-        echo "        -d '{\"question\": \"What causes turbulence in commercial flights?\"}'"
+        echo "        -d '{\"question\": \"Get employees that have skills related to Java\"}'"
         echo ""
         echo "  View logs:"
         echo "    aws logs tail $CLIENT_LOG_GROUP --follow"

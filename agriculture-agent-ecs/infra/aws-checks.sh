@@ -5,7 +5,7 @@ SCRIPT_DIR="$( cd "$( dirname "${BASH_SOURCE[0]}" )" && pwd )"
 source "${SCRIPT_DIR}/common.sh"
 
 echo "=================================================="
-echo "AWS Configuration Check for Agent ECS Template"
+echo "AWS Configuration Check for Spring AI Agent"
 echo "=================================================="
 echo ""
 
@@ -59,14 +59,14 @@ echo ""
 echo "🤖 Bedrock Model Access Check:"
 echo "------------------------------"
 
-# Required models from server configuration
-NOVA_MODEL="amazon.nova-lite-v1:0"
+# Required models from application.properties
+NOVA_MODEL="amazon.nova-pro-v1:0"
 
 # Check Bedrock access and specific model
 if check_bedrock_access "$REQUIRED_REGION" "$NOVA_MODEL"; then
-    echo -e "Amazon Nova Lite (${NOVA_MODEL}): ${GREEN}✅ Available${NC}"
+    echo -e "Amazon Nova Pro (${NOVA_MODEL}): ${GREEN}✅ Available${NC}"
 else
-    echo -e "Amazon Nova Lite (${NOVA_MODEL}): ${RED}❌ Not available${NC}"
+    echo -e "Amazon Nova Pro (${NOVA_MODEL}): ${RED}❌ Not available${NC}"
     exit 1
 fi
 

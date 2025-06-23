@@ -9,8 +9,12 @@ YELLOW='\033[1;33m'
 RED='\033[0;31m'
 NC='\033[0m' # No Color
 
+# Get the script directory and project root
+SCRIPT_DIR="$( cd "$( dirname "${BASH_SOURCE[0]}" )" && pwd )"
+PROJECT_ROOT="$( cd "$SCRIPT_DIR/.." && pwd )"
+
 # Create logs directory if it doesn't exist
-mkdir -p logs
+mkdir -p "$PROJECT_ROOT/logs"
 
 echo -e "${GREEN}Starting FastMCP servers...${NC}"
 echo ""
@@ -20,8 +24,8 @@ start_server() {
     local name=$1
     local script=$2
     local port=$3
-    local pid_file="logs/${name}.pid"
-    local log_file="logs/${name}.log"
+    local pid_file="$PROJECT_ROOT/logs/${name}.pid"
+    local log_file="$PROJECT_ROOT/logs/${name}.log"
     
     # Check if server is already running
     if [ -f "$pid_file" ]; then
@@ -34,7 +38,7 @@ start_server() {
     
     # Start the server
     echo -e "Starting ${name} server on port ${port}..."
-    python $script > "$log_file" 2>&1 &
+    (cd "$PROJECT_ROOT" && python $script > "$log_file" 2>&1) &
     local pid=$!
     
     # Save PID
@@ -69,4 +73,4 @@ echo "  - logs/forecast.log"
 echo "  - logs/historical.log"
 echo "  - logs/agricultural.log"
 echo ""
-echo "To stop all servers, run: ./stop_servers.sh"
+echo "To stop all servers, run: ./scripts/stop_servers.sh"

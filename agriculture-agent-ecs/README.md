@@ -1,19 +1,21 @@
-# LangGraph + FastMCP Weather Agent Demo
+# LangGraph + FastMCP Weather Agent Demo (Model-Agnostic with AWS Bedrock)
 
-A demonstration of building AI agent systems using LangGraph for orchestration and FastMCP for distributed tool servers. This project showcases a weather and agricultural data agent that can answer questions about weather conditions, forecasts, and agricultural recommendations.
+A demonstration of building model-agnostic AI agent systems using LangGraph for orchestration and FastMCP for distributed tool servers. This project showcases a weather and agricultural data agent that can answer questions about weather conditions, forecasts, and agricultural recommendations using any AWS Bedrock foundation model.
 
 ## Features
 
+- **Model-Agnostic Design**: Works with any AWS Bedrock model via `init_chat_model`
 - **LangGraph Agent Orchestration**: React agent pattern with conversation memory
 - **FastMCP Tool Servers**: Distributed HTTP-based Model Context Protocol servers
 - **Structured Output Support**: Optional transformation to typed Pydantic models
 - **Multi-turn Conversations**: Maintains context across interactions
 - **Real Weather Data**: Integration with OpenWeatherMap API
+- **AWS Bedrock Integration**: Supports Claude, Llama, Cohere, Amazon Nova, and more
 
 ## Quick Start
 
 ```bash
-# Prerequisites: Python 3.11+ and OpenWeatherMap API key
+# Prerequisites: Python 3.11+, AWS account with Bedrock access, OpenWeatherMap API key
 
 # Clone the repository
 git clone <repository-url>
@@ -22,12 +24,19 @@ cd agriculture-agent-ecs
 # Install dependencies
 pip install -r requirements.txt
 
-# Set up environment variables
+# Auto-configure AWS Bedrock (recommended)
+./aws-setup.sh
+cp bedrock.env .env
+
+# Or manually configure
 cp .env.example .env
-# Edit .env and add your OPENWEATHER_API_KEY
+# Edit .env and set:
+# - BEDROCK_MODEL_ID (required)
+# - BEDROCK_REGION
+# - OPENWEATHER_API_KEY
 
 # Start MCP servers
-./start_servers.sh
+./scripts/start_servers.sh
 
 # Run the application
 python main.py
@@ -45,11 +54,13 @@ curl http://localhost:8000/health
    - **Historical Server** (port 7072): Historical weather information
    - **Agricultural Server** (port 7073): Agricultural conditions and recommendations
 
-2. **LangGraph Agent**:
+2. **Model-Agnostic LangGraph Agent**:
+   - Uses `init_chat_model` for provider-agnostic initialization
    - Built with `create_react_agent` for tool selection
    - Discovers tools from MCP servers via HTTP
    - Supports both text and structured responses
    - Maintains conversation state with memory
+   - Works with any AWS Bedrock foundation model
 
 3. **FastAPI Application**:
    - REST API interface for queries
@@ -105,6 +116,118 @@ print(f"Location: {structured.location}")
 print(f"Current temp: {structured.current_conditions.temperature}°C")
 ```
 
+## Model Configuration
+
+### Supported AWS Bedrock Models
+
+The system works with any Bedrock model that supports tool/function calling:
+
+- **Claude Models** (Anthropic):
+  - `anthropic.claude-3-5-sonnet-20240620-v1:0` - Best overall performance
+  - `anthropic.claude-3-haiku-20240307-v1:0` - Fast and cost-effective
+  - `anthropic.claude-3-opus-20240229-v1:0` - Most capable
+
+- **Amazon Nova Models**:
+  - `amazon.nova-pro-v1:0` - High performance
+  - `amazon.nova-lite-v1:0` - Cost-effective, good for demos
+
+- **Llama Models** (Meta):
+  - `meta.llama3-70b-instruct-v1:0` - Open source, excellent performance
+  - `meta.llama3-1-70b-instruct-v1:0` - Latest Llama 3.1
+
+- **Cohere Models**:
+  - `cohere.command-r-plus-v1:0` - Optimized for RAG and tool use
+  - `cohere.command-r-v1:0` - Efficient alternative
+
+### Switching Models
+
+Simply change the `BEDROCK_MODEL_ID` environment variable:
+
+```bash
+# For best performance
+export BEDROCK_MODEL_ID="anthropic.claude-3-5-sonnet-20240620-v1:0"
+
+# For cost-effective operation
+export BEDROCK_MODEL_ID="amazon.nova-lite-v1:0"
+
+# For open source
+export BEDROCK_MODEL_ID="meta.llama3-70b-instruct-v1:0"
+```
+
+## Docker Deployment
+
+### Quick Start with Docker
+
+```bash
+# 1. Clone the repository
+git clone <repository-url>
+cd agriculture-agent-ecs
+
+# 2. Set up environment
+cp .env.docker .env
+# Edit .env with your AWS Bedrock configuration
+
+# 3. Build and run with Docker Compose
+docker-compose up -d
+
+# 4. Verify all services are healthy
+./scripts/test_docker.sh
+
+# 5. Access the application
+curl http://localhost:8000/health
+```
+
+### Docker Architecture
+
+The application is containerized with the following services:
+
+- **forecast-server**: Weather forecast MCP server (port 7071)
+- **historical-server**: Historical weather MCP server (port 7072)  
+- **agricultural-server**: Agricultural conditions MCP server (port 7073)
+- **weather-agent**: Main agent application (port 8000)
+
+All services communicate over an internal Docker network.
+
+### Docker Commands
+
+```bash
+# Build all images
+docker-compose build
+
+# Start all services
+docker-compose up -d
+
+# View logs
+docker-compose logs -f
+
+# Stop all services
+docker-compose down
+
+# Rebuild and restart a specific service
+docker-compose up -d --build weather-agent
+
+# Run automated tests
+python tests/docker_test.py
+```
+
+### Docker Environment Variables
+
+Configure in `.env` file:
+
+```env
+# Required
+BEDROCK_MODEL_ID=amazon.nova-lite-v1:0
+BEDROCK_REGION=us-east-1
+
+# AWS Credentials (if not using IAM role)
+AWS_ACCESS_KEY_ID=your_key
+AWS_SECRET_ACCESS_KEY=your_secret
+
+# Optional
+BEDROCK_TEMPERATURE=0
+LOG_LEVEL=INFO
+```
+
 ## Development
 
 ### Project Structure
@@ -118,11 +241,23 @@ print(f"Current temp: {structured.current_conditions.temperature}°C")
 ├── mcp_servers/            # FastMCP server implementations
 │   ├── forecast_server.py   # Weather forecast tools
 │   ├── historical_server.py # Historical weather tools
-│   └── agricultural_server.py # Agricultural data tools
+│   ├── agricultural_server.py # Agricultural data tools
+│   └── api_utils.py        # Common API utilities
 ├── models/                 # Data models
-├── utils/                  # Utility functions
+├── docker/                 # Docker configuration files
+│   ├── Dockerfile.base     # Base image
+│   ├── Dockerfile.agent    # Agent application
+│   └── Dockerfile.*        # MCP server images
+├── scripts/                # Operational scripts
+│   ├── start_servers.sh    # Start MCP servers
+│   ├── stop_servers.sh     # Stop MCP servers
+│   ├── test_docker.sh      # Docker integration test
+│   └── aws-setup.sh        # AWS Bedrock setup helper
 ├── tests/                  # Test suite
-└── logs/                   # Server logs and PIDs
+│   └── docker_test.py      # Docker integration tests
+├── infra/                  # AWS infrastructure code
+├── logs/                   # Server logs and PIDs
+└── docker-compose.yml      # Docker Compose configuration
 ```
 
 ### Running Tests
@@ -143,7 +278,7 @@ python tests/test_structured_output_demo.py
 
 ```bash
 # Start all MCP servers
-./start_servers.sh
+./scripts/start_servers.sh
 
 # Check server status
 ps aux | grep python | grep server
@@ -154,7 +289,7 @@ tail -f logs/historical_server.log
 tail -f logs/agricultural_server.log
 
 # Stop all servers
-./stop_servers.sh
+./scripts/stop_servers.sh
 ```
 
 ## Configuration
@@ -164,12 +299,38 @@ tail -f logs/agricultural_server.log
 Create a `.env` file with:
 
 ```env
-# Required
-ANTHROPIC_API_KEY=your_anthropic_api_key_here
+# Required - AWS Bedrock Model
+BEDROCK_MODEL_ID=amazon.nova-lite-v1:0  # or any supported model
+BEDROCK_REGION=us-east-1
 
 # Optional
+BEDROCK_TEMPERATURE=0
 LOG_LEVEL=INFO
+
+# AWS Credentials (if not using IAM role)
+AWS_ACCESS_KEY_ID=your_access_key
+AWS_SECRET_ACCESS_KEY=your_secret_key
 ```
+
+### AWS Setup
+
+1. **Enable Bedrock Access**: Go to AWS Console → Bedrock → Model access
+2. **Set IAM Permissions**: Ensure your user/role has:
+   ```json
+   {
+     "Version": "2012-10-17",
+     "Statement": [
+       {
+         "Effect": "Allow",
+         "Action": [
+           "bedrock:InvokeModel",
+           "bedrock:InvokeModelWithResponseStream"
+         ],
+         "Resource": "*"
+       }
+     ]
+   }
+   ```
 
 ### MCP Server Ports
 
@@ -205,7 +366,7 @@ async def get_weather_alerts(location: str) -> dict:
     # Implementation here
     return {"alerts": []}
 
-# Add to start_servers.sh
+# Add to scripts/start_servers.sh
 ```
 
 ### Customizing the Agent
@@ -216,28 +377,114 @@ Modify `weather_agent/mcp_agent.py` to:
 - Implement custom tool selection logic
 - Add new structured output models
 
+## AWS ECS Deployment
+
+### Quick Deploy
+
+```bash
+# Build and push Docker image
+./infra/build_and_push.sh
+
+# Deploy to ECS
+./infra/deploy.sh
+```
+
+### CloudFormation Configuration
+
+The stack accepts these parameters:
+- `BedrockModelId`: Which Bedrock model to use
+- `BedrockRegion`: AWS region for Bedrock
+- `BedrockTemperature`: Model temperature (0-1)
+
+The ECS task automatically uses IAM role credentials for Bedrock access.
+
+## Testing
+
+### Run Tests
+
+```bash
+# Run all tests
+python tests/run_all_tests.py
+
+# Test specific components
+python -m pytest tests/test_mcp_servers.py -v
+python -m pytest tests/test_weather_agent.py -v
+```
+
+### Model Comparison Testing
+
+```bash
+# Test different models
+export BEDROCK_MODEL_ID="anthropic.claude-3-5-sonnet-20240620-v1:0"
+python main.py --demo
+
+export BEDROCK_MODEL_ID="amazon.nova-lite-v1:0"
+python main.py --demo
+
+export BEDROCK_MODEL_ID="meta.llama3-70b-instruct-v1:0"
+python main.py --demo
+```
+
 ## Troubleshooting
 
 ### Common Issues
 
-1. **Servers not starting**: Check if ports are already in use
+1. **Model Access Denied**: 
+   - Enable the model in AWS Bedrock console
+   - Check IAM permissions
+   - Try `./scripts/aws-setup.sh` to diagnose
+
+2. **Servers not starting**: Check if ports are already in use
    ```bash
    lsof -i :7071
    lsof -i :7072
    lsof -i :7073
    ```
 
-2. **API key errors**: Ensure your OpenWeatherMap API key is valid and set in `.env`
+3. **Missing BEDROCK_MODEL_ID**: The application requires this environment variable
+   ```bash
+   export BEDROCK_MODEL_ID="amazon.nova-lite-v1:0"
+   ```
 
-3. **Import errors**: Verify all dependencies are installed:
+4. **Import errors**: Verify all dependencies are installed:
    ```bash
    pip install -r requirements.txt
    ```
 
-4. **Server connection errors**: Ensure MCP servers are running:
+5. **Server connection errors**: Ensure MCP servers are running:
    ```bash
-   ./start_servers.sh
+   ./scripts/start_servers.sh
    ps aux | grep python | grep server
+   ```
+
+### Docker-Specific Issues
+
+1. **Docker build fails**: Ensure Docker daemon is running
+   ```bash
+   docker info
+   ```
+
+2. **Services not starting**: Check container logs
+   ```bash
+   docker-compose logs forecast-server
+   docker-compose logs weather-agent
+   ```
+
+3. **Network issues**: Verify Docker network
+   ```bash
+   docker network ls
+   docker network inspect agriculture-agent-ecs_weather-network
+   ```
+
+4. **Environment variables not loading**: Check .env file
+   ```bash
+   docker-compose config  # Shows resolved configuration
+   ```
+
+5. **Permission issues**: Ensure proper file permissions
+   ```bash
+   chmod +x scripts/test_docker.sh
+   chmod +x tests/docker_test.py
    ```
 
 ## License
