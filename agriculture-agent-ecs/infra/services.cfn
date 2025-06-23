@@ -230,7 +230,7 @@ Resources:
         - Name: main-agent
           Image: !Sub ${AWS::AccountId}.dkr.ecr.${AWS::Region}.amazonaws.com/agriculture-agent-main:${MainImageTag}
           PortMappings:
-            - ContainerPort: 8000
+            - ContainerPort: 7075
               Protocol: tcp
           Environment:
             - Name: BEDROCK_MODEL_ID
@@ -256,7 +256,7 @@ Resources:
           HealthCheck:
             Command:
               - CMD-SHELL
-              - curl -f http://localhost:8000/health || exit 1
+              - curl -f http://localhost:7075/health || exit 1
             Interval: 30
             Timeout: 5
             Retries: 3
@@ -279,7 +279,7 @@ Resources:
             - Fn::ImportValue: !Sub ${BaseStackName}-private-subnet-2
           SecurityGroups:
             - Fn::ImportValue: !Sub ${BaseStackName}-service-sg
-          AssignPublicIp: DISABLED
+          AssignPublicIp: ENABLED
       ServiceRegistries:
         - RegistryArn: !GetAtt ForecastServiceDiscovery.Arn
 
@@ -299,7 +299,7 @@ Resources:
             - Fn::ImportValue: !Sub ${BaseStackName}-private-subnet-2
           SecurityGroups:
             - Fn::ImportValue: !Sub ${BaseStackName}-service-sg
-          AssignPublicIp: DISABLED
+          AssignPublicIp: ENABLED
       ServiceRegistries:
         - RegistryArn: !GetAtt HistoricalServiceDiscovery.Arn
 
@@ -319,7 +319,7 @@ Resources:
             - Fn::ImportValue: !Sub ${BaseStackName}-private-subnet-2
           SecurityGroups:
             - Fn::ImportValue: !Sub ${BaseStackName}-service-sg
-          AssignPublicIp: DISABLED
+          AssignPublicIp: ENABLED
       ServiceRegistries:
         - RegistryArn: !GetAtt AgriculturalServiceDiscovery.Arn
 
@@ -343,12 +343,12 @@ Resources:
             - Fn::ImportValue: !Sub ${BaseStackName}-private-subnet-2
           SecurityGroups:
             - Fn::ImportValue: !Sub ${BaseStackName}-service-sg
-          AssignPublicIp: DISABLED
+          AssignPublicIp: ENABLED
       LoadBalancers:
         - TargetGroupArn:
             Fn::ImportValue: !Sub ${BaseStackName}-target-group
           ContainerName: main-agent
-          ContainerPort: 8000
+          ContainerPort: 7075
       HealthCheckGracePeriodSeconds: 60
 
   # Auto Scaling (Optional)

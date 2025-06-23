@@ -35,8 +35,8 @@ cp bedrock.env .env
 python main.py
 
 # 6. Test the API
-curl http://localhost:8000/health
-curl -X POST http://localhost:8000/query \
+curl http://localhost:7075/health
+curl -X POST http://localhost:7075/query \
   -H "Content-Type: application/json" \
   -d '{"query": "What is the weather like in Chicago?"}'
 
@@ -79,9 +79,6 @@ The `infra/` directory contains scripts for deploying to AWS ECS:
 
 # Deploy with specific model
 BEDROCK_MODEL_ID="anthropic.claude-3-haiku-20240307-v1:0" ./infra/deploy.sh all
-
-# Deploy to production environment
-ENVIRONMENT=prod ./infra/deploy.sh all
 
 # Individual deployment steps
 ./infra/deploy.sh setup-ecr    # Create ECR repositories
@@ -196,7 +193,6 @@ BEDROCK_REGION=us-east-1
 # Optional
 BEDROCK_TEMPERATURE=0
 LOG_LEVEL=INFO
-OPENWEATHER_API_KEY=your_api_key  # For real weather data
 
 # AWS Credentials (if not using IAM role)
 AWS_ACCESS_KEY_ID=your_access_key
@@ -281,7 +277,7 @@ The CloudFormation templates create:
 import requests
 
 # Submit a weather query
-response = requests.post("http://localhost:8000/query", 
+response = requests.post("http://localhost:7075/query", 
     json={"query": "What's the weather like in Chicago?"})
 print(response.json())
 
@@ -327,14 +323,15 @@ cd agriculture-agent-ecs
 cp .env.docker .env
 # Edit .env with your AWS Bedrock configuration
 
-# 3. Build and run with Docker Compose
-docker-compose up -d
+# 3. Start services with AWS credentials
+# This automatically exports AWS credentials from your AWS CLI configuration
+./scripts/start.sh
 
 # 4. Verify all services are healthy
 ./scripts/test_docker.sh
 
 # 5. Access the application
-curl http://localhost:8000/health
+curl http://localhost:7075/health
 ```
 
 ### Docker Architecture
@@ -344,7 +341,7 @@ The application is containerized with the following services:
 - **forecast-server**: Weather forecast MCP server (port 7071)
 - **historical-server**: Historical weather MCP server (port 7072)  
 - **agricultural-server**: Agricultural conditions MCP server (port 7073)
-- **weather-agent**: Main agent application (port 8000)
+- **weather-agent**: Main agent application (port 7075)
 
 All services communicate over an internal Docker network.
 
@@ -354,13 +351,20 @@ All services communicate over an internal Docker network.
 # Build all images
 docker-compose build
 
-# Start all services
+# Start all services with AWS credentials
+./scripts/start.sh
+
+# Or manually with docker-compose (requires setting AWS env vars)
+export $(aws configure export-credentials --format env-no-export)
 docker-compose up -d
 
 # View logs
 docker-compose logs -f
 
 # Stop all services
+./scripts/stop.sh
+
+# Or manually with docker-compose
 docker-compose down
 
 # Rebuild and restart a specific service
@@ -379,9 +383,30 @@ Configure in `.env` file:
 BEDROCK_MODEL_ID=amazon.nova-lite-v1:0
 BEDROCK_REGION=us-east-1
 
-# AWS Credentials (if not using IAM role)
-AWS_ACCESS_KEY_ID=your_key
-AWS_SECRET_ACCESS_KEY=your_secret
+# Optional - AWS Credentials are automatically exported from AWS CLI
+# Only set these if you want to override the AWS CLI configuration
+# AWS_ACCESS_KEY_ID=your_key
+# AWS_SECRET_ACCESS_KEY=your_secret
+```
+
+### AWS Credentials in Docker
+
+The project automatically handles AWS credentials for Docker containers:
+
+1. **Automatic Export**: The `start.sh` script automatically exports AWS credentials from your AWS CLI configuration using:
+   ```bash
+   export $(aws configure export-credentials --format env-no-export)
+   ```
+
+2. **Supports All AWS Auth Methods**:
+   - AWS CLI profiles
+   - AWS SSO (Single Sign-On)
+   - Temporary credentials with session tokens
+   - IAM roles (when deployed to ECS)
+
+3. **No Manual Configuration**: You don't need to manually set AWS credentials in the `.env` file unless you want to override the AWS CLI configuration.
+
+4. **Security Best Practice**: Credentials are never stored in files, only passed as environment variables at runtime
 
 # Optional
 BEDROCK_TEMPERATURE=0

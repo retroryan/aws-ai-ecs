@@ -1,6 +1,10 @@
 # FastMCP for HTTP server endpoints
 fastmcp>=0.2.5
 
+# Web framework for main API
+fastapi>=0.110.0
+uvicorn>=0.27.0
+
 # Core AI framework
 langchain==0.3.25
 langchain-aws>=0.2.0

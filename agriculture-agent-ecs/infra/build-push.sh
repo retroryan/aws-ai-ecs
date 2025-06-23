@@ -126,7 +126,14 @@ for component in "${COMPONENTS[@]}"; do
     fi
     
     # Build the image with version tag (force AMD64 architecture for ECS Fargate)
-    docker build --platform linux/amd64 -t "${IMAGE_NAME}:${VERSION_TAG}" -f "$DOCKERFILE" . > build-${component}.log 2>&1 &
+    # Add --no-cache if FORCE_BUILD=true environment variable is set
+    BUILD_ARGS="--platform linux/amd64"
+    if [ "${FORCE_BUILD}" = "true" ]; then
+        BUILD_ARGS="$BUILD_ARGS --no-cache"
+        log_info "Force rebuild enabled for ${component}"
+    fi
+    
+    docker build $BUILD_ARGS -t "${IMAGE_NAME}:${VERSION_TAG}" -f "$DOCKERFILE" . > build-${component}.log 2>&1 &
     BUILD_PID=$!
     
     if spin $BUILD_PID "Building ${component} image"; then
