@@ -82,4 +82,4 @@ async def get_agricultural_conditions(
 
 if __name__ == "__main__":
     # Start the server with HTTP transport
-    server.run(transport="streamable-http", host="127.0.0.1", port=7073, path="/mcp")
+    server.run(transport="streamable-http", host="0.0.0.0", port=7073, path="/mcp")

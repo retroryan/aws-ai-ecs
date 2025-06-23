@@ -9,14 +9,14 @@ Phase 4 successfully transformed the infrastructure to support the Agriculture A
 ### 1. New Architecture Design
 
 **Service Structure:**
-- `agriculture-agent-main` - Main FastAPI application (port 8000)
+- `agriculture-agent-main` - Main FastAPI application (port 7075)
 - `agriculture-agent-forecast` - Weather forecast MCP server (port 7071)
 - `agriculture-agent-historical` - Historical weather MCP server (port 7072)
 - `agriculture-agent-agricultural` - Agricultural conditions MCP server (port 7073)
 
 **Naming Convention:**
 - All resources use `agriculture-agent-*` prefix
-- Environment-based naming: `agriculture-agent-{service}-{environment}`
+- Simple, consistent naming: `agriculture-agent-{service}`
 - Consistent across ECR, ECS, CloudFormation, and logs
 
 ### 2. CloudFormation Templates
@@ -39,14 +39,13 @@ Phase 4 successfully transformed the infrastructure to support the Agriculture A
 ### 3. Deployment Automation
 
 **Updated Scripts:**
-- `deploy.sh` - Master deployment script with environment support
+- `deploy.sh` - Master deployment script
 - `build-push.sh` - Builds and pushes all Docker images
 - Integrated ECR setup and authentication
-- Support for multiple environments (dev/staging/prod)
+- Simple, single-environment deployment
 
 **Key Features:**
 - Single command deployment: `./infra/deploy.sh all`
-- Environment-based configuration
 - Model selection via environment variables
 - Automatic image tagging with git commit and timestamp
 
@@ -65,7 +64,6 @@ BedrockModelId: amazon.nova-lite-v1:0  # Configurable
 BedrockRegion: us-east-1
 BedrockTemperature: "0"
 LogLevel: INFO
-Environment: dev
 ```
 
 **Environment Variables:**
@@ -142,7 +140,7 @@ The infrastructure is ready for deployment. The remaining task is to test the fu
          │
 ┌────────▼────────┐
 │  Main Agent     │ (Private Subnet)
-│  agriculture-   │ Port 8000
+│  agriculture-   │ Port 7075
 │  agent-main     │
 └────────┬────────┘
          │

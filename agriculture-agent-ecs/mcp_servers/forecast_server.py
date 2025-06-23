@@ -83,4 +83,4 @@ async def get_weather_forecast(
 
 if __name__ == "__main__":
     # Start the server with HTTP transport
-    server.run(transport="streamable-http", host="127.0.0.1", port=7071, path="/mcp")
+    server.run(transport="streamable-http", host="0.0.0.0", port=7071, path="/mcp")

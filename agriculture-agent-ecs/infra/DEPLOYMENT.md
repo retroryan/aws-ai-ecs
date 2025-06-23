@@ -119,9 +119,6 @@ This deploys:
 ### Environment Variables
 
 ```bash
-# Deployment environment (dev, staging, prod)
-export ENVIRONMENT=dev
-
 # AWS region for deployment
 export AWS_REGION=us-east-1
 
@@ -146,13 +143,11 @@ export LOG_LEVEL=INFO
 ### Deployment Examples
 
 ```bash
-# Production deployment with Claude
-ENVIRONMENT=prod \
+# Deploy with Claude Sonnet
 BEDROCK_MODEL_ID=anthropic.claude-3-5-sonnet-20240620-v1:0 \
 ./infra/deploy.sh all
 
-# Staging with Nova Pro
-ENVIRONMENT=staging \
+# Deploy with Nova Pro
 BEDROCK_MODEL_ID=amazon.nova-pro-v1:0 \
 ./infra/deploy.sh all
 

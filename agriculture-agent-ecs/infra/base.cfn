@@ -173,8 +173,8 @@ Resources:
       VpcId: !Ref ApplicationVPC
       SecurityGroupIngress:
         - Description: Allow traffic from ALB
-          FromPort: 8000
-          ToPort: 8000
+          FromPort: 7075
+          ToPort: 7075
           IpProtocol: tcp
           SourceSecurityGroupId: !Ref ALBSecurityGroup
         - Description: Allow inter-service communication
@@ -206,7 +206,7 @@ Resources:
     Type: AWS::ElasticLoadBalancingV2::TargetGroup
     Properties:
       Name: agriculture-agent
-      Port: 8000
+      Port: 7075
       Protocol: HTTP
       VpcId: !Ref ApplicationVPC
       TargetType: ip

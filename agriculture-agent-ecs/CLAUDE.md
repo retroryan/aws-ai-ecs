@@ -83,7 +83,7 @@ cp .env.example .env
 python main.py
 ```
 
-3. Access the API at http://localhost:8000
+3. Access the API at http://localhost:7075
    - Health check: GET /health
    - Submit query: POST /query
 

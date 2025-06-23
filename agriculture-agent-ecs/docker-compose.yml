@@ -1,5 +1,3 @@
-version: '3.8'
-
 services:
   # Forecast MCP Server
   forecast-server:
@@ -11,7 +9,6 @@ services:
       - "7071:7071"
     environment:
       - LOG_LEVEL=${LOG_LEVEL:-INFO}
-      - OPENWEATHER_API_KEY=${OPENWEATHER_API_KEY}
     networks:
       - weather-network
     restart: unless-stopped
@@ -32,7 +29,6 @@ services:
       - "7072:7072"
     environment:
       - LOG_LEVEL=${LOG_LEVEL:-INFO}
-      - OPENWEATHER_API_KEY=${OPENWEATHER_API_KEY}
     networks:
       - weather-network
     restart: unless-stopped
@@ -53,7 +49,6 @@ services:
       - "7073:7073"
     environment:
       - LOG_LEVEL=${LOG_LEVEL:-INFO}
-      - OPENWEATHER_API_KEY=${OPENWEATHER_API_KEY}
     networks:
       - weather-network
     restart: unless-stopped
@@ -68,10 +63,10 @@ services:
   weather-agent:
     build:
       context: .
-      dockerfile: docker/Dockerfile.agent
+      dockerfile: docker/Dockerfile.main
     container_name: weather-agent-app
     ports:
-      - "8000:8000"
+      - "7075:7075"
     environment:
       # AWS Bedrock Configuration
       - BEDROCK_MODEL_ID=${BEDROCK_MODEL_ID}
@@ -81,6 +76,7 @@ services:
       - AWS_ACCESS_KEY_ID=${AWS_ACCESS_KEY_ID}
       - AWS_SECRET_ACCESS_KEY=${AWS_SECRET_ACCESS_KEY}
       - AWS_SESSION_TOKEN=${AWS_SESSION_TOKEN}
+      - AWS_DEFAULT_REGION=${AWS_DEFAULT_REGION:-us-east-1}
       # MCP Server URLs (internal Docker network)
       - MCP_FORECAST_URL=http://forecast-server:7071/mcp
       - MCP_HISTORICAL_URL=http://historical-server:7072/mcp
@@ -98,7 +94,7 @@ services:
       - weather-network
     restart: unless-stopped
     healthcheck:
-      test: ["CMD", "curl", "-f", "http://localhost:8000/health"]
+      test: ["CMD", "curl", "-f", "http://localhost:7075/health"]
       interval: 30s
       timeout: 3s
       retries: 3

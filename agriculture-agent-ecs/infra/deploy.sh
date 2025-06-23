@@ -119,7 +119,7 @@ get_status() {
         # List services
         log_info "ECS Services:"
         aws ecs list-services \
-            --cluster "agriculture-agent-${ENVIRONMENT}" \
+            --cluster "agriculture-agent-cluster" \
             --region $REGION \
             --query 'serviceArns[*]' \
             --output text | xargs -n1 basename
@@ -163,7 +163,6 @@ show_help() {
     echo "  help             Show this help message"
     echo ""
     echo "Environment Variables:"
-    echo "  ENVIRONMENT          Environment name (default: dev)"
     echo "  AWS_REGION          AWS region (default: us-east-1)"
     echo "  BEDROCK_MODEL_ID    Bedrock model to use (default: amazon.nova-lite-v1:0)"
     echo "  BEDROCK_REGION      Bedrock region (default: us-east-1)"
@@ -175,7 +174,6 @@ show_help() {
     echo "  ./deploy.sh setup-ecr                     # Setup ECR repositories"
     echo "  ./deploy.sh build-push                    # Build and push images"
     echo "  ./deploy.sh all                          # Full deployment"
-    echo "  ENVIRONMENT=prod ./deploy.sh all         # Deploy to production"
     echo "  ./deploy.sh status                       # Check deployment status"
     echo ""
 }
