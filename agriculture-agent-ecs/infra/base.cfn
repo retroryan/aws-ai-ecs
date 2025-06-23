@@ -73,7 +73,7 @@ Resources:
   ECSCluster:
     Type: AWS::ECS::Cluster
     Properties:
-      ClusterName: agriculture-agent
+      ClusterName: agriculture-agent-cluster
       ClusterSettings:
         - Name: containerInsights
           Value: enabled

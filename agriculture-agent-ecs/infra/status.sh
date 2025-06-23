@@ -54,7 +54,7 @@ check_status() {
             # Get outputs using common functions
             LB_DNS=$(get_stack_output "$BASE_STACK_NAME" "LoadBalancerDNS" "$REGION")
             VPC_ID=$(get_stack_output "$BASE_STACK_NAME" "VPCId" "$REGION")
-            CLUSTER_NAME=$(get_stack_output "$BASE_STACK_NAME" "ECSClusterName" "$REGION")
+            CLUSTER_NAME=$(get_stack_output "$BASE_STACK_NAME" "ClusterName" "$REGION")
             
             echo "  Load Balancer: http://$LB_DNS"
             echo "  VPC ID: $VPC_ID"
