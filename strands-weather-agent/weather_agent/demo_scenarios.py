@@ -3,10 +3,12 @@
 Multi-turn conversation demo scenarios for AWS Strands Weather Agent
 
 This module demonstrates AWS Strands' multi-turn conversation capabilities,
-showing how the agent maintains context across multiple interactions.
+showing how the agent maintains context across multiple interactions using
+session-based conversation management.
 """
 
 import asyncio
+import uuid
 from typing import Optional
 from .mcp_agent import create_weather_agent, MCPWeatherAgent
 
@@ -22,13 +24,18 @@ async def run_mcp_multi_turn_demo(structured: bool = False):
     print("\n🌤️  AWS Strands Multi-Turn Conversation Demo")
     print("=" * 50)
     print("This demo shows how AWS Strands maintains context")
-    print("across multiple turns in a conversation.")
+    print("across multiple turns in a conversation using")
+    print("session-based conversation management.")
     print("=" * 50)
     
     # Initialize the agent
     print("\n🔌 Initializing AWS Strands agent with MCP connections...")
     agent = await create_weather_agent(structured)
-    print("✅ Ready for multi-turn conversation!\n")
+    
+    # Create a session ID for this conversation
+    session_id = str(uuid.uuid4())
+    print(f"✅ Ready for multi-turn conversation!")
+    print(f"🆔 Session ID: {session_id[:8]}...\n")
     
     # Multi-turn conversation scenarios
     conversation_turns = [
@@ -66,10 +73,10 @@ async def run_mcp_multi_turn_demo(structured: bool = False):
             print(f"{'='*50}")
             print(f"👤 User: {turn['query']}")
             
-            # Process the query with streaming response
+            # Process the query with session context
             print(f"🤖 Assistant: ", end="", flush=True)
             
-            response = await agent.query(turn['query'])
+            response = await agent.query(turn['query'], session_id=session_id)
             
             # Print the response content
             if hasattr(response, 'content'):
@@ -83,7 +90,16 @@ async def run_mcp_multi_turn_demo(structured: bool = False):
         print("\n" + "="*50)
         print("✨ Multi-turn conversation demo complete!")
         print("Notice how the agent maintains context throughout.")
-        print("This is AWS Strands' built-in session management.")
+        print("This is AWS Strands' session-based context retention.")
+        
+        # Show session information
+        session_info = agent.get_session_info(session_id)
+        if session_info:
+            print(f"\n📊 Session Statistics:")
+            print(f"   🔢 Total messages: {session_info['total_messages']}")
+            print(f"   🔄 Conversation turns: {session_info['conversation_turns']}")
+            print(f"   💾 Storage type: {session_info['storage_type']}")
+        
         print("="*50)
         
     except Exception as e:
@@ -106,13 +122,18 @@ async def run_context_switching_demo(structured: bool = False):
     print("\n🔄 AWS Strands Context Switching Demo")
     print("=" * 50)
     print("This demo shows sophisticated context handling")
-    print("across topic changes in conversation.")
+    print("across topic changes in conversation using")
+    print("session-based conversation management.")
     print("=" * 50)
     
     # Initialize the agent
     print("\n🔌 Initializing AWS Strands agent...")
     agent = await create_weather_agent(structured)
-    print("✅ Ready for context switching demo!\n")
+    
+    # Create a session ID for this conversation
+    session_id = str(uuid.uuid4())
+    print(f"✅ Ready for context switching demo!")
+    print(f"🆔 Session ID: {session_id[:8]}...\n")
     
     # Context switching scenarios
     scenarios = [
@@ -150,10 +171,10 @@ async def run_context_switching_demo(structured: bool = False):
             print(f"{'='*50}")
             print(f"👤 User: {scenario['query']}")
             
-            # Process the query
+            # Process the query with session context
             print(f"🤖 Assistant: ", end="", flush=True)
             
-            response = await agent.query(scenario['query'])
+            response = await agent.query(scenario['query'], session_id=session_id)
             
             # Print the response
             if hasattr(response, 'content'):
@@ -165,7 +186,17 @@ async def run_context_switching_demo(structured: bool = False):
         
         print("\n" + "="*50)
         print("✨ Context switching demo complete!")
-        print("AWS Strands seamlessly handles topic changes.")
+        print("AWS Strands seamlessly handles topic changes")
+        print("with session-based context retention.")
+        
+        # Show session information
+        session_info = agent.get_session_info(session_id)
+        if session_info:
+            print(f"\n📊 Session Statistics:")
+            print(f"   🔢 Total messages: {session_info['total_messages']}")
+            print(f"   🔄 Conversation turns: {session_info['conversation_turns']}")
+            print(f"   💾 Storage type: {session_info['storage_type']}")
+        
         print("="*50)
         
     except Exception as e:

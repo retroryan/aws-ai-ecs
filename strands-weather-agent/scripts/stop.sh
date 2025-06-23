@@ -3,7 +3,7 @@
 # Stop script for Docker Compose services
 set -e
 
-echo "Stopping AWS Strands Weather Agent services..."
+echo "Stopping Strands Weather Agent services..."
 
 # Navigate to project root
 cd "$(dirname "$0")/.."

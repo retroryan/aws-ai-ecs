@@ -14,7 +14,7 @@ RUN pip install --no-cache-dir -r requirements.txt
 
 # Copy server code
 COPY mcp_servers/ mcp_servers/
-COPY models/ models/
+COPY weather_agent/models/ weather_agent/models/
 
 # Create non-root user
 RUN useradd -m -u 1000 appuser && chown -R appuser:appuser /app
@@ -23,8 +23,8 @@ USER appuser
 # Expose MCP server port
 EXPOSE 8081
 
-# Health check - MCP servers don't have a /health endpoint
-# Health is checked by docker-compose using MCP JSON-RPC calls
+# Health check - Custom /health endpoint added via @server.custom_route
+# Health is checked by docker-compose using the /health endpoint
 
 # Run the server
 CMD ["python", "mcp_servers/forecast_server.py"]

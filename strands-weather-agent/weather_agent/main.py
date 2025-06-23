@@ -63,7 +63,7 @@ With --structured flag:
         asyncio.run(run_mcp_multi_turn_demo(structured=args.structured))
     else:
         # Import and run the chatbot
-        from chatbot import main as chatbot_main
+        from .chatbot import main as chatbot_main
         
         # Pass flags if provided
         sys.argv = [sys.argv[0]]

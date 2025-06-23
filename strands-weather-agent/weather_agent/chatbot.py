@@ -17,7 +17,7 @@ from typing import Optional
 # Add parent directory to path for imports
 sys.path.append('.')
 
-from .mcp_agent import create_weather_agent, MCPWeatherAgent
+from mcp_agent import create_weather_agent, MCPWeatherAgent
 
 # Configure logging
 logging.getLogger("strands").setLevel(logging.INFO)

@@ -9,6 +9,7 @@ from pydantic import BaseModel
 from typing import Optional, Dict, Any
 import asyncio
 import uvicorn
+import os
 from weather_agent.mcp_agent import create_weather_agent, MCPWeatherAgent
 from weather_agent.models.structured_responses import WeatherQueryResponse, ValidationResult
 from contextlib import asynccontextmanager
@@ -180,12 +181,47 @@ async def get_mcp_status():
         logger.error(f"Error checking MCP status: {e}")
         raise HTTPException(status_code=500, detail=str(e))
 
+@app.get("/session/{session_id}")
+async def get_session_info(session_id: str):
+    """Get information about a conversation session."""
+    if not agent:
+        raise HTTPException(status_code=503, detail="Agent not initialized")
+    
+    try:
+        session_info = agent.get_session_info(session_id)
+        if session_info is None:
+            raise HTTPException(status_code=404, detail="Session not found")
+        return session_info
+    except HTTPException:
+        raise
+    except Exception as e:
+        logger.error(f"Error getting session info: {e}")
+        raise HTTPException(status_code=500, detail=str(e))
+
+@app.delete("/session/{session_id}")
+async def clear_session(session_id: str):
+    """Clear a conversation session."""
+    if not agent:
+        raise HTTPException(status_code=503, detail="Agent not initialized")
+    
+    try:
+        cleared = agent.clear_session(session_id)
+        if not cleared:
+            raise HTTPException(status_code=404, detail="Session not found")
+        return {"message": f"Session {session_id} cleared successfully"}
+    except HTTPException:
+        raise
+    except Exception as e:
+        logger.error(f"Error clearing session: {e}")
+        raise HTTPException(status_code=500, detail=str(e))
+
 if __name__ == "__main__":
     # Run the server
+    port = int(os.getenv("API_PORT", "8090"))
     uvicorn.run(
         "api:app",
         host="0.0.0.0",
-        port=8090,
+        port=port,
         reload=True,
         log_level="info"
     )

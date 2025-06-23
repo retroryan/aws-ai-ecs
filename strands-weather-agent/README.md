@@ -82,35 +82,11 @@ pip install -r requirements.txt
 # 4. Start MCP servers (in background)
 ./scripts/start_servers.sh
 
-# 5. Test basic functionality
-python -c "
-import asyncio
-from weather_agent.mcp_agent import MCPWeatherAgent
+# 5. Run interactive chatbot - from project root
+python -m weather_agent.main               # Interactive mode
+python -m weather_agent.main --demo        # Demo mode with example queries
 
-async def test():
-    agent = MCPWeatherAgent()
-    connectivity = await agent.test_connectivity()
-    print('Server connectivity:', connectivity)
-    
-    if any(connectivity.values()):
-        response = await agent.query('What is the weather in Seattle?')
-        print('✅ Basic test PASSED')
-    else:
-        print('❌ No servers available')
-
-asyncio.run(test())
-"
-
-# 6. Run structured output demo (comprehensive test)
-python -m weather_agent.structured_output_demo
-
-# 7. Run interactive chatbot
-cd weather_agent
-python main.py              # Interactive mode
-python main.py --demo       # Demo mode with example queries
-
-# 8. Stop servers when done (from project root)
-cd ..
+# 6. Stop servers when done
 ./scripts/stop_servers.sh
 ```
 
@@ -123,44 +99,13 @@ For rapid local development and testing:
 ./scripts/start_servers.sh
 
 # Step 2: Test basic agent functionality
-python -c "
-import asyncio
-from weather_agent.mcp_agent import MCPWeatherAgent
-
-async def test():
-    agent = MCPWeatherAgent()
-    response = await agent.query('Weather in Denver?')
-    print('Response length:', len(response))
-    print('✅ Basic test completed')
-
-asyncio.run(test())
-"
+python tests/test_mcp_agent_strands.py
 
 # Step 3: Test structured output
-python -c "
-import asyncio
-from weather_agent.mcp_agent import MCPWeatherAgent
+python -m weather_agent.structured_output_demo
 
-async def test():
-    agent = MCPWeatherAgent()
-    response = await agent.query_structured('Weather in Chicago?')
-    print('Query type:', response.query_type)
-    print('Locations found:', len(response.locations))
-    if response.locations:
-        loc = response.locations[0]
-        print(f'Location: {loc.name} at ({loc.latitude}, {loc.longitude})')
-    print('✅ Structured output test completed')
-
-asyncio.run(test())
-"
-
-# Step 4: Test system prompt loading
-python -c "
-from weather_agent.prompts import PromptManager
-pm = PromptManager()
-print('Available prompts:', pm.get_available_prompts())
-print('✅ Prompt system test completed')
-"
+# Step 4: Run comprehensive test suite
+python tests/run_all_tests.py
 
 # Step 5: Clean up
 ./scripts/stop_servers.sh
@@ -178,15 +123,10 @@ cp .env.example .env
 # 2. Start all services with AWS credentials
 ./scripts/start.sh
 
-# 3. Test the services
+# 3. Test the services (comprehensive testing with sample queries)
 ./scripts/test_docker.sh
 
-# 4. Access the API at http://localhost:8090
-curl -X POST http://localhost:8090/query \
-  -H "Content-Type: application/json" \
-  -d '{"query": "What is the weather like in Chicago?"}'
-
-# 5. Stop services when done
+# 4. Stop services when done
 ./scripts/stop.sh
 ```
 
@@ -211,18 +151,10 @@ pip install -r requirements.txt
 # 5. Run the API server
 python api.py
 
-# 6. Test the API
-curl http://localhost:8090/health
-curl -X POST http://localhost:8090/query \
-  -H "Content-Type: application/json" \
-  -d '{"query": "What is the weather like in Chicago?"}'
+# 6. Test the API endpoints (health, query, structured output)
+./scripts/test.sh
 
-# 7. Test structured output endpoint
-curl -X POST http://localhost:8090/query/structured \
-  -H "Content-Type: application/json" \
-  -d '{"query": "What is the weather like in Seattle?"}'
-
-# 8. Stop servers when done
+# 7. Stop servers when done
 ./scripts/stop_servers.sh
 ```
 
@@ -544,23 +476,145 @@ The CloudFormation templates create:
    - No hardcoded credentials
    - VPC isolation for services
 
-## Usage Examples
+## Demo and Testing Usage
+
+### Running Interactive Demos
+
+#### 1. **Simple Interactive Chatbot**
+Test the agent with an interactive chatbot interface:
+
+```bash
+# Start MCP servers
+./scripts/start_servers.sh
+
+# Run interactive chatbot
+cd weather_agent
+python main.py              # Interactive mode - type queries
+python main.py --demo       # Demo mode with predefined examples
+
+# Stop servers when done
+cd ..
+./scripts/stop_servers.sh
+```
+
+#### 2. **Multi-Turn Conversation Demos** 🎯 **NEW - Context Retention**
+Test the agent's ability to maintain conversation context across multiple turns:
+
+```bash
+# Basic multi-turn conversation demo
+python -m weather_agent.demo_scenarios
+
+# Context switching demo (advanced scenarios)
+python -m weather_agent.demo_scenarios --context-switching
+
+# Show detailed tool calls during demo
+python -m weather_agent.demo_scenarios --structured
+```
+
+**What the multi-turn demos showcase:**
+- **Turn 1:** "What's the weather like in Seattle?"
+- **Turn 2:** "How does it compare to Portland?" (remembers Seattle)
+- **Turn 3:** "Which city would be better for outdoor activities?" (remembers both cities)
+- **Turn 4:** Agricultural queries with location context
+- **Turn 5:** Comprehensive summaries using accumulated context
+
+#### 3. **Structured Output Demo**
+Test AWS Strands native structured output capabilities:
+
+```bash
+# Comprehensive structured output demonstration
+python -m examples.structured_output_demo
+
+# Quick structured output test
+python -c "
+import asyncio
+from weather_agent.mcp_agent import MCPWeatherAgent
+
+async def test():
+    agent = MCPWeatherAgent()
+    response = await agent.query_structured('Weather in Chicago?')
+    print('Query type:', response.query_type)
+    print('Locations found:', len(response.locations))
+    if response.locations:
+        loc = response.locations[0]
+        print(f'Location: {loc.name} at ({loc.latitude}, {loc.longitude})')
+
+asyncio.run(test())
+"
+```
+
+#### 4. **Context Retention Testing** 🧪 **NEW**
+Validate the conversation context retention implementation:
+
+```bash
+# Comprehensive context retention test suite
+python test_context_retention.py
+
+# Expected output:
+# 🎉 All Tests Completed Successfully!
+# ✅ Basic context retention: PASSED
+# ✅ Context switching: PASSED  
+# ✅ Structured output context: PASSED
+# ✅ Session management: PASSED
+```
 
 ### API Usage
+
+#### REST API Endpoints
+
+```bash
+# Health check
+curl http://localhost:8090/health
+
+# Simple query
+curl -X POST http://localhost:8090/query \
+  -H "Content-Type: application/json" \
+  -d '{"query": "What is the weather like in Chicago?"}'
+
+# Structured output query
+curl -X POST http://localhost:8090/query/structured \
+  -H "Content-Type: application/json" \
+  -d '{"query": "What is the weather like in Seattle?"}'
+
+# Multi-turn conversation with session
+curl -X POST http://localhost:8090/query \
+  -H "Content-Type: application/json" \
+  -d '{"query": "What is the weather in Denver?", "session_id": "conversation_1"}'
+
+curl -X POST http://localhost:8090/query \
+  -H "Content-Type: application/json" \
+  -d '{"query": "How does it compare to Phoenix?", "session_id": "conversation_1"}'
+
+# Session management endpoints
+curl http://localhost:8090/session/conversation_1         # Get session info
+curl -X DELETE http://localhost:8090/session/conversation_1  # Clear session
+curl http://localhost:8090/mcp/status                     # Check MCP server status
+```
+
+#### Python API Usage
 
 ```python
 import requests
 
-# Submit a weather query
+# Simple usage
 response = requests.post("http://localhost:8090/query", 
     json={"query": "What's the weather like in Chicago?"})
 print(response.json())
 
-# Example queries:
-# - "Give me a 5-day forecast for Seattle"
-# - "What were the temperatures in New York last week?"
-# - "Are conditions good for planting corn in Iowa?"
-# - "What's the frost risk for tomatoes in Minnesota?"
+# Multi-turn conversation with session management
+session_id = "my_weather_session"
+
+# Turn 1
+response1 = requests.post("http://localhost:8090/query", 
+    json={"query": "What's the weather in Seattle?", "session_id": session_id})
+
+# Turn 2 - agent remembers Seattle context
+response2 = requests.post("http://localhost:8090/query", 
+    json={"query": "How does it compare to Portland?", "session_id": session_id})
+
+# Turn 3 - agent remembers both cities
+response3 = requests.post("http://localhost:8090/query", 
+    json={"query": "Which would be better for hiking this weekend?", "session_id": session_id})
 ```
 
 ### Programmatic Usage
@@ -568,21 +622,91 @@ print(response.json())
 ```python
 from weather_agent.mcp_agent import MCPWeatherAgent
 
-# Initialize agent
-agent = MCPWeatherAgent()
-await agent.initialize()
+# Initialize agent with optional configuration
+agent = MCPWeatherAgent(
+    debug_logging=True,                    # Show detailed tool calls
+    prompt_type="agriculture",             # Use agriculture-focused prompts
+    session_storage_dir="./sessions"      # Enable persistent sessions
+)
 
-# Get text response
+# Test connectivity
+connectivity = await agent.test_connectivity()
+print("MCP server status:", connectivity)
+
+# Single query (creates new session automatically)
 response = await agent.query("What's the weather forecast for Iowa?")
 print(response)
 
-# Get structured response
-structured = await agent.query_structured(
-    "What's the weather forecast for Iowa?", 
-    response_format="forecast"
+# Multi-turn conversation with explicit session
+session_id = "farming_consultation"
+
+# Turn 1: Get weather
+response1 = await agent.query(
+    "What's the weather in Des Moines, Iowa?", 
+    session_id=session_id
 )
-print(f"Location: {structured.location}")
-print(f"Current temp: {structured.current_conditions.temperature}°C")
+
+# Turn 2: Agent remembers Des Moines context
+response2 = await agent.query(
+    "Are conditions good for planting corn?", 
+    session_id=session_id
+)
+
+# Turn 3: Continue with context
+response3 = await agent.query(
+    "What about the frost risk?", 
+    session_id=session_id
+)
+
+# Get structured response with context
+structured = await agent.query_structured(
+    "Give me a complete agricultural assessment", 
+    session_id=session_id
+)
+
+print(f"Location: {structured.get_primary_location().name}")
+print(f"Agricultural assessment: {structured.agricultural_assessment}")
+
+# Session management
+session_info = agent.get_session_info(session_id)
+print(f"Session has {session_info['conversation_turns']} turns")
+
+# Clear session when done
+agent.clear_session(session_id)
+```
+
+### Example Queries
+
+The system handles various types of weather and agricultural queries:
+
+#### Weather Queries
+- "What's the weather like in Chicago?"
+- "Give me a 5-day forecast for Seattle"
+- "What were the temperatures in New York last week?"
+- "Compare the weather between Miami and Denver"
+- "Weather at coordinates 40.7128, -74.0060"
+
+#### Agricultural Queries  
+- "Are conditions good for planting corn in Iowa?"
+- "What's the frost risk for tomatoes in Minnesota?"
+- "Best time to plant wheat in Kansas?"
+- "Soil conditions for vineyards in Napa Valley?"
+
+#### Multi-Turn Context Examples
+- **Turn 1:** "Weather in Portland"
+- **Turn 2:** "How about Seattle?" (compares to Portland)
+- **Turn 3:** "Which is better for farming?" (considers both cities)
+
+#### Structured Output Examples
+The structured output preserves all geographic intelligence and weather data:
+
+```python
+# Returns WeatherQueryResponse with:
+# - query_type: "current", "forecast", "historical", "agricultural"
+# - locations: [ExtractedLocation(...)] with precise coordinates
+# - weather_data: WeatherDataSummary with conditions
+# - agricultural_assessment: Agricultural recommendations (if applicable)
+# - processing_time_ms: Response timing
 ```
 
 ## Docker Deployment
