@@ -20,6 +20,27 @@ The application demonstrates a weather and agricultural data assistant that can 
 
 **Important:** AWS credentials are required for AI features to work properly.
 
+You have two options for running the application locally:
+
+#### Option 1: Direct Python Execution (Development/Debugging)
+
+```bash
+# 1. Configure AWS Bedrock (one-time setup)
+./scripts/aws-setup.sh
+cp bedrock.env .env
+
+# 2. Start MCP servers in the background
+./scripts/start_servers.sh
+
+# 3. Run the main application
+python main.py
+
+# 4. Stop servers when done
+./scripts/stop_servers.sh
+```
+
+#### Option 2: Docker Compose (Production-like Environment)
+
 ```bash
 # 1. Configure AWS Bedrock (one-time setup)
 ./scripts/aws-setup.sh
@@ -139,63 +160,7 @@ For running and testing the application locally:
 - `run_tests.sh` - Run the full test suite
 
 ### AWS Infrastructure Scripts (`infra/`)
-For deploying and managing the application on AWS ECS:
-
-#### `infra/deploy.sh`
-Main deployment script with the following commands:
-- `aws-checks` - Verify AWS configuration and Bedrock access
-- `setup-ecr` - Setup ECR repositories and Docker authentication
-- `build-push` - Build and push Docker images to ECR
-- `all` - Deploy all infrastructure (base + services)
-- `base` - Deploy only base infrastructure
-- `services` - Deploy only services (requires base)
-- `update-services` - Update services after code changes
-- `status` - Show current deployment status
-- `cleanup-services` - Remove services stack only
-- `cleanup-base` - Remove base infrastructure
-- `cleanup-all` - Remove all infrastructure
-- `help` - Show help message
-
-#### `infra/setup-ecr.sh`
-Automates ECR repository creation and Docker authentication:
-- Creates ECR repositories for all four service images
-- Authenticates Docker with ECR (logs in for docker push)
-- Sets up proper repository lifecycle policies
-- Provides the ECR_REPO environment variable for builds
-- **Important:** Run this script if you get "Your authorization token has expired" errors during docker push
-
-#### `infra/build-push.sh`
-Builds and pushes Docker images to ECR:
-- Builds Docker images for all four services (agent + 3 MCP servers)
-- Uses linux/amd64 architecture for ECS Fargate compatibility
-- Tags and pushes images to ECR with versioning
-- Handles authentication and error checking
-- Detects expired authentication tokens and suggests running `setup-ecr.sh`
-- **Common failures:** Most push failures are due to expired ECR authentication tokens
-
-#### `infra/test_services.sh`
-Tests the deployed services end-to-end:
-- Retrieves the load balancer URL from CloudFormation
-- Tests health endpoints for all services
-- Sends test queries to the weather agent
-- Validates that services are responding correctly
-- Provides immediate feedback on deployment success
-
-#### `infra/aws-setup.sh`
-Configures AWS Bedrock settings:
-- Checks AWS CLI configuration and credentials
-- Lists available Bedrock models in your region
-- Creates a bedrock.env configuration file
-- Tests model access with actual invocation
-- Used by `scripts/aws-setup.sh` for local development
-
-#### `infra/status.sh`
-Comprehensive infrastructure status checking:
-- Shows CloudFormation stack status
-- Displays ECS service health and task counts
-- Performs health check calls
-- Shows recent errors from CloudWatch logs
-- Provides troubleshooting guidance
+The AWS Infrastructure Scripts are in the `infra/` directory. See the [AWS Setup and Configuration](#aws-setup-and-configuration) section for detailed documentation of these scripts.
 
 ## Architecture Overview
 
@@ -233,7 +198,13 @@ The agent uses **langchain-aws** to integrate with AWS Bedrock for AI-powered re
    - MCP servers provide weather and agricultural data
    - Agent combines tool responses into natural language answers
 
-2. **Required IAM Permissions**:
+2. **Model-Agnostic Design**:
+   - Built with LangChain's `init_chat_model` for unified interface across LLM providers
+   - AWS Bedrock Converse API ensures consistent tool calling across different models
+   - Switch between models by changing a single environment variable (`BEDROCK_MODEL_ID`)
+   - No code changes required when switching models
+
+3. **Required IAM Permissions**:
    - `bedrock:InvokeModel` for the following models:
      - `amazon.nova-lite-v1:0` (default)
      - `amazon.nova-pro-v1:0`
@@ -309,6 +280,7 @@ The system works with any AWS Bedrock model that supports tool/function calling:
 2. **Claude Models** (Anthropic) - Best overall performance
    - `anthropic.claude-3-5-sonnet-20241022-v2:0`
    - `anthropic.claude-3-haiku-20240307-v1:0`
+   - `anthropic.claude-3-opus-20240229-v1:0` (Most capable)
 
 3. **Llama Models** (Meta) - Open source option
    - `meta.llama3-70b-instruct-v1:0`
@@ -317,6 +289,11 @@ The system works with any AWS Bedrock model that supports tool/function calling:
 4. **Cohere Models** - Optimized for RAG and tool use
    - `cohere.command-r-plus-v1:0`
    - `cohere.command-r-v1:0`
+
+5. **Mistral Models** - Alternative option
+   - `mistral.mistral-large-2407-v1:0`
+
+**Note:** Model availability varies by AWS region. Check the [AWS Bedrock documentation](https://docs.aws.amazon.com/bedrock/latest/userguide/model-ids.html) for model availability in your region.
 
 ## Local Development
 
@@ -378,6 +355,30 @@ docker-compose up -d --build weather-agent
 ./scripts/test_docker.sh
 ```
 
+### Testing Different Models
+
+You can easily test different Bedrock models by changing the `BEDROCK_MODEL_ID` environment variable:
+
+```bash
+# Test with Claude 3.5 Sonnet
+export BEDROCK_MODEL_ID="anthropic.claude-3-5-sonnet-20241022-v2:0"
+./scripts/start.sh
+
+# Test with Claude 3 Haiku (faster, cheaper)
+export BEDROCK_MODEL_ID="anthropic.claude-3-haiku-20240307-v1:0"
+./scripts/start.sh
+
+# Test with Amazon Nova Lite
+export BEDROCK_MODEL_ID="amazon.nova-lite-v1:0"
+./scripts/start.sh
+
+# Test with Llama 3
+export BEDROCK_MODEL_ID="meta.llama3-70b-instruct-v1:0"
+./scripts/start.sh
+```
+
+**Note:** The application will exit with an error if `BEDROCK_MODEL_ID` is not set.
+
 ## AWS Setup and Configuration
 
 ### Infrastructure Overview
@@ -413,19 +414,39 @@ The ECS task roles include permissions for:
 - CloudWatch Logs for centralized logging
 - X-Ray for distributed tracing (optional)
 
+Required IAM policy for Bedrock access:
+```json
+{
+    "Version": "2012-10-17",
+    "Statement": [
+        {
+            "Effect": "Allow",
+            "Action": [
+                "bedrock:InvokeModel",
+                "bedrock:InvokeModelWithResponseStream"
+            ],
+            "Resource": "*"
+        }
+    ]
+}
+```
+
 ### Environment Variables
 
 #### Local Development (Docker)
 - `MCP_SERVERS`: JSON configuration for MCP server endpoints
-- `BEDROCK_MODEL_ID`: Selected AWS Bedrock model
+- `BEDROCK_MODEL_ID`: Selected AWS Bedrock model (required)
 - `BEDROCK_REGION`: AWS region for Bedrock
-- AWS credentials automatically passed from CLI
+- AWS credentials can be provided via:
+  - Environment variables (`AWS_ACCESS_KEY_ID`, `AWS_SECRET_ACCESS_KEY`)
+  - AWS CLI profiles (`aws configure`)
+  - IAM roles (if running on EC2)
 
 #### AWS ECS
 - `MCP_SERVERS`: Service discovery URLs (e.g., `forecast-server.agriculture.local:7071`)
 - `BEDROCK_MODEL_ID`: Configured during deployment
 - `BEDROCK_REGION`: Uses deployment region
-- IAM role provides AWS credentials automatically
+- IAM role provides AWS credentials automatically (no env vars needed)
 
 ### Container Details
 - **Base Image**: python:3.11-slim
@@ -433,6 +454,271 @@ The ECS task roles include permissions for:
 - **MCP Servers**: Ports 7071-7073, FastMCP HTTP servers
 - **Health Checks**: All services provide `/health` endpoints
 - **Production**: Uvicorn with auto-reload disabled
+
+### Infrastructure Scripts
+
+#### `infra/deploy.sh`
+Main deployment script with the following commands:
+- `aws-checks` - Verify AWS configuration and Bedrock access
+- `setup-ecr` - Setup ECR repositories and Docker authentication
+- `build-push` - Build and push Docker images to ECR
+- `all` - Deploy all infrastructure (base + services)
+- `base` - Deploy only base infrastructure
+- `services` - Deploy only services (requires base)
+- `update-services` - Update services after code changes
+- `status` - Show current deployment status
+- `cleanup-services` - Remove services stack only
+- `cleanup-base` - Remove base infrastructure
+- `cleanup-all` - Remove all infrastructure
+- `help` - Show help message
+
+#### `infra/setup-ecr.sh`
+Automates ECR repository creation and Docker authentication:
+- Creates ECR repositories for all four service images
+- Authenticates Docker with ECR (logs in for docker push)
+- Sets up proper repository lifecycle policies
+- Provides the ECR_REPO environment variable for builds
+- **Important:** Run this script if you get "Your authorization token has expired" errors during docker push
+
+#### `infra/build-push.sh`
+Builds and pushes Docker images to ECR:
+- Builds Docker images for all four services (agent + 3 MCP servers)
+- Uses linux/amd64 architecture for ECS Fargate compatibility
+- Tags and pushes images to ECR with versioning
+- Handles authentication and error checking
+- Detects expired authentication tokens and suggests running `setup-ecr.sh`
+- **Common failures:** Most push failures are due to expired ECR authentication tokens
+
+#### `infra/test_services.sh`
+Tests the deployed services end-to-end:
+- Retrieves the load balancer URL from CloudFormation
+- Tests health endpoints for all services
+- Sends test queries to the weather agent
+- Validates that services are responding correctly
+- Provides immediate feedback on deployment success
+
+#### `infra/aws-setup.sh`
+Configures AWS Bedrock settings:
+- Checks AWS CLI configuration and credentials
+- Lists available Bedrock models in your region
+- Creates a bedrock.env configuration file
+- Tests model access with actual invocation
+- Used by `scripts/aws-setup.sh` for local development
+
+#### `infra/status.sh`
+Comprehensive infrastructure status checking:
+- Shows CloudFormation stack status
+- Displays ECS service health and task counts
+- Performs health check calls
+- Shows recent errors from CloudWatch logs
+- Provides troubleshooting guidance
+
+## Health Checking MCP Servers
+
+### Overview
+FastMCP servers using the `streamable-http` transport don't provide traditional HTTP health endpoints at the root path. Instead, they use the MCP protocol over HTTP, requiring specific JSON-RPC requests to verify server health.
+
+**Important Notes:**
+- The path must include a trailing slash (`/mcp/` not `/mcp`)
+- The Accept header must include both `application/json` and `text/event-stream`
+- A "Missing session ID" error response still indicates a healthy server
+
+### Health Check Methods
+
+#### 1. JSON-RPC Method (Recommended)
+MCP servers respond to JSON-RPC requests at their configured path (typically `/mcp`). The most reliable health check uses the `mcp/list_tools` method:
+
+```bash
+# Check a single MCP server (note the trailing slash and Accept header)
+curl -X POST http://localhost:7071/mcp/ \
+  -H "Content-Type: application/json" \
+  -H "Accept: application/json, text/event-stream" \
+  -d '{"jsonrpc": "2.0", "method": "mcp/list_tools", "id": 1}'
+```
+
+A healthy server will respond with either:
+- A list of available tools (if no session is required)
+- An error about missing session (which still indicates the server is alive)
+
+#### 2. Docker Compose Health Checks
+The project's `docker-compose.yml` includes health checks for all MCP servers:
+
+```yaml
+healthcheck:
+  test: ["CMD", "curl", "-f", "-X", "POST", "http://localhost:7071/mcp", 
+         "-H", "Content-Type: application/json", 
+         "-d", '{"jsonrpc": "2.0", "method": "mcp/list_tools", "id": 1}']
+  interval: 30s
+  timeout: 3s
+  retries: 3
+  start_period: 5s
+```
+
+#### 3. Automated Health Check Script
+The `test_docker.sh` script includes a function to check MCP server health:
+
+```bash
+# Function from test_docker.sh
+check_mcp_service() {
+    local service=$1
+    local url=$2
+    
+    response=$(curl -s -X POST "$url" \
+        -H "Content-Type: application/json" \
+        -H "Accept: application/json, text/event-stream" \
+        -d '{"jsonrpc": "2.0", "method": "mcp/list_tools", "id": 1}')
+    
+    # Check for valid response (tools list or session error)
+    if echo "$response" | grep -q "session" || echo "$response" | grep -q "tools"; then
+        echo "✓ $service is healthy"
+    else
+        echo "✗ $service is not responding"
+    fi
+}
+```
+
+### Health Check Examples
+
+#### Local Development
+```bash
+# Check all MCP servers
+for port in 7071 7072 7073; do
+    echo "Checking server on port $port..."
+    curl -s -X POST http://localhost:$port/mcp/ \
+        -H "Content-Type: application/json" \
+        -H "Accept: application/json, text/event-stream" \
+        -d '{"jsonrpc": "2.0", "method": "mcp/list_tools", "id": 1}' | jq .
+done
+
+# Check specific servers
+# Forecast server
+curl -X POST http://localhost:7071/mcp/ \
+    -H "Content-Type: application/json" \
+    -H "Accept: application/json, text/event-stream" \
+    -d '{"jsonrpc": "2.0", "method": "mcp/list_tools", "id": 1}'
+
+# Historical server  
+curl -X POST http://localhost:7072/mcp/ \
+    -H "Content-Type: application/json" \
+    -H "Accept: application/json, text/event-stream" \
+    -d '{"jsonrpc": "2.0", "method": "mcp/list_tools", "id": 1}'
+
+# Agricultural server
+curl -X POST http://localhost:7073/mcp/ \
+    -H "Content-Type: application/json" \
+    -H "Accept: application/json, text/event-stream" \
+    -d '{"jsonrpc": "2.0", "method": "mcp/list_tools", "id": 1}'
+```
+
+#### AWS ECS Health Checks
+In AWS ECS, health checks are configured in the task definitions and monitored by the load balancer:
+
+```bash
+# Check service health via AWS CLI
+aws ecs describe-services \
+    --cluster agriculture-cluster \
+    --services agriculture-agent-forecast \
+    --query 'services[0].healthCheckGracePeriodSeconds'
+
+# View target health in load balancer
+aws elbv2 describe-target-health \
+    --target-group-arn <target-group-arn> \
+    --query 'TargetHealthDescriptions[*].[Target.Id,TargetHealth.State]'
+```
+
+### Understanding MCP Server Responses
+
+#### Healthy Response Examples
+1. **With tools list** (when session not required):
+```json
+{
+  "jsonrpc": "2.0",
+  "result": {
+    "tools": [
+      {
+        "name": "get_weather_forecast",
+        "description": "Get weather forecast data"
+      }
+    ]
+  },
+  "id": 1
+}
+```
+
+2. **Session error** (still indicates healthy server):
+```json
+{
+  "jsonrpc": "2.0",
+  "error": {
+    "code": -32603,
+    "message": "No active session"
+  },
+  "id": 1
+}
+```
+
+#### Unhealthy Indicators
+- Connection refused (server not running)
+- Timeout (server hanging)
+- HTTP 404 (wrong path)
+- Empty response
+- Invalid JSON response
+
+### Integration with Monitoring
+
+#### Docker Health Status
+```bash
+# View health status of all containers
+docker-compose ps
+
+# Get detailed health info
+docker inspect mcp-forecast-server | jq '.[0].State.Health'
+```
+
+#### Custom Health Check Implementation
+For production deployments, consider implementing a dedicated health endpoint in your MCP servers:
+
+```python
+from fastmcp import FastMCP
+from starlette.requests import Request
+from starlette.responses import PlainTextResponse
+
+mcp = FastMCP("MyServer")
+
+# Add custom health route
+@mcp.custom_route("/health", methods=["GET"])
+async def health_check(request: Request) -> PlainTextResponse:
+    return PlainTextResponse("OK")
+```
+
+### Troubleshooting Health Check Failures
+
+1. **Connection Refused**
+   - Server not started
+   - Wrong port number
+   - Container not running
+
+2. **404 Not Found**
+   - Wrong path (should be `/mcp`)
+   - Server not configured for HTTP transport
+
+3. **Timeout**
+   - Server overloaded
+   - Network issues
+   - Container resource constraints
+
+4. **Invalid Response**
+   - Server error
+   - Wrong protocol (not JSON-RPC)
+   - Authentication issues
+
+### Best Practices
+
+1. **Use appropriate timeouts**: 3-5 seconds is usually sufficient
+2. **Set reasonable intervals**: 30 seconds prevents overwhelming servers
+3. **Configure retries**: 3 retries helps with transient failures
+4. **Monitor logs**: Check server logs when health checks fail
+5. **Use service discovery**: In ECS, use internal DNS names for health checks
 
 ## Troubleshooting
 
@@ -562,3 +848,150 @@ To make this production-ready, consider:
 ---
 
 **Status**: Production-ready architecture demonstration. This showcases advanced AI agent patterns with distributed tools - add security measures and authentication before real-world deployment.
+
+## Working with AWS Credentials in Docker Containers
+
+### The Challenge
+
+When running AWS applications in Docker containers, a common issue is that containers cannot access AWS credentials configured on the host machine. This leads to errors like:
+```
+botocore.exceptions.NoCredentialsError: Unable to locate credentials
+```
+
+This happens because Docker containers are isolated from the host's filesystem and environment, including the `~/.aws` directory where AWS credentials are typically stored.
+
+### The Solution: AWS CLI Export-Credentials
+
+The key to solving this issue is using the AWS CLI's `export-credentials` command, which automatically extracts and exports credentials as environment variables that can be passed to Docker containers.
+
+#### The Magic Command
+
+```bash
+export $(aws configure export-credentials --format env-no-export 2>/dev/null)
+```
+
+This command:
+- Extracts credentials from your current AWS CLI configuration
+- Exports them as standard AWS environment variables:
+  - `AWS_ACCESS_KEY_ID`
+  - `AWS_SECRET_ACCESS_KEY`
+  - `AWS_SESSION_TOKEN` (if using temporary credentials)
+- Works with ALL authentication methods:
+  - AWS CLI profiles
+  - AWS SSO (Single Sign-On)
+  - Temporary credentials from assume-role
+  - IAM instance roles
+  - MFA-enabled accounts
+
+### Implementation in scripts/start.sh
+
+The project's `scripts/start.sh` implements this solution elegantly:
+
+```bash
+#!/bin/bash
+set -e
+
+echo "Starting Agriculture Agent services..."
+
+# Navigate to project root
+cd "$(dirname "$0")/.."
+
+# Export AWS credentials if available
+if command -v aws &> /dev/null && aws sts get-caller-identity &> /dev/null 2>&1; then
+    export $(aws configure export-credentials --format env-no-export 2>/dev/null)
+    echo "✓ AWS credentials exported"
+fi
+
+# Set AWS_SESSION_TOKEN to empty if not set (to avoid docker-compose warning)
+export AWS_SESSION_TOKEN=${AWS_SESSION_TOKEN:-}
+
+# Start services
+docker-compose up -d
+```
+
+Key features of this implementation:
+1. **Automatic detection**: Checks if AWS CLI is installed and configured
+2. **Silent operation**: Redirects errors to avoid cluttering output
+3. **Session token handling**: Sets empty value to prevent Docker Compose warnings
+4. **No manual configuration**: Users don't need to set any AWS environment variables
+
+### Docker Compose Configuration
+
+The credentials are then passed to containers via `docker-compose.yml`:
+
+```yaml
+services:
+  weather-agent:
+    environment:
+      # AWS Credentials (automatically populated by start.sh)
+      - AWS_ACCESS_KEY_ID=${AWS_ACCESS_KEY_ID}
+      - AWS_SECRET_ACCESS_KEY=${AWS_SECRET_ACCESS_KEY}
+      - AWS_SESSION_TOKEN=${AWS_SESSION_TOKEN}
+      - AWS_DEFAULT_REGION=${AWS_DEFAULT_REGION:-us-east-1}
+```
+
+### What to Avoid
+
+1. **Don't use AWS profiles in Docker**: Containers can't access `~/.aws/config` or `~/.aws/credentials`
+2. **Don't hardcode credentials**: Security risk and maintenance nightmare
+3. **Don't use volume mounts for ~/.aws**: 
+   - Doesn't work with SSO or temporary credentials
+   - Creates security risks
+   - Causes permission issues
+4. **Don't forget AWS_SESSION_TOKEN**: Required for temporary credentials (SSO, assume-role)
+5. **Don't use wildcards in IAM policies**: Be specific about which Bedrock models to allow
+
+### Additional Docker Fixes Implemented
+
+Beyond credential handling, several other Docker-related fixes were implemented:
+
+#### 1. Port Configuration
+- Changed Weather Agent API from port 8000 to 7075 to avoid conflicts
+- Consistently applied across all configuration files
+
+#### 2. Health Check Corrections
+- MCP servers don't have `/health` endpoints
+- Updated Docker health checks to use the MCP protocol:
+  ```yaml
+  healthcheck:
+    test: ["CMD", "curl", "-f", "-X", "POST", "http://localhost:7071/mcp", 
+           "-H", "Content-Type: application/json", 
+           "-d", '{"jsonrpc": "2.0", "method": "mcp/list_tools", "id": 1}']
+  ```
+
+#### 3. Service Dependencies
+- Main service depends on all MCP servers being healthy
+- Docker Compose ensures proper startup order
+
+### Why This Solution Works
+
+1. **Universal Compatibility**: Works with any AWS authentication method
+2. **Zero Configuration**: Users don't need to modify their AWS setup
+3. **Security**: Credentials are only passed at runtime, never stored
+4. **Temporary Credentials**: Handles session tokens for SSO/role assumption
+5. **Error Handling**: Gracefully handles missing credentials
+
+### Testing the Implementation
+
+To verify AWS credentials are working in Docker:
+
+```bash
+# Start services with automatic credential export
+./scripts/start.sh
+
+# Check for credential errors in logs
+docker logs weather-agent-app | grep -i credential
+
+# Test with an actual query
+curl -X POST http://localhost:7075/query \
+  -H "Content-Type: application/json" \
+  -d '{"query": "What is the weather in Chicago?"}'
+```
+
+### Key Takeaways
+
+1. **Always use `aws configure export-credentials`** for passing AWS credentials to Docker
+2. **Handle all three credential variables** (access key, secret key, session token)
+3. **Test with different authentication methods** to ensure compatibility
+4. **Implement proper health checks** that match your service's actual protocol
+5. **Document the credential flow** so team members understand the authentication
