@@ -73,13 +73,13 @@ services:
     environment:
       # AWS Bedrock Configuration
       - BEDROCK_MODEL_ID=${BEDROCK_MODEL_ID}
-      - BEDROCK_REGION=${BEDROCK_REGION:-us-east-1}
+      - BEDROCK_REGION=${BEDROCK_REGION:-us-west-2}
       - BEDROCK_TEMPERATURE=${BEDROCK_TEMPERATURE:-0}
       # AWS Credentials (if not using IAM role)
       - AWS_ACCESS_KEY_ID=${AWS_ACCESS_KEY_ID}
       - AWS_SECRET_ACCESS_KEY=${AWS_SECRET_ACCESS_KEY}
       - AWS_SESSION_TOKEN=${AWS_SESSION_TOKEN}
-      - AWS_DEFAULT_REGION=${AWS_DEFAULT_REGION:-us-east-1}
+      - AWS_DEFAULT_REGION=${AWS_DEFAULT_REGION:-us-west-2}
       # MCP Server URLs (internal Docker network)
       - MCP_FORECAST_URL=http://forecast-server:8081/mcp/
       - MCP_HISTORICAL_URL=http://historical-server:8082/mcp/

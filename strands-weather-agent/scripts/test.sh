@@ -160,7 +160,38 @@ test_query "Show me historical weather for Seattle last week"
 test_query "Are conditions good for planting corn in Iowa?"
 
 echo ""
-echo "4. Service URLs:"
+echo "4. Testing API endpoints..."
+echo ""
+
+# Test health endpoint
+echo "Testing health endpoint:"
+health_response=$(curl -s http://localhost:8090/health 2>/dev/null || echo "Error: Failed to connect")
+echo "  GET /health: $health_response"
+echo ""
+
+# Test query endpoint
+echo "Testing query endpoint:"
+query_response=$(curl -s -X POST http://localhost:8090/query \
+  -H "Content-Type: application/json" \
+  -d '{"query": "What is the weather like in Chicago?"}' 2>/dev/null || echo '{"response": "Error: Failed to connect"}')
+query_text=$(echo "$query_response" | jq -r '.response' 2>/dev/null || echo "Error parsing response")
+if [ ${#query_text} -gt 100 ]; then
+    echo "  POST /query: ${query_text:0:100}..."
+else
+    echo "  POST /query: $query_text"
+fi
+echo ""
+
+# Test structured output endpoint
+echo "Testing structured output endpoint:"
+structured_response=$(curl -s -X POST http://localhost:8090/query/structured \
+  -H "Content-Type: application/json" \
+  -d '{"query": "What is the weather like in Seattle?"}' 2>/dev/null || echo '{"error": "Failed to connect"}')
+structured_summary=$(echo "$structured_response" | jq -r '.query_type // .error' 2>/dev/null || echo "Error parsing response")
+echo "  POST /query/structured: Query type - $structured_summary"
+echo ""
+
+echo "5. Service URLs:"
 echo "   - Weather Agent API: http://localhost:8090"
 echo "   - API Docs: http://localhost:8090/docs"
 echo "   - Health Check: http://localhost:8090/health"

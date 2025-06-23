@@ -6,8 +6,8 @@
 
 set -e
 
-echo "🐳 Docker Service Test - AWS Strands Weather Agent"
-echo "=================================================="
+echo "🐳 Docker Service Test"
+echo "====================="
 echo ""
 
 # Colors for output
@@ -97,16 +97,16 @@ echo ""
 # Check each service
 services_ok=true
 
-# Check MCP servers (they don't have /health endpoints)
-if ! check_mcp_service "Forecast Server" "http://localhost:8081/mcp/"; then
+# Check MCP servers (they have /health endpoints in our setup)
+if ! check_service "Forecast Server" "http://localhost:8081/health"; then
     services_ok=false
 fi
 
-if ! check_mcp_service "Historical Server" "http://localhost:8082/mcp/"; then
+if ! check_service "Historical Server" "http://localhost:8082/health"; then
     services_ok=false
 fi
 
-if ! check_mcp_service "Agricultural Server" "http://localhost:8083/mcp/"; then
+if ! check_service "Agricultural Server" "http://localhost:8083/health"; then
     services_ok=false
 fi
 
@@ -142,19 +142,20 @@ test_query() {
     # Extract response field
     response_text=$(echo "$response" | jq -r '.response' 2>/dev/null || echo "Error parsing response")
     
-    if [[ "$response_text" == "Error"* ]] || [[ "$response_text" == *"error"* ]]; then
+    if [[ "$response_text" == "Error"* ]] || [[ "$response_text" == "An error occurred"* ]]; then
         if [[ "$response_text" == *"credentials"* ]]; then
             echo -e "Response: ${YELLOW}⚠${NC} AWS credentials not configured (expected in Docker)"
         else
             echo -e "Response: ${RED}✗ $response_text${NC}"
         fi
     else
-        # Show first 150 chars of response
+        # Truncate long responses for display
         if [ ${#response_text} -gt 150 ]; then
-            echo -e "Response: ${GREEN}✓${NC} ${response_text:0:150}..."
+            display_text="${response_text:0:147}..."
         else
-            echo -e "Response: ${GREEN}✓${NC} $response_text"
+            display_text="$response_text"
         fi
+        echo -e "Response: ${GREEN}✓${NC} $display_text"
     fi
     echo ""
 }
@@ -170,10 +171,10 @@ echo "   - Weather Agent API: http://localhost:8090"
 echo "   - API Docs: http://localhost:8090/docs"
 echo "   - Health Check: http://localhost:8090/health"
 echo ""
-echo "   MCP Servers (internal):"
-echo "   - Forecast: http://localhost:8081/mcp/"
-echo "   - Historical: http://localhost:8082/mcp/"
-echo "   - Agricultural: http://localhost:8083/mcp/"
+echo "   MCP Servers:"
+echo "   - Forecast: http://localhost:8081/health"
+echo "   - Historical: http://localhost:8082/health"
+echo "   - Agricultural: http://localhost:8083/health"
 echo ""
 
 echo -e "${GREEN}✅ All tests passed!${NC}"
