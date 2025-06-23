@@ -100,23 +100,50 @@ echo "=============================="
 check_json_health "Server" "http://localhost:8081/health"
 check_json_health "Client" "http://localhost:8080/health"
 
-# Functional test
+# Functional tests
 echo ""
-echo "3. Functional Test"
+echo "3. Functional Tests"
 echo "=================="
-echo "Testing inquiry endpoint with Python skills search..."
-echo ""
 
-response=$(curl -s -X POST http://localhost:8080/inquire \
-    -H "Content-Type: application/json" \
-    -d '{"question": "Find employees with Python skills"}')
+# Test 1: Get all employees
+echo "Test 1: Getting all employees..."
+echo ""
+response=$(curl -s http://localhost:8080/employees)
 
 if command -v jq &> /dev/null; then
-    count=$(echo "$response" | jq -r '.count // 0')
-    echo "Results found: $count employees"
+    count=$(echo "$response" | jq -r '.employees | length // 0')
+    echo "Found: $count knowledge specialists"
     echo ""
+    echo "Specialists:"
+    echo "$response" | jq -r '.employees[] | "  - \(.name) (\(.specialty))"'
+else
     echo "Response:"
-    echo "$response" | jq .
+    echo "$response"
+fi
+
+# Test 2: Ask a specialist a question
+echo ""
+echo "Test 2: Asking Dr. Sarah Chen about aircraft systems..."
+echo ""
+
+response=$(curl -s -X POST http://localhost:8080/ask/1 \
+    -H "Content-Type: application/json" \
+    -d '{"question": "What are the main components of modern aircraft navigation systems?"}')
+
+if command -v jq &> /dev/null; then
+    employee=$(echo "$response" | jq -r '.employee // "unknown"')
+    specialty=$(echo "$response" | jq -r '.specialty // "unknown"')
+    
+    if [ "$employee" != "unknown" ]; then
+        echo "Specialist: $employee"
+        echo "Specialty: $specialty"
+        echo ""
+        echo "Answer:"
+        echo "$response" | jq -r '.answer' | fold -s -w 80
+    else
+        echo "Response:"
+        echo "$response" | jq .
+    fi
 else
     echo "Response:"
     echo "$response"

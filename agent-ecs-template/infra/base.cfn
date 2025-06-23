@@ -1,5 +1,5 @@
 AWSTemplateFormatVersion: "2010-09-09"
-Description: Python Flask Client-Server Template - Base Infrastructure
+Description: Agent ECS Template - Base Infrastructure for Bedrock Demo
 
 Resources:
   ApplicationVPC:
@@ -62,14 +62,14 @@ Resources:
   ECSCluster:
     Type: AWS::ECS::Cluster
     Properties:
-      ClusterName: !Sub ${AWS::StackName}-cluster
+      ClusterName: agent-ecs-cluster
 
   LogGroup:
     DeletionPolicy: Delete
     UpdateReplacePolicy: Delete
     Type: AWS::Logs::LogGroup
     Properties:
-      LogGroupName: !Sub /ecs/${AWS::StackName}
+      LogGroupName: /ecs/agent-ecs
       RetentionInDays: 1
 
   ServerExecutionRole:
@@ -119,13 +119,16 @@ Resources:
                 Action:
                   - bedrock:InvokeModel
                 Resource:
-                  - arn:aws:bedrock:us-east-1::foundation-model/amazon.nova-pro-v1:0
+                  - !Sub 'arn:aws:bedrock:${AWS::Region}::foundation-model/amazon.nova-lite-v1:0'
+                  - !Sub 'arn:aws:bedrock:${AWS::Region}::foundation-model/amazon.nova-pro-v1:0'
+                  - !Sub 'arn:aws:bedrock:${AWS::Region}::foundation-model/anthropic.claude-3-5-haiku-*'
+                  - !Sub 'arn:aws:bedrock:${AWS::Region}::foundation-model/anthropic.claude-3-5-sonnet-*'
 
   ServiceConnectNamespace:
     Type: AWS::ServiceDiscovery::HttpNamespace
     Properties:
       Name: !Sub ${AWS::StackName}
-      Description: "Namespace for Python Flask client-server services"
+      Description: "Namespace for Agent ECS services"
 
   ServerSecurityGroup:
     Type: AWS::EC2::SecurityGroup
@@ -160,7 +163,7 @@ Resources:
           FromPort: 8081
           ToPort: 8081
           CidrIp: 0.0.0.0/0
-          Description: "Allow traffic to MCP Server on port 8081"
+          Description: "Allow traffic to Agent Server on port 8081"
 
   LoadBalancerSecurityGroup:
     Type: AWS::EC2::SecurityGroup

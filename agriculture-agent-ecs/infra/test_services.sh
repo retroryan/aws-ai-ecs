@@ -1,6 +1,6 @@
 #!/bin/bash
 
-# Agent ECS Template Service Testing Script
+# Spring AI MCP Agent Service Testing Script
 # Tests the deployed services through the Application Load Balancer
 
 set -e
@@ -14,8 +14,8 @@ source "${SCRIPT_DIR}/ecs-utils.sh"
 export_common_env
 
 # Main testing function
-test_agent_services() {
-    log_info "🔍 Finding AWS Load Balancer for Agent ECS services..."
+test_mcp_services() {
+    log_info "🔍 Finding AWS Load Balancer for Spring AI MCP Agent..."
     
     # Get the load balancer DNS name using common function
     local lb_dns=$(get_stack_output "$BASE_STACK_NAME" "LoadBalancerDNS")
@@ -113,24 +113,12 @@ test_agent_services() {
     # Check service status using common functions
     log_info "ECS Services Status:"
     
-    # Get service names from stack outputs
-    local client_service_name=$(get_stack_output "$SERVICES_STACK_NAME" "ClientServiceName")
-    local server_service_name=$(get_stack_output "$SERVICES_STACK_NAME" "ServerServiceName")
-    
-    # Use default names if not found
-    if [ -z "$client_service_name" ] || [ "$client_service_name" = "null" ]; then
-        client_service_name="${SERVICES_STACK_NAME}-client"
-    fi
-    if [ -z "$server_service_name" ] || [ "$server_service_name" = "null" ]; then
-        server_service_name="${SERVICES_STACK_NAME}-server"
-    fi
-    
     echo "  Client Service:"
-    local client_status=$(get_ecs_service_status "$CLUSTER_NAME" "$client_service_name")
+    local client_status=$(get_ecs_service_status "$CLUSTER_NAME" "mcp-client-service")
     log_info "    $client_status"
     
     echo "  Server Service:"
-    local server_status=$(get_ecs_service_status "$CLUSTER_NAME" "$server_service_name")
+    local server_status=$(get_ecs_service_status "$CLUSTER_NAME" "mcp-server-service")
     log_info "    $server_status"
     
     print_section "🎯 ALB Target Health"
@@ -165,4 +153,4 @@ fi
 check_jq
 
 # Run the test
-test_agent_services
+test_mcp_services

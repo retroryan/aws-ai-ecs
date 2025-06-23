@@ -15,7 +15,7 @@ import json
 from typing import Optional, Dict, Any, Union
 from langgraph.prebuilt import create_react_agent
 from langgraph.checkpoint.memory import MemorySaver
-from langchain_anthropic import ChatAnthropic
+from langchain.chat_models import init_chat_model
 from langchain_core.messages import HumanMessage, SystemMessage
 from langchain_mcp_adapters.client import MultiServerMCPClient
 from langchain_core.output_parsers import PydanticOutputParser
@@ -88,11 +88,31 @@ class MCPWeatherAgent:
     """
     
     def __init__(self):
-        # Create LLM instance
-        self.llm = ChatAnthropic(
-            model="claude-3-5-sonnet-20241022",
-            temperature=0
+        # Get configuration from environment
+        model_id = os.getenv("BEDROCK_MODEL_ID")
+        region = os.getenv("BEDROCK_REGION", "us-west-2")
+        temperature = float(os.getenv("BEDROCK_TEMPERATURE", "0"))
+        
+        # Require BEDROCK_MODEL_ID to be set
+        if not model_id:
+            print("❌ ERROR: BEDROCK_MODEL_ID environment variable is required")
+            print("   Please set BEDROCK_MODEL_ID to one of:")
+            print("   - anthropic.claude-3-5-sonnet-20240620-v1:0")
+            print("   - anthropic.claude-3-haiku-20240307-v1:0")
+            print("   - meta.llama3-70b-instruct-v1:0")
+            print("   - cohere.command-r-plus-v1:0")
+            print("\nExample: export BEDROCK_MODEL_ID=anthropic.claude-3-5-sonnet-20240620-v1:0")
+            import sys
+            sys.exit(1)
+        
+        # Create LLM instance using init_chat_model with Bedrock
+        self.llm = init_chat_model(
+            model_id,
+            model_provider="bedrock_converse",
+            region_name=region,
+            temperature=temperature
         )
+        print(f"🚀 Using Bedrock model: {model_id} in region {region}")
         
         # Initialize properties
         self.mcp_client = None

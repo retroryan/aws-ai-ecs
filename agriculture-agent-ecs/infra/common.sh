@@ -1,6 +1,6 @@
 #!/bin/bash
 
-# Agent ECS Template Common Functions Library
+# Python ECS Template Common Functions Library
 # This file contains shared functions used across all infrastructure scripts
 
 # Mark this module as sourced
@@ -15,14 +15,16 @@ export NC='\033[0m' # No Color
 
 # Common configuration defaults
 export DEFAULT_REGION="${AWS_REGION:-us-east-1}"
-export DEFAULT_BASE_STACK_NAME="${BASE_STACK_NAME:-agent-ecs-base}"
-export DEFAULT_SERVICES_STACK_NAME="${SERVICES_STACK_NAME:-agent-ecs-services}"
-export DEFAULT_CLUSTER_NAME="${CLUSTER_NAME:-agent-ecs-cluster}"
+export DEFAULT_BASE_STACK_NAME="${BASE_STACK_NAME:-agriculture-agent-base}"
+export DEFAULT_SERVICES_STACK_NAME="${SERVICES_STACK_NAME:-agriculture-agent-services}"
+export DEFAULT_CLUSTER_NAME="${CLUSTER_NAME:-${DEFAULT_BASE_STACK_NAME}-cluster}"
 
-# ECR configuration
-export ECR_REPO_PREFIX="agent-ecs"
-export ECR_CLIENT_REPO="${ECR_REPO_PREFIX}-client"
-export ECR_SERVER_REPO="${ECR_REPO_PREFIX}-server"
+# ECR configuration for agriculture agent
+export ECR_REPO_PREFIX="agriculture-agent"
+export ECR_MAIN_REPO="${ECR_REPO_PREFIX}-main"
+export ECR_FORECAST_REPO="${ECR_REPO_PREFIX}-forecast"
+export ECR_HISTORICAL_REPO="${ECR_REPO_PREFIX}-historical"
+export ECR_AGRICULTURAL_REPO="${ECR_REPO_PREFIX}-agricultural"
 
 # Logging functions
 log_info() {
@@ -296,8 +298,8 @@ ensure_project_root() {
     fi
     
     # Verify we're in the right place by checking for key files
-    if [ ! -f "docker-compose.yml" ] || [ ! -d "client" ] || [ ! -d "server" ]; then
-        log_error "Not in the Python Flask Client-Server project root directory"
+    if [ ! -f "main.py" ] || [ ! -d "mcp_servers" ] || [ ! -d "weather_agent" ]; then
+        log_error "Not in the Agriculture Agent project root directory"
         return 1
     fi
     

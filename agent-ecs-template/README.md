@@ -1,6 +1,6 @@
-# Python ECS Template
+# Agent ECS Template
 
-A simple Python Flask application demonstrating a client-server architecture designed to run on AWS ECS behind an Application Load Balancer. This template shows how to deploy a basic Python program to AWS ECR and ECS.
+A simple Python Flask application demonstrating AWS Bedrock integration in a client-server architecture. This template shows how to deploy AI-powered services to AWS ECS with proper IAM permissions for Bedrock access.
 
 ## Project Structure
 
@@ -10,40 +10,84 @@ A simple Python Flask application demonstrating a client-server architecture des
 
 ## Key Technologies
 
-- Python 3.12.10
-- Flask 3.1.0
+- Python 3.12.10 with Flask 3.1.0
+- AWS Bedrock (Amazon Nova Lite model)
 - Docker with linux/amd64 targeting
 - AWS ECS Fargate
-- Gunicorn production server
+- boto3 for AWS service integration
 
 ## Prerequisites
 
-- Docker (for local development and AWS deployment)
-- AWS CLI configured with appropriate permissions
-- [Rain CLI](https://github.com/aws-cloudformation/rain) (for AWS deployment)
+- Docker installed and running
+- AWS CLI configured with appropriate credentials
+- AWS account with Bedrock access enabled
+- [Rain CLI](https://github.com/aws-cloudformation/rain) (for CloudFormation deployment)
 
 ## Run Locally
 
-### Start the Applications
+### Quick Start with AWS Bedrock
 
-Run locally with Docker Compose:
+**Important:** AWS credentials are required for AI features to work properly.
+
 ```bash
-docker-compose up --build
+# Configure AWS Bedrock access (one-time setup)
+./scripts/setup.sh
+
+# Start services with AWS credentials
+./scripts/start.sh
+
+# Test all endpoints
+./scripts/test.sh
+```
+
+### Available Scripts
+
+All scripts are located in the `scripts/` directory:
+
+- `setup.sh` - Initial AWS Bedrock configuration
+- `start.sh` - Start services with AWS credentials
+- `stop.sh` - Stop all services
+- `test.sh` - Run comprehensive endpoint tests
+- `test-quick.sh` - Run quick health check
+- `logs.sh` - Show Docker Compose logs
+- `clean.sh` - Clean up containers and cache files
+- `rebuild.sh` - Rebuild containers from scratch
+
+### Manual Start
+
+If you prefer to start manually:
+```bash
+# Export AWS credentials first (required for Bedrock)
+export $(aws configure export-credentials --format env-no-export)
+
+# Then start Docker Compose
+docker-compose up -d
 ```
 
 ### Test the Application
 
 Run health checks:
 ```bash
+# Quick health check
+./scripts/test-quick.sh
+
+# Comprehensive endpoint testing
+./scripts/test.sh
+
+# Or test manually
 curl http://localhost:8080/health
 curl http://localhost:8081/health
 ```
 
 Test main functionality:
 ```bash
-curl -X POST http://localhost:8080/inquire \
+# Get all knowledge specialists
+curl http://localhost:8080/employees
+
+# Ask a specialist a question
+curl -X POST http://localhost:8080/ask/1 \
     -H "Content-Type: application/json" \
-    -d '{"question": "Find employees with Python skills"}'
+    -d '{"question": "What are the main components of modern aircraft navigation systems?"}'
 ```
 
 ## Container Details
@@ -58,46 +102,90 @@ curl -X POST http://localhost:8080/inquire \
 
 - `SERVER_URL`: The URL of the server (used by the client)
   - Local: `http://localhost:8081`
-  - ECS: `http://python-server.python-agent-ecs-base:8081`
+  - ECS: `http://agent-server.agent-ecs:8081`
 
-## Run on AWS
+### AWS Bedrock Configuration
+
+The server integrates with AWS Bedrock for AI-powered responses:
+
+```bash
+# Configure AWS Bedrock access (one-time setup)
+./scripts/setup.sh
+```
+
+Environment variables (automatically configured in ECS):
+- `BEDROCK_MODEL_ID`: Amazon Nova Lite model (`amazon.nova-lite-v1:0`)
+- `BEDROCK_REGION`: AWS region for Bedrock (uses deployment region)
+- `BEDROCK_MAX_TOKENS`: Maximum response tokens (500)
+- `BEDROCK_TEMPERATURE`: Response randomness 0-1 (0.7)
+
+## Deploy to AWS ECS
 
 ### Infrastructure Overview
 
-The infrastructure is split into two CloudFormation stacks for faster, more flexible deployments:
+The deployment uses two CloudFormation stacks:
 
-1. **Base Stack** (`infra/base.cfn`): VPC, networking, security groups, IAM roles, load balancer (~10 min to deploy)
-2. **Services Stack** (`infra/services.cfn`): ECS task definitions and services (~5 min to deploy/update)
+1. **Base Stack** (`infra/base.cfn`): 
+   - VPC with 2 private subnets
+   - Application Load Balancer
+   - ECS Cluster (agent-ecs-cluster)
+   - IAM roles with Bedrock permissions
+   - Security groups and networking
 
-This modular approach allows you to:
-- Update services without touching base infrastructure (5 min vs 60+ min)
-- Debug issues more easily with smaller, focused stacks
-- Deploy and test components incrementally
+2. **Services Stack** (`infra/services.cfn`): 
+   - ECS Task Definitions with Bedrock environment variables
+   - ECS Services running on Fargate
+   - Service Connect for internal communication
+   - CloudWatch logging
 
-**Note:** If deployment is taking an unusually long time, it's likely that the services deployment has failed. Check the deployment status using `./infra/deploy.sh status` and review the ECS service logs in the AWS Console for troubleshooting.
+### Step-by-Step Deployment
 
-### Quick Deployment
+1. **Verify AWS Prerequisites**:
+   ```bash
+   # Check AWS configuration and Bedrock access
+   ./infra/aws-checks.sh
+   ```
 
-The easiest way to deploy is using the orchestrated deployment script:
+2. **Setup ECR Repositories**:
+   ```bash
+   # Create ECR repositories: agent-ecs-client and agent-ecs-server
+   ./infra/deploy.sh setup-ecr
+   ```
 
+3. **Build and Push Docker Images**:
+   ```bash
+   # Build images for linux/amd64 and push to ECR
+   ./infra/deploy.sh build-push
+   ```
+
+4. **Deploy Infrastructure**:
+   ```bash
+   # Deploy both base and services stacks
+   ./infra/deploy.sh all
+   
+   # This creates:
+   # - agent-ecs-base stack (VPC, ALB, IAM roles)
+   # - agent-ecs-services stack (ECS tasks and services)
+   ```
+
+5. **Verify Deployment**:
+   ```bash
+   # Test the deployed services
+   ./infra/test_services.sh
+   
+   # Check infrastructure status
+   ./infra/deploy.sh status
+   ```
+
+### Update After Code Changes
+
+When you modify the application code:
 ```bash
-# 1. Setup ECR repositories
-./infra/deploy.sh setup-ecr
-
-# 2. Build and push Docker images
+# Rebuild and push new images
 ./infra/deploy.sh build-push
 
-# 3. Deploy all infrastructure (base + services)
-./infra/deploy.sh all
-
-# 4. Check the deployment worked with 
-./infra/test_services.sh 
-
-# For subsequent deployments - just update services after code changes
+# Update the running services
 ./infra/deploy.sh update-services
-
-# Check deployment status
-./infra/deploy.sh status
 ```
 
 ### Helper Scripts
@@ -158,19 +246,49 @@ If you prefer to run scripts individually:
 3. **Deploy infrastructure with Rain:**
    ```bash
    # Deploy base infrastructure
-   rain deploy infra/base.cfn python-agent-ecs-base
+   rain deploy infra/base.cfn agent-ecs-base
    
    # Deploy services
-   rain deploy infra/services.cfn python-agent-ecs-services --params BaseStackName=python-agent-ecs-base
+   rain deploy infra/services.cfn agent-ecs-services --params BaseStackName=agent-ecs-base
    ```
 
-### Testing the Deployment
+### Accessing the Deployed Application
 
-Once deployed, test with `curl` (replace YOUR_LB_HOST with your load balancer URL):
+After deployment, get the load balancer URL:
 ```bash
-curl -X POST --location "http://YOUR_LB_HOST/inquire" \
+# Get the load balancer URL
+aws cloudformation describe-stacks \
+    --stack-name agent-ecs-base \
+    --query "Stacks[0].Outputs[?OutputKey=='LoadBalancerDNS'].OutputValue" \
+    --output text
+```
+
+Test the deployed application:
+```bash
+# Replace <LB_URL> with your actual load balancer URL
+
+# Get all knowledge specialists
+curl http://<LB_URL>/employees
+
+# Ask a specialist a question
+curl -X POST "http://<LB_URL>/ask/1" \
     -H "Content-Type: application/json" \
-    -d '{"question": "Find employees with Python skills"}'
+    -d '{"question": "What are the main components of modern aircraft navigation systems?"}'
+```
+
+### Clean Up
+
+To remove all AWS resources:
+```bash
+# Remove services first
+./infra/deploy.sh cleanup-services
+
+# Then remove base infrastructure
+./infra/deploy.sh cleanup-all
+
+# Delete ECR repositories (optional)
+aws ecr delete-repository --repository-name agent-ecs-client --force
+aws ecr delete-repository --repository-name agent-ecs-server --force
 ```
 
 ## API Endpoints
@@ -178,10 +296,55 @@ curl -X POST --location "http://YOUR_LB_HOST/inquire" \
 ### Client (Port 8080)
 - `GET /` - Service information
 - `GET /health` - Health check with server connectivity
-- `POST /inquire` - Forward requests to server
+- `GET /employees` - Get all knowledge specialists
+- `POST /ask/{employee_id}` - Ask a specific specialist a question
 
 ### Server (Port 8081)
 - `GET /` - Service information
 - `GET /health` - Health check
-- `POST /api/process` - Process employee skill queries
-- `GET /api/employees` - Get all employees
+- `GET /api/employees` - Get all knowledge specialists
+- `POST /api/employee/{employee_id}/ask` - Ask a specific specialist a question using AWS Bedrock
+
+## Troubleshooting
+
+### Common Deployment Issues
+
+1. **ECR Push Failures**:
+   - Error: "Your authorization token has expired"
+   - Solution: Run `./infra/setup-ecr.sh` to refresh authentication
+
+2. **CloudFormation Stack Stuck**:
+   - Check deployment status: `./infra/deploy.sh status`
+   - View CloudWatch logs in AWS Console
+   - Common cause: ECS services failing health checks
+
+3. **Bedrock Access Denied**:
+   - Ensure your AWS account has Bedrock access enabled
+   - Check the region supports Amazon Nova Lite model
+   - Verify IAM permissions in base.cfn include your model
+
+4. **Services Not Responding**:
+   - Check ECS service logs: `/ecs/agent-ecs-client` and `/ecs/agent-ecs-server`
+   - Verify security groups allow traffic on ports 8080/8081
+   - Ensure tasks have public IP assignment enabled
+
+### Monitoring
+
+- **CloudWatch Logs**: All container logs are in CloudWatch under `/ecs/agent-ecs-*`
+- **ECS Console**: View task status, CPU/memory usage, and service events
+- **Load Balancer**: Check target health in EC2 console under Target Groups
+
+## Cost Estimates
+
+Running this demo on AWS:
+- **ECS Fargate**: ~$10-20/month (2 tasks, 0.25 vCPU, 0.5GB memory each)
+- **Application Load Balancer**: ~$20/month
+- **Amazon Bedrock**: ~$0.00015 per 1K tokens (very low for demo usage)
+- **Total**: ~$30-45/month
+
+## Further Reading
+
+- [AWS ECS Documentation](https://docs.aws.amazon.com/ecs/)
+- [AWS Bedrock Documentation](https://docs.aws.amazon.com/bedrock/)
+- [boto3 Bedrock Runtime](https://boto3.amazonaws.com/v1/documentation/api/latest/reference/services/bedrock-runtime.html)
+- See `boto3-v3.md` for detailed architecture and implementation notes

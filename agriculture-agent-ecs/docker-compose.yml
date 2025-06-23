@@ -1,0 +1,113 @@
+version: '3.8'
+
+services:
+  # Forecast MCP Server
+  forecast-server:
+    build:
+      context: .
+      dockerfile: docker/Dockerfile.forecast
+    container_name: mcp-forecast-server
+    ports:
+      - "7071:7071"
+    environment:
+      - LOG_LEVEL=${LOG_LEVEL:-INFO}
+      - OPENWEATHER_API_KEY=${OPENWEATHER_API_KEY}
+    networks:
+      - weather-network
+    restart: unless-stopped
+    healthcheck:
+      test: ["CMD", "curl", "-f", "-X", "POST", "http://localhost:7071/mcp", "-H", "Content-Type: application/json", "-d", '{"jsonrpc": "2.0", "method": "mcp/list_tools", "id": 1}']
+      interval: 30s
+      timeout: 3s
+      retries: 3
+      start_period: 5s
+
+  # Historical MCP Server  
+  historical-server:
+    build:
+      context: .
+      dockerfile: docker/Dockerfile.historical
+    container_name: mcp-historical-server
+    ports:
+      - "7072:7072"
+    environment:
+      - LOG_LEVEL=${LOG_LEVEL:-INFO}
+      - OPENWEATHER_API_KEY=${OPENWEATHER_API_KEY}
+    networks:
+      - weather-network
+    restart: unless-stopped
+    healthcheck:
+      test: ["CMD", "curl", "-f", "-X", "POST", "http://localhost:7072/mcp", "-H", "Content-Type: application/json", "-d", '{"jsonrpc": "2.0", "method": "mcp/list_tools", "id": 1}']
+      interval: 30s
+      timeout: 3s
+      retries: 3
+      start_period: 5s
+
+  # Agricultural MCP Server
+  agricultural-server:
+    build:
+      context: .
+      dockerfile: docker/Dockerfile.agricultural
+    container_name: mcp-agricultural-server
+    ports:
+      - "7073:7073"
+    environment:
+      - LOG_LEVEL=${LOG_LEVEL:-INFO}
+      - OPENWEATHER_API_KEY=${OPENWEATHER_API_KEY}
+    networks:
+      - weather-network
+    restart: unless-stopped
+    healthcheck:
+      test: ["CMD", "curl", "-f", "-X", "POST", "http://localhost:7073/mcp", "-H", "Content-Type: application/json", "-d", '{"jsonrpc": "2.0", "method": "mcp/list_tools", "id": 1}']
+      interval: 30s
+      timeout: 3s
+      retries: 3
+      start_period: 5s
+
+  # Weather Agent Application
+  weather-agent:
+    build:
+      context: .
+      dockerfile: docker/Dockerfile.agent
+    container_name: weather-agent-app
+    ports:
+      - "8000:8000"
+    environment:
+      # AWS Bedrock Configuration
+      - BEDROCK_MODEL_ID=${BEDROCK_MODEL_ID}
+      - BEDROCK_REGION=${BEDROCK_REGION:-us-east-1}
+      - BEDROCK_TEMPERATURE=${BEDROCK_TEMPERATURE:-0}
+      # AWS Credentials (if not using IAM role)
+      - AWS_ACCESS_KEY_ID=${AWS_ACCESS_KEY_ID}
+      - AWS_SECRET_ACCESS_KEY=${AWS_SECRET_ACCESS_KEY}
+      - AWS_SESSION_TOKEN=${AWS_SESSION_TOKEN}
+      # MCP Server URLs (internal Docker network)
+      - MCP_FORECAST_URL=http://forecast-server:7071/mcp
+      - MCP_HISTORICAL_URL=http://historical-server:7072/mcp
+      - MCP_AGRICULTURAL_URL=http://agricultural-server:7073/mcp
+      # Logging
+      - LOG_LEVEL=${LOG_LEVEL:-INFO}
+    depends_on:
+      forecast-server:
+        condition: service_healthy
+      historical-server:
+        condition: service_healthy
+      agricultural-server:
+        condition: service_healthy
+    networks:
+      - weather-network
+    restart: unless-stopped
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:8000/health"]
+      interval: 30s
+      timeout: 3s
+      retries: 3
+      start_period: 10s
+
+networks:
+  weather-network:
+    driver: bridge
+
+volumes:
+  logs:
+    driver: local

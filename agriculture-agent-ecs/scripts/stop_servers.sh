@@ -9,13 +9,17 @@ YELLOW='\033[1;33m'
 RED='\033[0;31m'
 NC='\033[0m' # No Color
 
+# Get the script directory and project root
+SCRIPT_DIR="$( cd "$( dirname "${BASH_SOURCE[0]}" )" && pwd )"
+PROJECT_ROOT="$( cd "$SCRIPT_DIR/.." && pwd )"
+
 echo -e "${YELLOW}Stopping FastMCP servers...${NC}"
 echo ""
 
 # Function to stop a server
 stop_server() {
     local name=$1
-    local pid_file="logs/${name}.pid"
+    local pid_file="$PROJECT_ROOT/logs/${name}.pid"
     
     if [ ! -f "$pid_file" ]; then
         echo -e "${YELLOW}⚠️  ${name} server is not running (no PID file found)${NC}"
@@ -52,7 +56,7 @@ stop_server() {
 }
 
 # Check if logs directory exists
-if [ ! -d "logs" ]; then
+if [ ! -d "$PROJECT_ROOT/logs" ]; then
     echo -e "${YELLOW}No logs directory found. No servers to stop.${NC}"
     exit 0
 fi
@@ -70,6 +74,6 @@ echo ""
 read -p "Do you want to remove log files? (y/N) " -n 1 -r
 echo
 if [[ $REPLY =~ ^[Yy]$ ]]; then
-    rm -f logs/*.log
+    rm -f "$PROJECT_ROOT"/logs/*.log
     echo -e "${GREEN}Log files removed.${NC}"
 fi

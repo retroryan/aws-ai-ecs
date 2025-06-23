@@ -21,7 +21,7 @@ export_common_env
 BASE_STACK_NAME="${BASE_STACK_NAME:-$DEFAULT_BASE_STACK_NAME}"
 SERVICES_STACK_NAME="${SERVICES_STACK_NAME:-$DEFAULT_SERVICES_STACK_NAME}"
 REGION="${AWS_REGION:-$DEFAULT_REGION}"
-CLUSTER_NAME=$(get_stack_output "$BASE_STACK_NAME" "ECSClusterName" "$REGION")
+CLUSTER_NAME="${BASE_STACK_NAME}-cluster"
 
 # Deployment timeouts
 SERVER_WAIT_TIME=300  # 5 minutes
@@ -146,12 +146,12 @@ deploy_services() {
     log_step "Step 6: Waiting for server to be healthy (timeout: ${SERVER_WAIT_TIME}s)..."
     if ! wait_for_service_stable "$SERVER_SERVICE_NAME" "Server" $SERVER_WAIT_TIME "$CLUSTER_NAME" "$REGION"; then
         log_error "Server deployment failed!"
-        capture_service_logs "Server" "/ecs/agent-ecs-server" 5 "$REGION"
+        capture_service_logs "Server" "/ecs/spring-ai-mcp-agent-server" 5 "$REGION"
         exit 1
     fi
     
     # Capture server logs
-    capture_service_logs "Server" "/ecs/agent-ecs-server" 2 "$REGION"
+    capture_service_logs "Server" "/ecs/spring-ai-mcp-agent-server" 2 "$REGION"
     
     # Step 7: Start the client service by updating desired count
     log_step "Step 7: Starting client service..."
@@ -164,7 +164,7 @@ deploy_services() {
     log_step "Step 8: Waiting for client to be healthy (timeout: ${CLIENT_WAIT_TIME}s)..."
     if ! wait_for_service_stable "$CLIENT_SERVICE_NAME" "Client" $CLIENT_WAIT_TIME "$CLUSTER_NAME" "$REGION"; then
         log_error "Client deployment failed!"
-        capture_service_logs "Client" "/ecs/agent-ecs-client" 5 "$REGION"
+        capture_service_logs "Client" "/ecs/spring-ai-mcp-agent-client" 5 "$REGION"
         
         # Check client configuration
         log_info "Checking client configuration..."
@@ -175,7 +175,7 @@ deploy_services() {
     fi
     
     # Capture client logs
-    capture_service_logs "Client" "/ecs/agent-ecs-client" 2 "$REGION"
+    capture_service_logs "Client" "/ecs/spring-ai-mcp-agent-client" 2 "$REGION"
     
     # Step 9: Verify deployment
     log_step "Step 9: Verifying deployment..."
