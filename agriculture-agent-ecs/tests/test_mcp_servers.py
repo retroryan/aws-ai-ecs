@@ -567,11 +567,11 @@ async def main():
     await test_all_server_types()
     
     # Print consolidated results
-    results.print_summary()
+    success = results.print_summary()
     
-    return results.failed == 0
+    return 0 if success else 1
 
 
 if __name__ == "__main__":
-    success = asyncio.run(main())
-    sys.exit(0 if success else 1)
+    exit_code = asyncio.run(main())
+    sys.exit(exit_code)

@@ -13,12 +13,12 @@ from typing import List, Tuple, Optional
 # Add parent directory to path
 sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 
-# Import all test modules
-from test_simple_coordinate import test_simple
-from test_coordinate_usage import test_coordinate_provision
-from test_coordinates import test_coordinates
-from test_diverse_cities import test_diverse_city_coordinates
-from test_coordinate_handling import test_forecast_server
+# Import consolidated test modules
+from test_mcp_servers import main as test_mcp_servers
+from test_mcp_agent import main as test_mcp_agent
+from test_coordinates_consolidated import main as test_coordinates
+from test_structured_output_demo import main as test_structured_output
+from docker_test import main as test_docker_integration
 
 
 async def run_test(test_name: str, test_func) -> Tuple[str, bool, float, Optional[str]]:
@@ -52,12 +52,15 @@ async def run_all_tests():
     
     # Define all tests to run
     tests = [
-        ("Simple Coordinate Test", test_simple),
-        ("Coordinate Provision Test", test_coordinate_provision),
-        ("Forecast Server Test", test_forecast_server),
-        ("Coordinates General Test", test_coordinates),
-        ("Diverse Cities Test", test_diverse_city_coordinates),
+        ("MCP Servers Test Suite", test_mcp_servers),
+        ("MCP Agent Test Suite", test_mcp_agent),
+        ("Coordinates Test Suite", test_coordinates),
+        ("Structured Output Demo", test_structured_output),
     ]
+    
+    # Note: Docker integration test requires Docker to be running
+    if "--with-docker" in sys.argv:
+        tests.append(("Docker Integration Test", test_docker_integration))
     
     results: List[Tuple[str, bool, float, Optional[str]]] = []
     total_start = time.time()
