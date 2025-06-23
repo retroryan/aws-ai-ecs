@@ -40,11 +40,20 @@ All local development scripts are in the `scripts/` directory:
 - `start.sh` - Start services with AWS credentials
 - `stop.sh` - Stop all services
 - `test.sh` - Run comprehensive tests
+- `run-tests.sh` - Run integration tests with automatic service startup/shutdown
 - `logs.sh` - Show Docker Compose logs
 - `clean.sh` - Clean up containers and cache files
 - `rebuild.sh` - Rebuild containers from scratch
 
-### Testing the API
+### Testing the Application
+
+#### Option 1: Automated Integration Tests
+```bash
+# Run comprehensive integration tests (starts services automatically)
+./scripts/run-tests.sh
+```
+
+#### Option 2: Manual API Testing
 ```bash
 # Get all knowledge specialists
 curl http://localhost:8080/employees
@@ -122,6 +131,7 @@ For running and testing the application locally with Docker:
 - `start.sh` - Start services with AWS credentials
 - `stop.sh` - Stop all services  
 - `test.sh` - Run comprehensive tests against local endpoints
+- `run-tests.sh` - Run integration tests with automatic service startup/shutdown
 - `logs.sh` - Show Docker Compose logs
 - `clean.sh` - Clean up containers and cache files
 - `rebuild.sh` - Rebuild containers from scratch
@@ -320,6 +330,12 @@ All local development scripts are in the `scripts/` directory:
   - Tests API functionality
   - Validates specialist responses
 
+- **`run-tests.sh`** - Run integration tests
+  - Automatically starts services
+  - Runs pytest integration tests
+  - Stops services when complete
+  - Returns appropriate exit codes
+
 - **`logs.sh`** - Show Docker Compose logs
 
 - **`clean.sh`** - Clean up containers and cache files
@@ -472,7 +488,7 @@ If you want to make this production-ready, consider:
 2. Implementing proper logging and monitoring
 3. Adding input validation and rate limiting
 4. Setting up CI/CD pipeline
-5. Adding unit and integration tests
+5. Adding more comprehensive tests (basic integration tests are provided)
 6. Implementing caching for common questions
 7. Adding HTTPS with proper certificates
 
