@@ -1,0 +1,31 @@
+# Main Agent Application
+FROM python:3.11-slim
+
+WORKDIR /app
+
+# Install system dependencies
+RUN apt-get update && apt-get install -y \
+    curl \
+    && rm -rf /var/lib/apt/lists/*
+
+# Copy requirements and install dependencies
+COPY requirements.txt .
+RUN pip install --no-cache-dir -r requirements.txt
+
+# Copy API application
+COPY api.py .
+
+# Copy application code
+COPY weather_agent/ weather_agent/
+COPY models/ models/
+COPY mcp_servers/api_utils.py mcp_servers/api_utils.py
+
+# Create non-root user
+RUN useradd -m -u 1000 appuser && chown -R appuser:appuser /app
+USER appuser
+
+# Expose API port
+EXPOSE 8090
+
+# Run the FastAPI application
+CMD ["python", "api.py"]

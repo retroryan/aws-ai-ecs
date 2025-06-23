@@ -19,6 +19,9 @@ This is an AWS Bedrock integration demo showcasing a client-server architecture 
 # Run comprehensive tests
 ./scripts/test.sh
 
+# Run integration tests (starts/stops services automatically)
+./scripts/run-tests.sh
+
 # View logs
 ./scripts/logs.sh
 

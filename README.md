@@ -9,12 +9,14 @@ The repository contains two example projects that showcase different approaches 
 ### 1. Agent ECS Template
 A foundational template project for deploying agent-based AI applications to AWS ECS. This project demonstrates:
 - Client-server architecture patterns for AI agents
+- **Direct AWS Bedrock integration using boto3** for foundational model access
 - Proper containerization of AI workloads
 - Health monitoring and service management
 - CloudFormation infrastructure as code
 
 ### 2. Agriculture Agent ECS
 A practical implementation of an AI-powered weather and agricultural data agent system. This project features:
+- **LangGraph integration with AWS Bedrock** for orchestrating complex AI workflows
 - Integration with MCP (Model Context Protocol) servers
 - Real-world use case for agricultural data analysis
 - Weather data processing and insights
@@ -29,9 +31,26 @@ Getting started with AWS Bedrock and deploying AI applications to production can
 - **Container Optimization**: Docker configurations optimized for AI workloads
 - **Cost-Effective Architecture**: ECS deployment patterns that scale efficiently
 
+## AWS Bedrock Integration Approaches
+
+This repository showcases two complementary approaches to integrating with AWS Bedrock:
+
+1. **Direct boto3 Integration** (Agent ECS Template)
+   - Low-level control over Bedrock API calls
+   - Ideal for simple, direct model interactions
+   - Minimal dependencies and maximum flexibility
+   - Perfect for understanding Bedrock fundamentals
+
+2. **LangGraph Framework** (Agriculture Agent ECS)
+   - High-level orchestration of complex AI workflows
+   - Built-in state management and flow control
+   - Ideal for multi-step reasoning and agent behaviors
+   - Simplified integration with multiple AI services
+
 ## Key Features
 
 - 🚀 **Quick Start**: Get AI applications running on AWS ECS in minutes
+- 🤖 **AWS Bedrock Ready**: Pre-configured for Claude, Llama, and other Bedrock models
 - 🛠️ **Infrastructure as Code**: Complete CloudFormation templates for reproducible deployments
 - 🐳 **Docker-First**: Containerized applications ready for cloud deployment
 - 📊 **Monitoring**: Built-in health checks and CloudWatch logging integration
