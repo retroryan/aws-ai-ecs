@@ -1,741 +1,564 @@
-# LangGraph + FastMCP Weather Agent Demo (Model-Agnostic with AWS Bedrock)
-
-A production-ready demonstration of building model-agnostic AI agent systems using LangGraph for orchestration and FastMCP for distributed tool servers. This project showcases a weather and agricultural data agent that can answer questions about weather conditions, forecasts, and agricultural recommendations using any AWS Bedrock foundation model.
+# Agriculture Agent ECS - Weather & Agricultural Data Assistant
 
 ## Overview
 
-This project demonstrates a clean separation between application logic and model providers through LangChain's `init_chat_model` utility. The system features:
+This is a **production-ready demonstration** project showing how to build model-agnostic AI agent systems using LangGraph for orchestration, FastMCP for distributed tool servers, and AWS Bedrock for foundation models. It showcases a multi-service architecture pattern: **User → Agent → MCP Servers → Weather APIs**.
 
-- **True Model Agnosticism**: Switch between Claude, Llama, Cohere, and Amazon Nova models via environment variable
-- **Zero Code Changes Required**: Model selection happens entirely through configuration
-- **Production-Ready**: Docker containerized with AWS ECS deployment scripts
-- **Distributed Architecture**: Multiple MCP servers for different data domains
-- **Real Weather Data**: Integration with OpenWeatherMap API for live weather information
+The application demonstrates a weather and agricultural data assistant that can answer questions about current conditions, forecasts, and crop recommendations, powered by AWS Bedrock's AI models through a clean, model-agnostic interface.
+
+**Purpose**: Educational demo showing advanced AI agent architecture with distributed tools - production-ready patterns for real-world deployment.
 
 ## Quick Start - Local Development
 
+### Prerequisites
+- Docker installed and running
+- AWS CLI configured with appropriate credentials
+- AWS account with Bedrock access enabled
+- Python 3.11+ (for local development without Docker)
+
+### Running Locally
+
+**Important:** AWS credentials are required for AI features to work properly.
+
 ```bash
-# Prerequisites: Python 3.11+, AWS account with Bedrock access
-
-# 1. Clone and navigate to the project
-git clone <repository-url>
-cd agriculture-agent-ecs
-
-# 2. Install dependencies
-pip install -r requirements.txt
-
-# 3. Auto-configure AWS Bedrock (recommended)
+# 1. Configure AWS Bedrock (one-time setup)
 ./scripts/aws-setup.sh
 cp bedrock.env .env
 
-# 4. Start MCP servers
-./scripts/start_servers.sh
+# 2. Start services with AWS credentials
+./scripts/start.sh
 
-# 5. Run the application
-python main.py
+# 3. Test all endpoints
+./scripts/test_docker.sh
 
-# 6. Test the API
+# 4. Stop services when done
+./scripts/stop.sh
+```
+
+### Local Development Scripts
+
+All local development scripts are in the `scripts/` directory:
+- `aws-setup.sh` - Configure AWS Bedrock for local development
+- `start.sh` - Start services with AWS credentials (Docker)
+- `stop.sh` - Stop all Docker services
+- `test_docker.sh` - Run comprehensive Docker tests
+- `start_servers.sh` - Start MCP servers locally (non-Docker)
+- `stop_servers.sh` - Stop local MCP servers
+- `run_tests.sh` - Run the test suite
+
+### Testing the API
+```bash
+# Check health
 curl http://localhost:7075/health
+
+# Ask about weather
 curl -X POST http://localhost:7075/query \
-  -H "Content-Type: application/json" \
-  -d '{"query": "What is the weather like in Chicago?"}'
+    -H "Content-Type: application/json" \
+    -d '{"query": "What is the weather like in Chicago?"}'
 
-# 7. Stop servers when done
-./scripts/stop_servers.sh
+# Get a forecast
+curl -X POST http://localhost:7075/query \
+    -H "Content-Type: application/json" \
+    -d '{"query": "Give me a 5-day forecast for Seattle"}'
+
+# Agricultural query
+curl -X POST http://localhost:7075/query \
+    -H "Content-Type: application/json" \
+    -d '{"query": "Are conditions good for planting corn in Iowa?"}'
 ```
 
-## Quick Start - AWS Deployment
+## Quick Start - AWS Development
 
+### Prerequisites
+- AWS CLI configured with appropriate credentials
+- [Rain CLI](https://github.com/aws-cloudformation/rain) (for CloudFormation deployment)
+- AWS account with Bedrock access enabled
+- Docker installed (for building images)
+
+### Deploy to AWS ECS
 ```bash
-# Prerequisites: AWS CLI configured, Docker installed
+# 1. Verify AWS prerequisites
+./infra/aws-checks.sh
 
-# 1. Navigate to infrastructure directory
-cd infra
+# 2. Setup ECR repositories and push images
+./infra/deploy.sh setup-ecr
+./infra/deploy.sh build-push
 
-# 2. Deploy everything to AWS ECS
-./deploy.sh all
-
-# 3. Get the application URL
-./deploy.sh status
-
-# The deployment will:
-# - Create ECR repositories
-# - Build and push Docker images
-# - Deploy VPC, ECS cluster, and ALB
-# - Deploy all services with auto-scaling
-```
-
-## AWS Infrastructure Scripts Guide
-
-The `infra/` directory contains scripts for deploying to AWS ECS:
-
-### deploy.sh - Main Deployment Script
-```bash
-# View all available commands
-./infra/deploy.sh help
-
-# Deploy everything (recommended for first time)
+# 3. Deploy all infrastructure
 ./infra/deploy.sh all
 
-# Deploy with specific model
-BEDROCK_MODEL_ID="anthropic.claude-3-haiku-20240307-v1:0" ./infra/deploy.sh all
-
-# Individual deployment steps
-./infra/deploy.sh setup-ecr    # Create ECR repositories
-./infra/deploy.sh build        # Build Docker images
-./infra/deploy.sh push         # Push images to ECR
-./infra/deploy.sh deploy-base  # Deploy VPC, ECS cluster, ALB
-./infra/deploy.sh deploy-services  # Deploy application services
-./infra/deploy.sh status       # Check deployment status
-./infra/deploy.sh cleanup      # Remove all resources
+# 4. Check deployment status
+./infra/deploy.sh status
 ```
 
-### Key Infrastructure Features
-- **Auto-scaling**: Main service scales based on CPU/memory utilization
-- **Service Discovery**: Internal DNS for MCP server communication
-- **Load Balancing**: ALB distributes traffic to healthy containers
-- **Health Checks**: All services monitored with health endpoints
-- **CloudWatch Logs**: Centralized logging for all services
-- **IAM Roles**: Secure access to AWS Bedrock without API keys
+### Testing the Deployed Application
+
+You have two options for testing:
+
+#### Option 1: Use the automated test script
+```bash
+./infra/test_services.sh
+```
+
+#### Option 2: Manual testing
+```bash
+# Get the load balancer URL
+LB_URL=$(aws cloudformation describe-stacks \
+    --stack-name agriculture-base \
+    --query "Stacks[0].Outputs[?OutputKey=='LoadBalancerDNS'].OutputValue" \
+    --output text)
+
+# Test the endpoints
+curl http://$LB_URL/health
+curl -X POST http://$LB_URL/query \
+    -H "Content-Type: application/json" \
+    -d '{"query": "What is the weather forecast for Chicago?"}'
+```
+
+### Update After Code Changes
+```bash
+# Rebuild and push new images
+./infra/deploy.sh build-push
+
+# Update the running services
+./infra/deploy.sh update-services
+```
+
+## Script Organization
+
+This project has two distinct script directories:
+
+### Local Development Scripts (`scripts/`)
+For running and testing the application locally:
+- `aws-setup.sh` - Configure AWS Bedrock for local development
+- `start.sh` - Start Docker Compose services with AWS credentials
+- `stop.sh` - Stop all Docker services
+- `test_docker.sh` - Run comprehensive tests against Docker endpoints
+- `start_servers.sh` - Start MCP servers locally (non-Docker)
+- `stop_servers.sh` - Stop local MCP servers
+- `run_tests.sh` - Run the full test suite
+
+### AWS Infrastructure Scripts (`infra/`)
+For deploying and managing the application on AWS ECS:
+
+#### `infra/deploy.sh`
+Main deployment script with the following commands:
+- `aws-checks` - Verify AWS configuration and Bedrock access
+- `setup-ecr` - Setup ECR repositories and Docker authentication
+- `build-push` - Build and push Docker images to ECR
+- `all` - Deploy all infrastructure (base + services)
+- `base` - Deploy only base infrastructure
+- `services` - Deploy only services (requires base)
+- `update-services` - Update services after code changes
+- `status` - Show current deployment status
+- `cleanup-services` - Remove services stack only
+- `cleanup-base` - Remove base infrastructure
+- `cleanup-all` - Remove all infrastructure
+- `help` - Show help message
+
+#### `infra/setup-ecr.sh`
+Automates ECR repository creation and Docker authentication:
+- Creates ECR repositories for all four service images
+- Authenticates Docker with ECR (logs in for docker push)
+- Sets up proper repository lifecycle policies
+- Provides the ECR_REPO environment variable for builds
+- **Important:** Run this script if you get "Your authorization token has expired" errors during docker push
+
+#### `infra/build-push.sh`
+Builds and pushes Docker images to ECR:
+- Builds Docker images for all four services (agent + 3 MCP servers)
+- Uses linux/amd64 architecture for ECS Fargate compatibility
+- Tags and pushes images to ECR with versioning
+- Handles authentication and error checking
+- Detects expired authentication tokens and suggests running `setup-ecr.sh`
+- **Common failures:** Most push failures are due to expired ECR authentication tokens
+
+#### `infra/test_services.sh`
+Tests the deployed services end-to-end:
+- Retrieves the load balancer URL from CloudFormation
+- Tests health endpoints for all services
+- Sends test queries to the weather agent
+- Validates that services are responding correctly
+- Provides immediate feedback on deployment success
+
+#### `infra/aws-setup.sh`
+Configures AWS Bedrock settings:
+- Checks AWS CLI configuration and credentials
+- Lists available Bedrock models in your region
+- Creates a bedrock.env configuration file
+- Tests model access with actual invocation
+- Used by `scripts/aws-setup.sh` for local development
+
+#### `infra/status.sh`
+Comprehensive infrastructure status checking:
+- Shows CloudFormation stack status
+- Displays ECS service health and task counts
+- Performs health check calls
+- Shows recent errors from CloudWatch logs
+- Provides troubleshooting guidance
 
 ## Architecture Overview
 
 ### System Architecture
-
-The system consists of multiple containerized services working together:
-
 ```
-┌─────────────────┐     ┌──────────────────────────────────────┐
-│   User Request  │────▶│         Application Load          │
-└─────────────────┘     │          Balancer (ALB)            │
-                        └────────────────┬─────────────────────┘
-                                        │
-                        ┌───────────────▼─────────────────┐
-                        │    Weather Agent Service        │
-                        │  (LangGraph + AWS Bedrock)      │
-                        └───────┬────────┬────────┬───────┘
-                                │        │        │
-                   Service Discovery (Internal DNS: *.agriculture.local)
-                                │        │        │
-                 ┌──────────────▼──┐ ┌──▼───────┐ ┌──▼──────────────┐
-                 │ Forecast Server │ │Historical│ │  Agricultural   │
-                 │   (Port 7071)   │ │  Server  │ │     Server      │
-                 └─────────────────┘ │(Port 7072)│ │  (Port 7073)    │
-                                    └──────────┘ └─────────────────┘
+User → Weather Agent (FastAPI:7075) → LangGraph Agent → MCP Servers → Open-Meteo API
+             ↓                              ↓
+        AWS ALB                    Service Discovery
+                                  (*.agriculture.local)
+                                           ↓
+                        ┌──────────┬───────────────┬──────────────┐
+                        │ Forecast │  Historical   │ Agricultural │
+                        │  Server  │    Server     │    Server    │
+                        │  (7071)  │    (7072)     │    (7073)    │
+                        └──────────┴───────────────┴──────────────┘
 ```
 
-### Component Details
+### Key Technologies
+- Python 3.11+ with FastAPI and Uvicorn
+- LangGraph 0.4.8 for agent orchestration
+- FastMCP 0.2.5 for Model Context Protocol servers
+- AWS Bedrock (supports all models with tool calling)
+- Docker with linux/amd64 targeting
+- AWS ECS Fargate with Service Discovery
+- langchain-aws for Bedrock integration
 
-1. **FastMCP Servers** (Distributed Tool Servers):
-   - **Forecast Server**: 5-day weather forecasts via OpenWeatherMap
-   - **Historical Server**: Past weather data and trends
-   - **Agricultural Server**: Crop recommendations and frost risk analysis
+### AWS Bedrock Integration
 
-2. **Model-Agnostic LangGraph Agent**:
-   - Uses `init_chat_model` for seamless model switching
-   - React agent pattern with tool selection capabilities
-   - Maintains conversation memory across interactions
-   - Optionally transforms responses to structured Pydantic models
+The agent uses **langchain-aws** to integrate with AWS Bedrock for AI-powered responses:
 
-3. **FastAPI Application**:
-   - RESTful API for query submission
-   - Health monitoring endpoints
-   - Structured request/response models
+1. **How it works**:
+   - Agent receives natural language queries
+   - Uses `init_chat_model` for model-agnostic initialization
+   - LangGraph orchestrates tool discovery and selection
+   - MCP servers provide weather and agricultural data
+   - Agent combines tool responses into natural language answers
 
-### Data Flow
+2. **Required IAM Permissions**:
+   - `bedrock:InvokeModel` for the following models:
+     - `amazon.nova-lite-v1:0` (default)
+     - `amazon.nova-pro-v1:0`
+     - `anthropic.claude-3-5-sonnet-*`
+     - `anthropic.claude-3-haiku-*`
+     - `meta.llama3-*` models
+     - `cohere.command-r-*` models
+   - These permissions are automatically configured in the ECS task role
 
-1. User submits natural language query via REST API
-2. LangGraph agent analyzes intent and determines required tools
-3. Agent discovers available tools from MCP servers via HTTP
-4. Agent executes tools with appropriate parameters
-5. Raw responses transformed and combined into natural language answer
+### Project Structure
+```
+agriculture-agent-ecs/
+├── main.py                 # FastAPI application entry
+├── weather_agent/          # LangGraph agent implementation
+│   ├── mcp_agent.py       # Main agent with MCP integration
+│   ├── chatbot.py         # Interactive chat interface
+│   └── query_classifier.py # Intent classification
+├── mcp_servers/           # FastMCP server implementations
+│   ├── forecast_server.py # Weather forecast tools
+│   ├── historical_server.py # Historical weather tools
+│   ├── agricultural_server.py # Agricultural data tools
+│   └── api_utils.py       # Open-Meteo API utilities
+├── models/                # Data models
+│   ├── weather.py         # Weather-specific models
+│   ├── responses.py       # Tool response models
+│   └── queries.py         # Query classification
+├── docker/                # Docker configurations
+│   ├── Dockerfile.main    # Main agent container
+│   ├── Dockerfile.forecast # Forecast server
+│   ├── Dockerfile.historical # Historical server
+│   └── Dockerfile.agricultural # Agricultural server
+├── infra/                 # Infrastructure as code
+│   ├── base.cfn          # Base infrastructure
+│   ├── services.cfn      # ECS services
+│   └── *.sh              # Deployment scripts
+├── scripts/              # Development scripts
+│   ├── aws-setup.sh      # Initial AWS setup
+│   ├── start.sh          # Start Docker services
+│   ├── test_docker.sh    # Run Docker tests
+│   └── stop.sh           # Stop services
+├── tests/                # Test suite
+└── docker-compose.yml    # Local Docker orchestration
+```
 
-## AWS Setup and Configuration
+### API Endpoints
 
-### Prerequisites
+#### Weather Agent (Port 7075)
+- `GET /` - Service information
+- `GET /health` - Health check with MCP server connectivity
+- `POST /query` - Submit natural language queries about weather or agriculture
+- `GET /docs` - Interactive API documentation (FastAPI)
 
-1. **AWS Account Setup**:
-   - Create an AWS account if you don't have one
-   - Configure AWS CLI: `aws configure`
-   - Ensure your IAM user/role has appropriate permissions
+#### MCP Servers (Internal)
+Each MCP server provides specialized tools discovered dynamically by the agent:
 
-2. **Enable AWS Bedrock**:
-   - Navigate to AWS Console → Bedrock → Model access
-   - Request access to desired models (instant for most models)
-   - Wait for access approval (usually immediate)
+**Forecast Server (Port 7071)**
+- `get_weather_forecast` - 5-day weather forecast for any location
 
-3. **Required IAM Permissions**:
-   ```json
-   {
-     "Version": "2012-10-17",
-     "Statement": [
-       {
-         "Effect": "Allow",
-         "Action": [
-           "bedrock:InvokeModel",
-           "bedrock:InvokeModelWithResponseStream"
-         ],
-         "Resource": "*"
-       }
-     ]
-   }
-   ```
+**Historical Server (Port 7072)**
+- `get_historical_weather` - Past 7 days of weather data
+
+**Agricultural Server (Port 7073)**
+- `get_agricultural_conditions` - Crop suitability analysis
+- `get_frost_risk_assessment` - Frost risk for specific crops
+
+### Supported Models
+The system works with any AWS Bedrock model that supports tool/function calling:
+
+1. **Amazon Nova Models** - Cost-effective, good performance
+   - `amazon.nova-lite-v1:0` (default)
+   - `amazon.nova-pro-v1:0`
+
+2. **Claude Models** (Anthropic) - Best overall performance
+   - `anthropic.claude-3-5-sonnet-20241022-v2:0`
+   - `anthropic.claude-3-haiku-20240307-v1:0`
+
+3. **Llama Models** (Meta) - Open source option
+   - `meta.llama3-70b-instruct-v1:0`
+   - `meta.llama3-1-70b-instruct-v1:0`
+
+4. **Cohere Models** - Optimized for RAG and tool use
+   - `cohere.command-r-plus-v1:0`
+   - `cohere.command-r-v1:0`
+
+## Local Development
+
+### Development Scripts
+
+All local development scripts are in the `scripts/` directory:
+
+- **`aws-setup.sh`** - Configure AWS Bedrock for local development
+  - Runs `infra/aws-setup.sh` to check AWS credentials
+  - Lists available Bedrock models
+  - Creates `bedrock.env` configuration file
+  - Tests model access
+
+- **`start.sh`** - Start services with AWS credentials
+  - Exports AWS credentials for Docker
+  - Starts Docker Compose services
+  - Services run on localhost:7075
+
+- **`stop.sh`** - Stop all Docker services
+
+- **`test_docker.sh`** - Run comprehensive tests
+  - Tests health endpoints
+  - Tests query functionality
+  - Validates MCP server connectivity
+
+- **`start_servers.sh`** - Start MCP servers locally (non-Docker)
+  - Runs servers in background
+  - Creates PID files for management
+  - Logs to `logs/` directory
+
+- **`stop_servers.sh`** - Stop local MCP servers
 
 ### Environment Configuration
 
-Configure the system via environment variables in `.env`:
-
-```env
-# Required - AWS Bedrock Model
-BEDROCK_MODEL_ID=amazon.nova-lite-v1:0  # or any supported model
+Local development requires AWS credentials for Bedrock access:
+```bash
+# Generated by aws-setup.sh
+BEDROCK_MODEL_ID=amazon.nova-lite-v1:0
 BEDROCK_REGION=us-east-1
+LOG_LEVEL=INFO
 
 # Optional
 BEDROCK_TEMPERATURE=0
-LOG_LEVEL=INFO
-
-# AWS Credentials (if not using IAM role)
-AWS_ACCESS_KEY_ID=your_access_key
-AWS_SECRET_ACCESS_KEY=your_secret_key
 ```
 
-### Supported AWS Bedrock Models
-
-The system works with any Bedrock model that supports tool/function calling:
-
-#### Claude Models (Anthropic)
-- `anthropic.claude-3-5-sonnet-20240620-v1:0` - Best overall performance ⭐
-- `anthropic.claude-3-haiku-20240307-v1:0` - Fast and cost-effective
-- `anthropic.claude-3-opus-20240229-v1:0` - Most capable
-
-#### Amazon Nova Models
-- `amazon.nova-pro-v1:0` - High performance
-- `amazon.nova-lite-v1:0` - Cost-effective, good for demos ⭐
-
-#### Meta Llama Models
-- `meta.llama3-70b-instruct-v1:0` - Open source, excellent performance
-- `meta.llama3-1-70b-instruct-v1:0` - Latest Llama 3.1
-- `meta.llama3-1-8b-instruct-v1:0` - Smaller, faster option
-
-#### Cohere Models
-- `cohere.command-r-plus-v1:0` - Optimized for RAG and tool use
-- `cohere.command-r-v1:0` - Efficient alternative
-
-### Model Selection
-
-Simply change the `BEDROCK_MODEL_ID` environment variable:
+### Docker Development
 
 ```bash
-# For best performance
-export BEDROCK_MODEL_ID="anthropic.claude-3-5-sonnet-20240620-v1:0"
-
-# For cost-effective operation
-export BEDROCK_MODEL_ID="amazon.nova-lite-v1:0"
-
-# For open source
-export BEDROCK_MODEL_ID="meta.llama3-70b-instruct-v1:0"
-```
-
-### AWS Infrastructure Details
-
-The CloudFormation templates create:
-
-1. **Networking**:
-   - VPC with public/private subnets across 2 AZs
-   - Internet Gateway and NAT Gateways
-   - Security groups for ALB and services
-
-2. **ECS Cluster**:
-   - Fargate launch type (serverless containers)
-   - Container Insights enabled
-   - Auto-scaling policies
-
-3. **Services**:
-   - 4 ECS services (agent + 3 MCP servers)
-   - Service discovery for internal communication
-   - Health checks for reliability
-
-4. **Load Balancing**:
-   - Application Load Balancer for external access
-   - Target group with health checks
-   - Auto-assigned DNS name
-
-5. **Storage**:
-   - ECR repositories for Docker images
-   - CloudWatch Log Groups for each service
-
-6. **Security**:
-   - IAM roles with least-privilege access
-   - No hardcoded credentials
-   - VPC isolation for services
-
-## Usage Examples
-
-### API Usage
-
-```python
-import requests
-
-# Submit a weather query
-response = requests.post("http://localhost:7075/query", 
-    json={"query": "What's the weather like in Chicago?"})
-print(response.json())
-
-# Example queries:
-# - "Give me a 5-day forecast for Seattle"
-# - "What were the temperatures in New York last week?"
-# - "Are conditions good for planting corn in Iowa?"
-# - "What's the frost risk for tomatoes in Minnesota?"
-```
-
-### Programmatic Usage
-
-```python
-from weather_agent.mcp_agent import MCPWeatherAgent
-
-# Initialize agent
-agent = MCPWeatherAgent()
-await agent.initialize()
-
-# Get text response
-response = await agent.query("What's the weather forecast for Iowa?")
-print(response)
-
-# Get structured response
-structured = await agent.query_structured(
-    "What's the weather forecast for Iowa?", 
-    response_format="forecast"
-)
-print(f"Location: {structured.location}")
-print(f"Current temp: {structured.current_conditions.temperature}°C")
-```
-
-## Docker Deployment
-
-### Quick Start with Docker
-
-```bash
-# 1. Clone the repository
-git clone <repository-url>
-cd agriculture-agent-ecs
-
-# 2. Set up environment
-cp .env.docker .env
-# Edit .env with your AWS Bedrock configuration
-
-# 3. Start services with AWS credentials
-# This automatically exports AWS credentials from your AWS CLI configuration
+# Start with Docker Compose
 ./scripts/start.sh
-
-# 4. Verify all services are healthy
-./scripts/test_docker.sh
-
-# 5. Access the application
-curl http://localhost:7075/health
-```
-
-### Docker Architecture
-
-The application is containerized with the following services:
-
-- **forecast-server**: Weather forecast MCP server (port 7071)
-- **historical-server**: Historical weather MCP server (port 7072)  
-- **agricultural-server**: Agricultural conditions MCP server (port 7073)
-- **weather-agent**: Main agent application (port 7075)
-
-All services communicate over an internal Docker network.
-
-### Docker Commands
-
-```bash
-# Build all images
-docker-compose build
-
-# Start all services with AWS credentials
-./scripts/start.sh
-
-# Or manually with docker-compose (requires setting AWS env vars)
-export $(aws configure export-credentials --format env-no-export)
-docker-compose up -d
 
 # View logs
 docker-compose logs -f
 
-# Stop all services
-./scripts/stop.sh
-
-# Or manually with docker-compose
-docker-compose down
-
-# Rebuild and restart a specific service
+# Rebuild specific service
 docker-compose up -d --build weather-agent
 
-# Run automated tests
-python tests/docker_test.py
+# Run tests
+./scripts/test_docker.sh
 ```
 
-### Docker Environment Variables
+## AWS Setup and Configuration
 
-Configure in `.env` file:
+### Infrastructure Overview
 
-```env
-# Required
-BEDROCK_MODEL_ID=amazon.nova-lite-v1:0
-BEDROCK_REGION=us-east-1
+The deployment uses two CloudFormation stacks:
 
-# Optional - AWS Credentials are automatically exported from AWS CLI
-# Only set these if you want to override the AWS CLI configuration
-# AWS_ACCESS_KEY_ID=your_key
-# AWS_SECRET_ACCESS_KEY=your_secret
-```
+1. **Base Stack** (`infra/base.cfn`): 
+   - VPC with 2 public subnets
+   - Application Load Balancer
+   - ECS Cluster (agriculture-cluster)
+   - IAM roles with Bedrock permissions
+   - Security groups and networking
+   - Service discovery namespace (agriculture.local)
 
-### AWS Credentials in Docker
+2. **Services Stack** (`infra/services.cfn`): 
+   - ECS Task Definitions with Bedrock environment variables
+   - 4 ECS Services running on Fargate
+   - Service Connect for internal communication
+   - CloudWatch logging
+   - Auto-scaling configuration
 
-The project automatically handles AWS credentials for Docker containers:
+### Naming Convention
+All resources follow the `agriculture-*` naming pattern:
+- **ECR Repositories**: `agriculture-main`, `agriculture-forecast`, `agriculture-historical`, `agriculture-agricultural`
+- **ECS Cluster**: `agriculture-cluster`
+- **CloudFormation Stacks**: `agriculture-base`, `agriculture-services`
+- **Log Groups**: `/ecs/agriculture-main`, `/ecs/agriculture-forecast`, etc.
+- **Service Discovery**: `*.agriculture.local`
 
-1. **Automatic Export**: The `start.sh` script automatically exports AWS credentials from your AWS CLI configuration using:
-   ```bash
-   export $(aws configure export-credentials --format env-no-export)
-   ```
-
-2. **Supports All AWS Auth Methods**:
-   - AWS CLI profiles
-   - AWS SSO (Single Sign-On)
-   - Temporary credentials with session tokens
-   - IAM roles (when deployed to ECS)
-
-3. **No Manual Configuration**: You don't need to manually set AWS credentials in the `.env` file unless you want to override the AWS CLI configuration.
-
-4. **Security Best Practice**: Credentials are never stored in files, only passed as environment variables at runtime
-
-# Optional
-BEDROCK_TEMPERATURE=0
-LOG_LEVEL=INFO
-```
-
-## Development
-
-### Project Structure
-
-```
-.
-├── main.py                  # FastAPI application entry
-├── weather_agent/           # LangGraph agent implementation
-│   ├── mcp_agent.py        # Main agent logic
-│   └── query_classifier.py  # Query intent classification
-├── mcp_servers/            # FastMCP server implementations
-│   ├── forecast_server.py   # Weather forecast tools
-│   ├── historical_server.py # Historical weather tools
-│   ├── agricultural_server.py # Agricultural data tools
-│   └── api_utils.py        # Common API utilities
-├── models/                 # Data models
-├── docker/                 # Docker configuration files
-│   ├── Dockerfile.base     # Base image
-│   ├── Dockerfile.agent    # Agent application
-│   └── Dockerfile.*        # MCP server images
-├── scripts/                # Operational scripts
-│   ├── start_servers.sh    # Start MCP servers
-│   ├── stop_servers.sh     # Stop MCP servers
-│   ├── test_docker.sh      # Docker integration test
-│   └── aws-setup.sh        # AWS Bedrock setup helper
-├── tests/                  # Test suite
-│   └── docker_test.py      # Docker integration tests
-├── infra/                  # AWS infrastructure code
-├── logs/                   # Server logs and PIDs
-└── docker-compose.yml      # Docker Compose configuration
-```
-
-### Running Tests
-
-```bash
-# Run all tests
-python tests/run_all_tests.py
-
-# Run specific test suites
-python -m pytest tests/test_mcp_servers.py -v
-python -m pytest tests/test_weather_agent.py -v
-
-# Test structured output functionality
-python tests/test_structured_output_demo.py
-```
-
-### Server Management
-
-```bash
-# Start all MCP servers
-./scripts/start_servers.sh
-
-# Check server status
-ps aux | grep python | grep server
-
-# View server logs
-tail -f logs/forecast_server.log
-tail -f logs/historical_server.log
-tail -f logs/agricultural_server.log
-
-# Stop all servers
-./scripts/stop_servers.sh
-```
-
-## Configuration
+### IAM Permissions
+The ECS task roles include permissions for:
+- All supported Bedrock models (see Supported Models section)
+- CloudWatch Logs for centralized logging
+- X-Ray for distributed tracing (optional)
 
 ### Environment Variables
 
-Create a `.env` file with:
+#### Local Development (Docker)
+- `MCP_SERVERS`: JSON configuration for MCP server endpoints
+- `BEDROCK_MODEL_ID`: Selected AWS Bedrock model
+- `BEDROCK_REGION`: AWS region for Bedrock
+- AWS credentials automatically passed from CLI
 
-```env
-# Required - AWS Bedrock Model
-BEDROCK_MODEL_ID=amazon.nova-lite-v1:0  # or any supported model
-BEDROCK_REGION=us-east-1
+#### AWS ECS
+- `MCP_SERVERS`: Service discovery URLs (e.g., `forecast-server.agriculture.local:7071`)
+- `BEDROCK_MODEL_ID`: Configured during deployment
+- `BEDROCK_REGION`: Uses deployment region
+- IAM role provides AWS credentials automatically
 
-# Optional
-BEDROCK_TEMPERATURE=0
-LOG_LEVEL=INFO
-
-# AWS Credentials (if not using IAM role)
-AWS_ACCESS_KEY_ID=your_access_key
-AWS_SECRET_ACCESS_KEY=your_secret_key
-```
-
-### AWS Setup
-
-1. **Enable Bedrock Access**: Go to AWS Console → Bedrock → Model access
-2. **Set IAM Permissions**: Ensure your user/role has:
-   ```json
-   {
-     "Version": "2012-10-17",
-     "Statement": [
-       {
-         "Effect": "Allow",
-         "Action": [
-           "bedrock:InvokeModel",
-           "bedrock:InvokeModelWithResponseStream"
-         ],
-         "Resource": "*"
-       }
-     ]
-   }
-   ```
-
-### MCP Server Ports
-
-Default ports (configurable in server files):
-- Forecast Server: 7071
-- Historical Server: 7072
-- Agricultural Server: 7073
-
-## Extending the System
-
-### Adding New MCP Tools
-
-1. Create a new tool in an existing server:
-
-```python
-@weather_server.tool()
-async def get_uv_index(location: str) -> dict:
-    """Get UV index for a location"""
-    # Implementation here
-    return {"location": location, "uv_index": 5}
-```
-
-2. Or create a new MCP server:
-
-```python
-from fastmcp import FastMCP
-
-alert_server = FastMCP("Weather Alerts")
-
-@alert_server.tool()
-async def get_weather_alerts(location: str) -> dict:
-    """Get weather alerts for a location"""
-    # Implementation here
-    return {"alerts": []}
-
-# Add to scripts/start_servers.sh
-```
-
-### Customizing the Agent
-
-Modify `weather_agent/mcp_agent.py` to:
-- Change agent prompts
-- Add new response formats
-- Implement custom tool selection logic
-- Add new structured output models
-
-## AWS ECS Deployment
-
-### Quick Deploy
-
-```bash
-# Build and push Docker image
-./infra/build_and_push.sh
-
-# Deploy to ECS
-./infra/deploy.sh
-```
-
-### CloudFormation Configuration
-
-The stack accepts these parameters:
-- `BedrockModelId`: Which Bedrock model to use
-- `BedrockRegion`: AWS region for Bedrock
-- `BedrockTemperature`: Model temperature (0-1)
-
-The ECS task automatically uses IAM role credentials for Bedrock access.
-
-## Key Implementation Details
-
-### Model-Agnostic Design
-
-The system achieves true model agnosticism through:
-
-1. **LangChain's init_chat_model**: Automatically detects and initializes the correct model based on environment variables
-2. **Unified Tool Interface**: All Bedrock models use the same tool calling format
-3. **Environment-Based Configuration**: No code changes needed to switch models
-
-### Challenges Solved
-
-1. **Inference Profile Requirements**: 
-   - Newer Claude models require inference profiles
-   - Solution: Use models that support direct invocation
-   - Future: Add inference profile support
-
-2. **Model Access Permissions**:
-   - Some models show available but return access denied
-   - Solution: Created aws-setup.sh diagnostic script
-
-3. **Simplified Architecture**:
-   - Removed multi-provider complexity
-   - Focused solely on AWS Bedrock integration
-
-## Testing
-
-### Run Tests
-
-```bash
-# Run all tests
-python tests/run_all_tests.py
-
-# Test specific components
-python -m pytest tests/test_mcp_servers.py -v
-python -m pytest tests/test_weather_agent.py -v
-
-# Test structured output functionality
-python tests/test_structured_output_demo.py
-
-# Test Docker deployment
-python tests/docker_test.py
-```
-
-### Model Comparison Testing
-
-```bash
-# Test different models
-export BEDROCK_MODEL_ID="anthropic.claude-3-5-sonnet-20240620-v1:0"
-python main.py --demo
-
-export BEDROCK_MODEL_ID="amazon.nova-lite-v1:0"
-python main.py --demo
-
-export BEDROCK_MODEL_ID="meta.llama3-70b-instruct-v1:0"
-python main.py --demo
-```
+### Container Details
+- **Base Image**: python:3.11-slim
+- **Weather Agent**: Port 7075, FastAPI with Uvicorn
+- **MCP Servers**: Ports 7071-7073, FastMCP HTTP servers
+- **Health Checks**: All services provide `/health` endpoints
+- **Production**: Uvicorn with auto-reload disabled
 
 ## Troubleshooting
 
+### Common Deployment Issues
+
+1. **ECR Push Failures**:
+   - Error: "Your authorization token has expired"
+   - Solution: Run `./infra/setup-ecr.sh` to refresh authentication
+
+2. **CloudFormation Stack Stuck**:
+   - Check deployment status: `./infra/deploy.sh status`
+   - View CloudWatch logs in AWS Console
+   - Common cause: ECS services failing health checks
+
+3. **Bedrock Access Denied**:
+   - Ensure your AWS account has Bedrock access enabled
+   - Check the region supports your selected model
+   - Run `./infra/aws-checks.sh` to verify setup
+   - Try a different model (e.g., Amazon Nova Lite)
+
+4. **Services Not Responding**:
+   - Check ECS service logs: `/ecs/agriculture-*`
+   - Verify security groups allow traffic on required ports
+   - Ensure service discovery is working
+   - Check ALB target health
+
+### Viewing Logs
+
+Local:
+```bash
+# Docker logs
+docker-compose logs -f
+
+# Local server logs
+tail -f logs/forecast_server.log
+tail -f logs/historical_server.log
+tail -f logs/agricultural_server.log
+```
+
+AWS:
+```bash
+# View recent errors
+./infra/status.sh
+
+# Check CloudWatch logs in AWS Console
+# Log groups: /ecs/agriculture-main, /ecs/agriculture-forecast, etc.
+```
+
 ### Common Issues
 
-1. **Model Access Denied**: 
+1. **Model Not Available**:
+   - Run `./infra/aws-setup.sh` to see available models
    - Enable the model in AWS Bedrock console
-   - Check IAM permissions
-   - Run `./scripts/aws-setup.sh` to diagnose
+   - Switch to an available model via BEDROCK_MODEL_ID
 
-2. **Servers not starting**: Check if ports are already in use
-   ```bash
-   lsof -i :7071
-   lsof -i :7072
-   lsof -i :7073
-   ```
+2. **MCP Servers Not Connecting**:
+   - Ensure all servers are running: `docker-compose ps`
+   - Check server health: `curl http://localhost:7071/health`
+   - Verify service discovery in ECS
 
-3. **Missing BEDROCK_MODEL_ID**: The application requires this environment variable
-   ```bash
-   export BEDROCK_MODEL_ID="amazon.nova-lite-v1:0"
-   ```
+3. **Slow Response Times**:
+   - First request may be slow (cold start)
+   - Consider using a faster model (e.g., Claude Haiku)
+   - Check ECS task CPU/memory allocation
 
-4. **Import errors**: Verify all dependencies are installed:
-   ```bash
-   pip install -r requirements.txt
-   ```
+### Monitoring
+- **CloudWatch Logs**: All container logs are in CloudWatch under `/ecs/agriculture-*`
+- **ECS Console**: View task status, CPU/memory usage, and service events
+- **Load Balancer**: Check target health in EC2 console under Target Groups
+- **Service Map**: View service dependencies in AWS X-Ray (if enabled)
 
-5. **Server connection errors**: Ensure MCP servers are running:
-   ```bash
-   ./scripts/start_servers.sh
-   ps aux | grep python | grep server
-   ```
+## Clean Up
 
-### Docker-Specific Issues
+### Local Resources
+```bash
+# Stop and remove containers
+./scripts/stop.sh
 
-1. **Docker build fails**: Ensure Docker daemon is running
-   ```bash
-   docker info
-   ```
+# Clean all Docker resources
+docker-compose down -v
+```
 
-2. **Services not starting**: Check container logs
-   ```bash
-   docker-compose logs forecast-server
-   docker-compose logs weather-agent
-   ```
+### AWS Resources
+```bash
+# Remove services first
+./infra/deploy.sh cleanup-services
 
-3. **Network issues**: Verify Docker network
-   ```bash
-   docker network ls
-   docker network inspect agriculture-agent-ecs_weather-network
-   ```
+# Then remove base infrastructure
+./infra/deploy.sh cleanup-all
 
-4. **Environment variables not loading**: Check .env file
-   ```bash
-   docker-compose config  # Shows resolved configuration
-   ```
+# Delete ECR repositories (optional)
+./infra/cleanup-ecr-images.sh
+# Or completely remove repositories:
+./infra/setup-ecr.sh --delete
+```
 
-### AWS Deployment Issues
+## Important Notes
 
-1. **CloudFormation Stack Fails**:
-   - Check CloudFormation events for specific errors
-   - Verify AWS quotas (VPCs, EIPs, etc.)
-   - Ensure region supports all services
+- **No Authentication**: Endpoints are publicly accessible (add API keys for production)
+- **Rate Limiting**: No rate limiting implemented (add for production)
+- **For Demo Only**: Includes production patterns but needs security hardening
+- **Cost Monitoring**: Check AWS Console to monitor Bedrock API usage
+- **Model Selection**: Different models have different costs and performance characteristics
 
-2. **ECS Tasks Not Starting**:
-   - Check CloudWatch logs for task errors
-   - Verify ECR images exist
-   - Check IAM role permissions
+## Next Steps
 
-3. **ALB Health Checks Failing**:
-   - Verify security group allows health check traffic
-   - Check service logs for startup errors
-   - Ensure health check path returns 200 OK
+To make this production-ready, consider:
+1. Adding authentication (API keys, JWT, or AWS Cognito)
+2. Implementing rate limiting and request throttling
+3. Adding a caching layer for common queries
+4. Setting up CI/CD pipeline with GitHub Actions
+5. Adding comprehensive integration tests
+6. Implementing request/response logging
+7. Adding HTTPS with proper certificates
+8. Setting up monitoring and alerting
+9. Implementing graceful shutdown handling
+10. Adding database for conversation history
 
-## Performance Considerations
+## Resources
 
-- **Model Selection**: Claude 3.5 Sonnet provides best quality, Nova Lite best cost
-- **Scaling**: Auto-scaling configured for 1-10 tasks based on CPU/memory
-- **Cold Starts**: First request may be slower due to container startup
-- **Caching**: Consider implementing response caching for common queries
+- [AWS ECS Documentation](https://docs.aws.amazon.com/ecs/)
+- [AWS Bedrock Documentation](https://docs.aws.amazon.com/bedrock/)
+- [LangGraph Documentation](https://python.langchain.com/docs/langgraph)
+- [FastMCP Documentation](https://github.com/jlowin/fastmcp)
+- [Open-Meteo API](https://open-meteo.com/)
 
-## Security Best Practices
+---
 
-1. **No Hardcoded Secrets**: All credentials via environment variables or IAM roles
-2. **Least Privilege IAM**: Only necessary Bedrock permissions granted
-3. **VPC Isolation**: Services communicate over private network
-4. **HTTPS Only**: ALB configured for secure communication
-5. **Container Security**: Non-root users, minimal base images
-
-## License
-
-This project is provided as a demonstration of LangGraph and FastMCP integration patterns.
-
-## Acknowledgments
-
-- Built with [LangGraph](https://github.com/langchain-ai/langgraph) for agent orchestration
-- Uses [FastMCP](https://github.com/jlowin/fastmcp) for Model Context Protocol servers
-- Powered by [AWS Bedrock](https://aws.amazon.com/bedrock/) for model-agnostic AI
-- Weather data from [OpenWeatherMap API](https://openweathermap.org/api)
+**Status**: Production-ready architecture demonstration. This showcases advanced AI agent patterns with distributed tools - add security measures and authentication before real-world deployment.
