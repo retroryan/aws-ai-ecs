@@ -17,7 +17,7 @@ export NC='\033[0m' # No Color
 export DEFAULT_REGION="${AWS_REGION:-us-east-1}"
 export DEFAULT_BASE_STACK_NAME="${BASE_STACK_NAME:-agriculture-agent-base}"
 export DEFAULT_SERVICES_STACK_NAME="${SERVICES_STACK_NAME:-agriculture-agent-services}"
-export DEFAULT_CLUSTER_NAME="${CLUSTER_NAME:-agriculture-agent}"
+export DEFAULT_CLUSTER_NAME="${CLUSTER_NAME:-agriculture-agent-cluster}"
 
 # ECR configuration for agriculture agent
 export ECR_REPO_PREFIX="agriculture-agent"
