@@ -12,6 +12,7 @@ import uvicorn
 import os
 from .mcp_agent import create_weather_agent, MCPWeatherAgent
 from .models.structured_responses import WeatherQueryResponse, ValidationResult
+from .session_manager import SessionManager, SessionData
 from contextlib import asynccontextmanager
 import logging
 
@@ -19,20 +20,27 @@ import logging
 logging.getLogger("strands").setLevel(logging.INFO)
 logger = logging.getLogger(__name__)
 
-# Global agent instance
+# Global instances
 agent: Optional[MCPWeatherAgent] = None
+session_manager: Optional[SessionManager] = None
 
 @asynccontextmanager
 async def lifespan(app: FastAPI):
-    """Initialize the agent on startup and cleanup on shutdown."""
-    global agent
+    """Initialize the agent and session manager on startup and cleanup on shutdown."""
+    global agent, session_manager
     print("🚀 Starting AWS Strands Weather Agent API...")
     try:
+        # Initialize agent
         agent = await create_weather_agent()
+        
+        # Initialize session manager
+        default_ttl = int(os.getenv("SESSION_DEFAULT_TTL_MINUTES", "60"))
+        session_manager = SessionManager(default_ttl_minutes=default_ttl)
+        
         print("✅ AWS Strands Weather Agent API ready!")
         yield
     except Exception as e:
-        logger.error(f"Failed to initialize agent: {e}")
+        logger.error(f"Failed to initialize: {e}")
         raise
     finally:
         # Cleanup (Strands handles this automatically)
@@ -49,10 +57,13 @@ app = FastAPI(
 class QueryRequest(BaseModel):
     query: str
     session_id: Optional[str] = None
+    create_session: bool = True  # Auto-create if not provided
 
 class QueryResponse(BaseModel):
     response: str
-    session_id: Optional[str] = None
+    session_id: str  # Always included
+    session_new: bool  # True if newly created
+    conversation_turn: int
 
 class AgentInfo(BaseModel):
     model: str
@@ -80,28 +91,61 @@ async def get_agent_info():
 @app.post("/query", response_model=QueryResponse)
 async def process_query(request: QueryRequest):
     """
-    Process a weather query using the Strands agent.
+    Process a weather query using the Strands agent with session support.
     
     Args:
-        request: Query request with the user's question
+        request: Query request with the user's question and optional session_id
         
     Returns:
-        Agent's response
+        Agent's response with session information
     """
-    if not agent:
-        raise HTTPException(status_code=503, detail="Agent not initialized")
+    if not agent or not session_manager:
+        raise HTTPException(status_code=503, detail="Service not initialized")
     
     try:
+        # Handle session creation/retrieval
+        session_new = False
+        session_id = request.session_id
+        
+        if not session_id and request.create_session:
+            # Create new session
+            session = await session_manager.create_session()
+            session_id = session.session_id
+            session_new = True
+        elif session_id:
+            # Verify existing session
+            session = await session_manager.get_session(session_id)
+            if not session:
+                if request.create_session:
+                    # Session expired or not found, create new one
+                    session = await session_manager.create_session()
+                    session_id = session.session_id
+                    session_new = True
+                else:
+                    raise HTTPException(status_code=404, detail="Session not found or expired")
+        else:
+            # No session_id and create_session is False
+            raise HTTPException(status_code=400, detail="Session ID required when create_session is False")
+        
+        # Process query with agent
         response = await agent.query(
             message=request.query,
-            session_id=request.session_id
+            session_id=session_id
         )
+        
+        # Update session activity
+        await session_manager.update_activity(session_id)
+        session = await session_manager.get_session(session_id)
         
         return QueryResponse(
             response=response,
-            session_id=request.session_id
+            session_id=session_id,
+            session_new=session_new,
+            conversation_turn=session.conversation_turns if session else 1
         )
         
+    except HTTPException:
+        raise
     except Exception as e:
         logger.error(f"Error processing query: {e}")
         raise HTTPException(status_code=500, detail=str(e))
@@ -109,27 +153,61 @@ async def process_query(request: QueryRequest):
 @app.post("/query/structured", response_model=WeatherQueryResponse)
 async def process_query_structured(request: QueryRequest):
     """
-    Process a weather query and return structured output.
+    Process a weather query and return structured output with session support.
     
     This endpoint uses AWS Strands native structured output to:
     - Extract location information using LLM geographic knowledge
     - Call weather tools with precise coordinates
-    - Return validated, structured response
+    - Return validated, structured response with session information
     
     Args:
-        request: Query request with the user's question
+        request: Query request with the user's question and optional session_id
         
     Returns:
-        Structured WeatherQueryResponse with locations, weather data, and metadata
+        Structured WeatherQueryResponse with locations, weather data, and session metadata
     """
-    if not agent:
-        raise HTTPException(status_code=503, detail="Agent not initialized")
+    if not agent or not session_manager:
+        raise HTTPException(status_code=503, detail="Service not initialized")
     
     try:
+        # Handle session creation/retrieval (same logic as /query)
+        session_new = False
+        session_id = request.session_id
+        
+        if not session_id and request.create_session:
+            # Create new session
+            session = await session_manager.create_session()
+            session_id = session.session_id
+            session_new = True
+        elif session_id:
+            # Verify existing session
+            session = await session_manager.get_session(session_id)
+            if not session:
+                if request.create_session:
+                    # Session expired or not found, create new one
+                    session = await session_manager.create_session()
+                    session_id = session.session_id
+                    session_new = True
+                else:
+                    raise HTTPException(status_code=404, detail="Session not found or expired")
+        else:
+            # No session_id and create_session is False
+            raise HTTPException(status_code=400, detail="Session ID required when create_session is False")
+        
+        # Process structured query with agent
         response = await agent.query_structured(
             message=request.query,
-            session_id=request.session_id
+            session_id=session_id
         )
+        
+        # Update session activity
+        await session_manager.update_activity(session_id)
+        session = await session_manager.get_session(session_id)
+        
+        # Add session information to response
+        response.session_id = session_id
+        response.session_new = session_new
+        response.conversation_turn = session.conversation_turns if session else 1
         
         # Validate the response
         validation = agent.validate_response(response)
@@ -138,6 +216,8 @@ async def process_query_structured(request: QueryRequest):
         
         return response
         
+    except HTTPException:
+        raise
     except Exception as e:
         logger.error(f"Error processing structured query: {e}")
         raise HTTPException(status_code=500, detail=str(e))
@@ -184,13 +264,24 @@ async def get_mcp_status():
 @app.get("/session/{session_id}")
 async def get_session_info(session_id: str):
     """Get information about a conversation session."""
-    if not agent:
-        raise HTTPException(status_code=503, detail="Agent not initialized")
+    if not session_manager:
+        raise HTTPException(status_code=503, detail="Session manager not initialized")
     
     try:
-        session_info = agent.get_session_info(session_id)
-        if session_info is None:
-            raise HTTPException(status_code=404, detail="Session not found")
+        session = await session_manager.get_session(session_id)
+        if session is None:
+            raise HTTPException(status_code=404, detail="Session not found or expired")
+        
+        # Get additional info from agent if available
+        agent_session_info = None
+        if agent:
+            agent_session_info = agent.get_session_info(session_id)
+        
+        # Combine session manager and agent info
+        session_info = session_manager.get_session_info(session)
+        if agent_session_info:
+            session_info['message_count'] = agent_session_info.get('total_messages', 0)
+        
         return session_info
     except HTTPException:
         raise
@@ -201,13 +292,20 @@ async def get_session_info(session_id: str):
 @app.delete("/session/{session_id}")
 async def clear_session(session_id: str):
     """Clear a conversation session."""
-    if not agent:
-        raise HTTPException(status_code=503, detail="Agent not initialized")
+    if not session_manager:
+        raise HTTPException(status_code=503, detail="Session manager not initialized")
     
     try:
-        cleared = agent.clear_session(session_id)
+        # Clear from session manager
+        cleared = await session_manager.delete_session(session_id)
+        
+        # Also clear from agent if available
+        if agent and cleared:
+            agent.clear_session(session_id)
+        
         if not cleared:
             raise HTTPException(status_code=404, detail="Session not found")
+        
         return {"message": f"Session {session_id} cleared successfully"}
     except HTTPException:
         raise
@@ -219,7 +317,7 @@ if __name__ == "__main__":
     # Run the server
     port = int(os.getenv("API_PORT", "8090"))
     uvicorn.run(
-        "main:app",
+        "weather_agent.main:app",
         host="0.0.0.0",
         port=port,
         reload=True,

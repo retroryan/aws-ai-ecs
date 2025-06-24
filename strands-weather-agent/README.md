@@ -183,9 +183,6 @@ cd infra
 # Deploy with specific model
 BEDROCK_MODEL_ID="anthropic.claude-3-haiku-20240307-v1:0" ./infra/deploy.sh all
 
-# Deploy to production environment
-ENVIRONMENT=prod ./infra/deploy.sh all
-
 # Individual deployment steps
 ./infra/deploy.sh setup-ecr        # Create ECR repositories
 ./infra/deploy.sh build           # Build Docker images
@@ -903,7 +900,7 @@ This demonstration project requires several enhancements for production use:
 
 ### Code Comparison
 
-**LangGraph (agriculture-agent-ecs):**
+**LangGraph (strands-weather-agent-ecs):**
 ```python
 # Complex setup with manual orchestration
 self.llm = get_bedrock_llm(...)

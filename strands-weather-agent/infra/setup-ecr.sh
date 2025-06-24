@@ -18,7 +18,7 @@ while [[ $# -gt 0 ]]; do
         --help|-h)
             echo "Usage: $0 [OPTIONS]"
             echo ""
-            echo "Setup ECR repositories and Docker authentication for Agriculture Agent ECS deployment"
+            echo "Setup ECR repositories and Docker authentication for Strands Weather Agent ECS deployment"
             echo ""
             echo "This script will:"
             echo "  - Create ECR repositories if they don't exist"
@@ -40,7 +40,7 @@ while [[ $# -gt 0 ]]; do
 done
 
 echo "=================================================="
-echo "ECR Setup for Agriculture Agent ECS"
+echo "ECR Setup for Strands Weather Agent ECS"
 echo "=================================================="
 echo ""
 

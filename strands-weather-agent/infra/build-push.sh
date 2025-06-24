@@ -1,6 +1,6 @@
 #!/bin/bash
 
-# Agriculture Agent - Build and Push Script
+# Strands Weather Agent - Build and Push Script
 # Builds Docker images for AMD64/x86_64 architecture (required for ECS Fargate)
 # and pushes them to Amazon ECR
 
@@ -14,7 +14,7 @@ mkdir -p "${LOGS_DIR}"
 
 # Script configuration
 COMPONENTS=("main" "forecast" "historical" "agricultural")
-ECR_REPO_PREFIX="agriculture-agent"
+ECR_REPO_PREFIX="strands-weather-agent"
 
 # Generate version tag based on git commit and timestamp
 GIT_COMMIT=$(git rev-parse --short HEAD 2>/dev/null || echo "unknown")
@@ -22,7 +22,7 @@ TIMESTAMP=$(date +%Y%m%d-%H%M%S)
 VERSION_TAG="${GIT_COMMIT}-${TIMESTAMP}"
 
 echo "=================================================="
-echo "Build & Push Agriculture Agent Images to ECR"
+echo "Build & Push Strands Weather Agent Images to ECR"
 echo "=================================================="
 echo ""
 
