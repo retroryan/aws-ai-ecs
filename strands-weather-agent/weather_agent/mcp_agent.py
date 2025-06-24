@@ -31,11 +31,18 @@ from strands.tools.mcp import MCPClient
 # from strands.tools.structured_output import convert_pydantic_to_tool_spec  # Not available in current version
 
 # Local imports
-from .models.structured_responses import (
-    WeatherQueryResponse, ExtractedLocation, WeatherDataSummary,
-    AgriculturalAssessment, ValidationResult
-)
-from .prompts import PromptManager
+try:
+    from .models.structured_responses import (
+        WeatherQueryResponse, ExtractedLocation, WeatherDataSummary,
+        AgriculturalAssessment, ValidationResult
+    )
+    from .prompts import PromptManager
+except ImportError:
+    from models.structured_responses import (
+        WeatherQueryResponse, ExtractedLocation, WeatherDataSummary,
+        AgriculturalAssessment, ValidationResult
+    )
+    from prompts import PromptManager
 
 # Type variable for structured output
 T = TypeVar('T')

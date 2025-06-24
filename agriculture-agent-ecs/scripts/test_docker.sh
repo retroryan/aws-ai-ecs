@@ -2,7 +2,7 @@
 
 # Docker Integration Test Script
 # This script tests the running Docker services without starting them
-# Use ./start.sh to start the services first
+# Use ./start_docker.sh to start the services first
 
 set -e
 
@@ -82,7 +82,7 @@ if [ "$running_containers" -eq "0" ]; then
     echo -e "${RED}No services running!${NC}"
     echo ""
     echo "Please start the services first with:"
-    echo "  ./scripts/start.sh"
+    echo "  ./scripts/start_docker.sh"
     exit 1
 fi
 
@@ -174,7 +174,7 @@ echo ""
 echo -e "${GREEN}✅ All tests passed!${NC}"
 echo ""
 echo "Commands:"
-echo "  Stop services:  ./scripts/stop.sh"
+echo "  Stop services:  ./scripts/stop_docker.sh"
 echo "  View logs:      docker-compose logs -f"
-echo "  Restart:        ./scripts/stop.sh && ./scripts/start.sh"
+echo "  Restart:        ./scripts/stop_docker.sh && ./scripts/start_docker.sh"
 echo ""

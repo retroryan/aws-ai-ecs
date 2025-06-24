@@ -1,10 +1,51 @@
-# Strands Weather Agent - Code Cleanup Proposal
+# Strands Weather Agent - Code Cleanup Proposal & Progress
 
 ## Executive Summary
 
 After a comprehensive analysis of the strands-weather-agent codebase, I've identified significant opportunities for cleanup and refactoring that could reduce the codebase size by approximately 40% while improving maintainability and clarity. This proposal outlines specific files to remove, code patterns to refactor, and structural improvements to implement.
 
 **Key Change**: All Python code for the weather agent will be consolidated into the `weather_agent` directory, making it a self-contained Python application that users can run with `cd weather_agent && python main.py`.
+
+## Progress Update - Phase 1 Complete ✅
+
+**Date**: June 23, 2025
+
+### Completed Actions:
+1. ✅ Moved `api.py` to `weather_agent/main.py`
+2. ✅ Moved root `requirements.txt` to `weather_agent/requirements.txt`
+3. ✅ Moved `.env.example` to `weather_agent/.env.example`
+4. ✅ Created `weather_agent/.python-version` with `3.12.10`
+5. ✅ Updated import paths in moved files
+6. ✅ Removed redundant files:
+   - `weather_agent/chatbot.py` (281 lines)
+   - `api.py` (original from root)
+   - `weather_agent/models/queries.py`
+   - `weather_agent/models/metadata.py`
+   - `test_context_retention.py`
+   - `.history/` directory
+   - `/infra/logs/` directory
+7. ✅ Updated Docker configuration:
+   - Modified `docker/Dockerfile.main` to use new structure
+   - Updated CMD to run `python -m weather_agent.main`
+8. ✅ Fixed import errors in `weather_agent/models/__init__.py`
+9. ✅ Tested with Docker - all services running successfully
+
+### Results:
+- Docker services start and run correctly with `./scripts/start_docker.sh`
+- Health checks pass for all services
+- API endpoints respond correctly
+- Test queries execute successfully
+- README.md updated with new usage instructions
+- Weather agent is now a self-contained Python application
+
+### Usage Summary:
+Users can now run the weather agent with:
+```bash
+cd weather_agent
+pyenv local 3.12.10
+pip install -r requirements.txt
+python -m weather_agent.main
+```
 
 ## 1. Files to Remove (Immediate Impact)
 

@@ -235,14 +235,3 @@ class ValidationResult(BaseModel):
         return "\n".join(messages)
 
 
-class StreamingWeatherUpdate(BaseModel):
-    """Model for streaming weather updates (future enhancement)."""
-    update_type: Literal["location_extracted", "tool_called", "data_received", "processing_complete"] = Field(
-        ...,
-        description="Type of update in the streaming response"
-    )
-    location: Optional[ExtractedLocation] = Field(None, description="Extracted location if applicable")
-    tool_name: Optional[str] = Field(None, description="Name of tool being called")
-    partial_data: Optional[Dict[str, Any]] = Field(None, description="Partial data received")
-    is_final: bool = Field(False, description="Whether this is the final update")
-    timestamp: datetime = Field(default_factory=datetime.utcnow)

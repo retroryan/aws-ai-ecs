@@ -23,7 +23,7 @@ fi
 echo "Checking Python environment..."
 python -c "import asyncio, httpx" 2>/dev/null || {
     echo -e "${YELLOW}⚠️  Missing required Python packages${NC}"
-    echo "Please install requirements: pip install -r requirements.txt"
+    echo "Please install requirements: cd weather_agent && pip install -r requirements.txt"
     exit 1
 }
 
