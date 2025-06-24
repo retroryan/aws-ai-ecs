@@ -161,6 +161,20 @@ class WeatherQueryResponse(BaseModel):
         description="UTC timestamp indicating when the weather data was last updated by the source APIs"
     )
     
+    # Session information (optional - for API responses)
+    session_id: Optional[str] = Field(
+        None,
+        description="Session identifier for stateful conversations"
+    )
+    session_new: Optional[bool] = Field(
+        None,
+        description="Whether this is a newly created session"
+    )
+    conversation_turn: Optional[int] = Field(
+        None,
+        description="The conversation turn number within the session"
+    )
+    
     def get_primary_location(self) -> ExtractedLocation:
         """Get the primary (first) location."""
         return self.locations[0]

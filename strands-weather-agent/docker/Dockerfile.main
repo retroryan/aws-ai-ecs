@@ -27,5 +27,5 @@ EXPOSE 8090
 # Set environment variable for API port (can be overridden)
 ENV API_PORT=8090
 
-# Run the FastAPI application
-CMD ["python", "-m", "weather_agent.main"]
+# Run the FastAPI application using uvicorn directly
+CMD ["python", "-m", "uvicorn", "weather_agent.main:app", "--host", "0.0.0.0", "--port", "8090"]

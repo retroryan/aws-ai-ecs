@@ -1,6 +1,6 @@
 #!/bin/bash
 
-# Agriculture Agent Infrastructure Deployment Script
+# Strands Weather Agent Infrastructure Deployment Script
 
 set -e
 
@@ -15,8 +15,8 @@ source "${SCRIPT_DIR}/ecs-utils.sh"
 export_common_env
 
 # Configuration
-BASE_STACK_NAME="agriculture-agent-base"
-SERVICES_STACK_NAME="agriculture-agent-services"
+BASE_STACK_NAME="strands-weather-agent-base"
+SERVICES_STACK_NAME="strands-weather-agent-services"
 REGION="${AWS_REGION:-us-east-1}"
 
 # Bedrock configuration
@@ -119,7 +119,7 @@ get_status() {
         # List services
         log_info "ECS Services:"
         aws ecs list-services \
-            --cluster "agriculture-agent-${ENVIRONMENT}" \
+            --cluster "strands-weather-agent" \
             --region $REGION \
             --query 'serviceArns[*]' \
             --output text | xargs -n1 basename
@@ -144,7 +144,7 @@ aws_checks() {
 }
 
 show_help() {
-    echo "Agriculture Agent Infrastructure Deployment Script"
+    echo "Strands Weather Agent Infrastructure Deployment Script"
     echo ""
     echo "Usage: ./deploy.sh [command]"
     echo ""
@@ -163,7 +163,6 @@ show_help() {
     echo "  help             Show this help message"
     echo ""
     echo "Environment Variables:"
-    echo "  ENVIRONMENT          Environment name (default: dev)"
     echo "  AWS_REGION          AWS region (default: us-east-1)"
     echo "  BEDROCK_MODEL_ID    Bedrock model to use (default: amazon.nova-lite-v1:0)"
     echo "  BEDROCK_REGION      Bedrock region (default: us-east-1)"
@@ -175,7 +174,6 @@ show_help() {
     echo "  ./deploy.sh setup-ecr                     # Setup ECR repositories"
     echo "  ./deploy.sh build-push                    # Build and push images"
     echo "  ./deploy.sh all                          # Full deployment"
-    echo "  ENVIRONMENT=prod ./deploy.sh all         # Deploy to production"
     echo "  ./deploy.sh status                       # Check deployment status"
     echo ""
 }

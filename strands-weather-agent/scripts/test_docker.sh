@@ -139,8 +139,11 @@ test_query() {
         -H "Content-Type: application/json" \
         -d "{\"query\": \"$query\"}" 2>/dev/null || echo '{"response": "Error: Failed to connect"}')
     
-    # Extract response field
+    # Extract response and session fields
     response_text=$(echo "$response" | jq -r '.response' 2>/dev/null || echo "Error parsing response")
+    session_id=$(echo "$response" | jq -r '.session_id' 2>/dev/null || echo "")
+    session_new=$(echo "$response" | jq -r '.session_new' 2>/dev/null || echo "")
+    conversation_turn=$(echo "$response" | jq -r '.conversation_turn' 2>/dev/null || echo "")
     
     if [[ "$response_text" == "Error"* ]] || [[ "$response_text" == "An error occurred"* ]]; then
         if [[ "$response_text" == *"credentials"* ]]; then
@@ -156,6 +159,11 @@ test_query() {
             display_text="$response_text"
         fi
         echo -e "Response: ${GREEN}✓${NC} $display_text"
+        
+        # Display session info if available
+        if [[ -n "$session_id" ]] && [[ "$session_id" != "null" ]]; then
+            echo -e "Session: ${GREEN}✓${NC} ID: ${session_id:0:8}... | New: $session_new | Turn: $conversation_turn"
+        fi
     fi
     echo ""
 }
@@ -166,7 +174,38 @@ test_query "How much rain did Seattle get last week?"
 test_query "Are conditions good for planting corn in Iowa?"
 
 echo ""
-echo "4. Service URLs:"
+echo "4. Testing session endpoints..."
+echo ""
+
+# Test session info endpoint
+echo -n "Testing session endpoint..."
+# Get a session ID from the last query (if jq is available)
+if command -v jq &> /dev/null; then
+    # Make a query to get a session ID
+    session_response=$(curl -s -X POST http://localhost:8090/query \
+        -H "Content-Type: application/json" \
+        -d '{"query": "test session"}' 2>/dev/null)
+    
+    test_session_id=$(echo "$session_response" | jq -r '.session_id' 2>/dev/null || echo "")
+    
+    if [[ -n "$test_session_id" ]] && [[ "$test_session_id" != "null" ]]; then
+        # Test GET session info
+        session_info=$(curl -s "http://localhost:8090/session/$test_session_id" 2>/dev/null)
+        if echo "$session_info" | jq -e '.session_id' &> /dev/null; then
+            echo -e " ${GREEN}✓${NC}"
+            echo "Session info retrieved successfully"
+        else
+            echo -e " ${RED}✗${NC}"
+        fi
+    else
+        echo -e " ${YELLOW}⚠${NC} Could not get session ID"
+    fi
+else
+    echo -e " ${YELLOW}⚠${NC} jq not installed, skipping session test"
+fi
+
+echo ""
+echo "5. Service URLs:"
 echo "   - Weather Agent API: http://localhost:8090"
 echo "   - API Docs: http://localhost:8090/docs"
 echo "   - Health Check: http://localhost:8090/health"

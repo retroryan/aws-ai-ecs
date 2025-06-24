@@ -1374,7 +1374,7 @@ This guide documents the complete journey from a 65% failure rate to perfect 100
 - **Modern LLMs possess comprehensive, accurate geographic knowledge** - more extensive than most external APIs
 - **Eliminate anti-patterns**: No manual coordinate extraction, no external geocoding, no hardcoded databases
 - **Let the model handle geographic reasoning directly** - this is what foundation models excel at
-- **Key Learning**: The agriculture-agent-ecs project proved this approach works perfectly
+- **Key Learning**: The strands-weather-agent project proved this approach works perfectly
 
 ### 2. **Use Native Strands Capabilities Correctly**
 - **`agent.structured_output()` works perfectly** when used as designed - no custom wrappers needed

@@ -1,5 +1,5 @@
 AWSTemplateFormatVersion: "2010-09-09"
-Description: Agriculture Agent - Base Infrastructure (VPC, ECS Cluster, IAM Roles, Service Discovery)
+Description: Strands Weather Agent - Base Infrastructure (VPC, ECS Cluster, IAM Roles, Service Discovery)
 
 Resources:
   # VPC Configuration
@@ -73,7 +73,7 @@ Resources:
   ECSCluster:
     Type: AWS::ECS::Cluster
     Properties:
-      ClusterName: agriculture-agent
+      ClusterName: strands-weather-agent
       ClusterSettings:
         - Name: containerInsights
           Value: enabled
@@ -82,15 +82,15 @@ Resources:
   ServiceDiscoveryNamespace:
     Type: AWS::ServiceDiscovery::PrivateDnsNamespace
     Properties:
-      Name: agriculture.local
-      Description: Service discovery namespace for agriculture agent services
+      Name: strands-weather.local
+      Description: Service discovery namespace for strands weather agent services
       Vpc: !Ref ApplicationVPC
 
   # IAM Roles
   TaskExecutionRole:
     Type: AWS::IAM::Role
     Properties:
-      RoleName: agriculture-agent-execution-role
+      RoleName: strands-weather-agent-execution-role
       AssumeRolePolicyDocument:
         Version: "2012-10-17"
         Statement:
@@ -116,7 +116,7 @@ Resources:
   TaskRole:
     Type: AWS::IAM::Role
     Properties:
-      RoleName: agriculture-agent-task-role
+      RoleName: strands-weather-agent-task-role
       AssumeRolePolicyDocument:
         Version: "2012-10-17"
         Statement:
@@ -149,7 +149,7 @@ Resources:
   ALBSecurityGroup:
     Type: AWS::EC2::SecurityGroup
     Properties:
-      GroupName: agriculture-agent-alb-sg
+      GroupName: strands-weather-agent-alb-sg
       GroupDescription: Security group for Application Load Balancer
       VpcId: !Ref ApplicationVPC
       SecurityGroupIngress:
@@ -163,12 +163,12 @@ Resources:
           CidrIp: 0.0.0.0/0
       Tags:
         - Key: Name
-          Value: agriculture-agent-alb-sg
+          Value: strands-weather-agent-alb-sg
 
   ServiceSecurityGroup:
     Type: AWS::EC2::SecurityGroup
     Properties:
-      GroupName: agriculture-agent-service-sg
+      GroupName: strands-weather-agent-service-sg
       GroupDescription: Security group for ECS services
       VpcId: !Ref ApplicationVPC
       SecurityGroupIngress:
@@ -184,13 +184,13 @@ Resources:
           CidrIp: 10.0.0.0/16
       Tags:
         - Key: Name
-          Value: agriculture-agent-service-sg
+          Value: strands-weather-agent-service-sg
 
   # Application Load Balancer
   ApplicationLoadBalancer:
     Type: AWS::ElasticLoadBalancingV2::LoadBalancer
     Properties:
-      Name: agriculture-agent
+      Name: strands-weather-agent
       Type: application
       Scheme: internet-facing
       SecurityGroups:
@@ -200,12 +200,12 @@ Resources:
         - !Ref PrivateSubnet2
       Tags:
         - Key: Name
-          Value: agriculture-agent-alb
+          Value: strands-weather-agent-alb
 
   ALBTargetGroup:
     Type: AWS::ElasticLoadBalancingV2::TargetGroup
     Properties:
-      Name: agriculture-agent
+      Name: strands-weather-agent
       Port: 8000
       Protocol: HTTP
       VpcId: !Ref ApplicationVPC

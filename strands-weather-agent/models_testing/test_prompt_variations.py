@@ -30,7 +30,7 @@ class PromptTester:
     PROMPT_FILES = [
         "system_prompt.txt",           # Current complex prompt
         "system_prompt_simple.txt",    # Simplified version
-        "system_prompt_agriculture.txt" # Agriculture-agent-ecs style
+        "system_prompt_agriculture.txt" # strands-weather-agent style
     ]
     
     def __init__(self):

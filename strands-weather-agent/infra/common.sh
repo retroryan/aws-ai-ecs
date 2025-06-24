@@ -15,12 +15,12 @@ export NC='\033[0m' # No Color
 
 # Common configuration defaults
 export DEFAULT_REGION="${AWS_REGION:-us-east-1}"
-export DEFAULT_BASE_STACK_NAME="${BASE_STACK_NAME:-agriculture-agent-base}"
-export DEFAULT_SERVICES_STACK_NAME="${SERVICES_STACK_NAME:-agriculture-agent-services}"
-export DEFAULT_CLUSTER_NAME="${CLUSTER_NAME:-${DEFAULT_BASE_STACK_NAME}-cluster}"
+export DEFAULT_BASE_STACK_NAME="${BASE_STACK_NAME:-strands-weather-agent-base}"
+export DEFAULT_SERVICES_STACK_NAME="${SERVICES_STACK_NAME:-strands-weather-agent-services}"
+export DEFAULT_CLUSTER_NAME="${CLUSTER_NAME:-strands-weather-agent}"
 
-# ECR configuration for agriculture agent
-export ECR_REPO_PREFIX="agriculture-agent"
+# ECR configuration for strands weather agent
+export ECR_REPO_PREFIX="strands-weather-agent"
 export ECR_MAIN_REPO="${ECR_REPO_PREFIX}-main"
 export ECR_FORECAST_REPO="${ECR_REPO_PREFIX}-forecast"
 export ECR_HISTORICAL_REPO="${ECR_REPO_PREFIX}-historical"
@@ -299,7 +299,7 @@ ensure_project_root() {
     
     # Verify we're in the right place by checking for key files
     if [ ! -f "main.py" ] || [ ! -d "mcp_servers" ] || [ ! -d "weather_agent" ]; then
-        log_error "Not in the Agriculture Agent project root directory"
+        log_error "Not in the Strands Weather Agent project root directory"
         return 1
     fi
     
