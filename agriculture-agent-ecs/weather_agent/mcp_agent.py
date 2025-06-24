@@ -35,45 +35,13 @@ except ImportError:
     pass
 
 
-# Structured Output Models for LangGraph Option 1
-class WeatherCondition(BaseModel):
-    """Current weather condition."""
-    temperature: Optional[float] = Field(None, description="Temperature in Celsius")
-    humidity: Optional[int] = Field(None, description="Relative humidity percentage")
-    precipitation: Optional[float] = Field(None, description="Current precipitation in mm")
-    wind_speed: Optional[float] = Field(None, description="Wind speed in km/h")
-    conditions: Optional[str] = Field(None, description="Weather description")
-
-
-class DailyForecast(BaseModel):
-    """Daily weather forecast."""
-    date: str = Field(..., description="Date in YYYY-MM-DD format")
-    temperature_max: Optional[float] = Field(None, description="Maximum temperature in Celsius")
-    temperature_min: Optional[float] = Field(None, description="Minimum temperature in Celsius")
-    precipitation_sum: Optional[float] = Field(None, description="Total precipitation in mm")
-    conditions: Optional[str] = Field(None, description="Weather conditions summary")
-
-
-class OpenMeteoResponse(BaseModel):
-    """Structured response consolidating Open-Meteo data."""
-    location: str = Field(..., description="Location name")
-    coordinates: Optional[Any] = Field(None, description="Latitude and longitude")
-    timezone: Optional[str] = Field(None, description="Timezone")
-    current_conditions: Optional[WeatherCondition] = Field(None, description="Current weather")
-    daily_forecast: Optional[List[DailyForecast]] = Field(None, description="Daily forecast data")
-    summary: str = Field(..., description="Natural language summary")
-    data_source: str = Field(default="Open-Meteo API", description="Data source")
-
-
-class AgricultureAssessment(BaseModel):
-    """Agricultural conditions assessment."""
-    location: str = Field(..., description="Location name")
-    soil_temperature: Optional[float] = Field(None, description="Soil temperature in Celsius")
-    soil_moisture: Optional[float] = Field(None, description="Soil moisture content")
-    evapotranspiration: Optional[float] = Field(None, description="Daily evapotranspiration in mm")
-    planting_conditions: str = Field(..., description="Assessment of planting conditions")
-    recommendations: List[str] = Field(default_factory=list, description="Farming recommendations")
-    summary: str = Field(..., description="Natural language summary")
+# Import structured output models
+from .models import (
+    WeatherCondition,
+    DailyForecast,
+    OpenMeteoResponse,
+    AgricultureAssessment
+)
 
 
 class MCPWeatherAgent:

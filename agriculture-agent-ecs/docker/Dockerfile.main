@@ -96,7 +96,6 @@ EOF
 
 # Copy application code
 COPY weather_agent/ weather_agent/
-COPY models/ models/
 COPY mcp_servers/api_utils.py mcp_servers/api_utils.py
 
 # Create non-root user

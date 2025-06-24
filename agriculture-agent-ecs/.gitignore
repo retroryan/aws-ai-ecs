@@ -204,5 +204,6 @@ Temporary Items
 
 # Project specific
 logs/
+infra/logs/
 *.pid
 .image-tags
