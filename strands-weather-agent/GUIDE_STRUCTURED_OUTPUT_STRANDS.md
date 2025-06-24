@@ -787,6 +787,89 @@ response = agent.structured_output(
 
 ---
 
+## Additional Structured Output Patterns
+
+### Tool-Generated Structured Data
+
+Beyond using LLM intelligence directly, tools can return structured JSON that agents process:
+
+```python
+import json
+from strands import tool
+
+@tool
+def get_weather_data(latitude: float, longitude: float) -> str:
+    """Get weather data and return structured JSON."""
+    # Fetch weather data from API
+    weather_data = {
+        "location": {"lat": latitude, "lon": longitude},
+        "current": {
+            "temperature": 22.5,
+            "conditions": "Partly cloudy",
+            "humidity": 65
+        },
+        "forecast": [
+            {"day": "Monday", "high": 24, "low": 18},
+            {"day": "Tuesday", "high": 26, "low": 19}
+        ]
+    }
+    return json.dumps(weather_data)
+```
+
+### Conversation Context Extraction
+
+Extract structured data from existing conversation context:
+
+```python
+# Build conversation context
+agent("Tell me about the Eiffel Tower")
+agent("What materials was it made from?")
+agent("When was it built?")
+
+# Extract all discussed information into structured format
+class LandmarkInfo(BaseModel):
+    name: str
+    location: str
+    height_meters: int
+    construction_year: int
+    materials: List[str]
+    architect: str
+
+result = agent.structured_output(
+    LandmarkInfo,
+    "Extract all the landmark information we discussed"
+)
+```
+
+### Progressive Data Building
+
+Build complex structured data progressively:
+
+```python
+# Stage 1: Basic information
+class BasicInfo(BaseModel):
+    query_intent: str
+    primary_location: str
+    data_needed: List[str]
+
+basic = agent.structured_output(BasicInfo, user_query)
+
+# Stage 2: Detailed analysis based on intent
+if "agricultural" in basic.query_intent:
+    class AgriculturalAnalysis(BaseModel):
+        crop_type: str
+        growth_stage: str
+        risk_factors: List[str]
+        recommendations: List[str]
+    
+    detailed = agent.structured_output(
+        AgriculturalAnalysis,
+        f"Analyze agricultural factors for {basic.primary_location}"
+    )
+```
+
+---
+
 ## Best Practices for System Prompts
 
 ### 1. Explicit Geographic Examples for Output Calibration
@@ -895,6 +978,25 @@ and farming practices. This prompt guides OUTPUT FORMAT, not domain knowledge.
 Implement validation to ensure structured output meets requirements:
 
 ```python
+from pydantic import BaseModel, Field, ValidationError
+from typing import List, Optional
+
+class ValidationResult(BaseModel):
+    valid: bool
+    errors: List[str] = Field(default_factory=list)
+    warnings: List[str] = Field(default_factory=list)
+    
+    def get_user_message(self) -> Optional[str]:
+        """Generate user-friendly error message if validation fails."""
+        if not self.valid:
+            return (
+                "I need more specific location information. Please clarify which exact "
+                "location you want weather data for. If this structured output issue "
+                "persists, try using a more powerful model like Claude 3.5 Sonnet "
+                "for better geographical reasoning."
+            )
+        return None
+
 def validate_structured_response(response: WeatherQueryWithIntelligentLocation) -> ValidationResult:
     """Validate structured response for completeness and accuracy."""
     
@@ -930,22 +1032,6 @@ def validate_structured_response(response: WeatherQueryWithIntelligentLocation) 
         errors=errors,
         warnings=warnings
     )
-
-class ValidationResult(BaseModel):
-    valid: bool
-    errors: List[str] = Field(default_factory=list)
-    warnings: List[str] = Field(default_factory=list)
-    
-    def get_user_message(self) -> Optional[str]:
-        """Generate user-friendly error message if validation fails."""
-        if not self.valid:
-            return (
-                "I need more specific location information. Please clarify which exact "
-                "location you want weather data for. If this structured output issue "
-                "persists, try using a more powerful model like Claude 3.5 Sonnet "
-                "for better geographical reasoning."
-            )
-        return None
 ```
 
 ### Graceful Fallback Implementation
@@ -996,11 +1082,11 @@ async def get_structured_weather_response(user_query: str) -> Union[WeatherQuery
 ```python
 import asyncio
 import logging
-from typing import Optional, Union
+from typing import Optional, Union, List, Dict, Any
 from datetime import datetime
 from strands import Agent
 from strands.models.bedrock import BedrockModel
-from pydantic import BaseModel, Field, validator
+from pydantic import BaseModel, Field, validator, ValidationError
 
 # Configure logging
 logging.basicConfig(level=logging.INFO)
@@ -1225,6 +1311,55 @@ async def main():
 
 if __name__ == "__main__":
     asyncio.run(main())
+```
+
+---
+
+## Common Patterns from AWS Strands
+
+Based on the official AWS Strands documentation and samples, here are the key structured output patterns:
+
+### 1. Direct Structured Output (Recommended Default)
+```python
+result = agent.structured_output(MyModel, "Extract information from this text")
+```
+
+### 2. Tool Result Format
+```python
+# Note: This pattern is shown in AWS samples but exact imports may vary
+# Check your Strands version for correct import paths
+def my_tool(tool_use_id: str, **kwargs) -> dict:
+    return {
+        "toolUseId": tool_use_id,
+        "status": "success",
+        "content": [{"text": "Result"}]
+    }
+```
+
+### 3. JSON from Custom Tools
+```python
+import json
+from strands import tool
+
+@tool
+def list_data() -> str:
+    data = [{"id": 1, "name": "Item 1"}]
+    return json.dumps(data)
+```
+
+### 4. Pydantic Models for APIs
+```python
+from pydantic import BaseModel
+from typing import List, Dict, Any
+
+class APIResponse(BaseModel):
+    status: str
+    data: List[Dict[str, Any]]
+    
+# Example usage
+results = [{"id": 1, "value": "data"}]
+response = APIResponse(status="ok", data=results)
+json_output = response.model_dump_json()
 ```
 
 ---
