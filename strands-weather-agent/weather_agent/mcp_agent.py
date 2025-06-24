@@ -28,7 +28,7 @@ from strands.models import BedrockModel
 from strands.agent.conversation_manager import SlidingWindowConversationManager
 from mcp.client.streamable_http import streamablehttp_client
 from strands.tools.mcp import MCPClient
-from strands.tools.structured_output import convert_pydantic_to_tool_spec
+# from strands.tools.structured_output import convert_pydantic_to_tool_spec  # Not available in current version
 
 # Local imports
 from .models.structured_responses import (
