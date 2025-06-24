@@ -1,5 +1,157 @@
 # The Definitive Guide to AWS Strands: Building Production AI Agents
 
+## Table of Contents
+1. [Introduction](#introduction)
+2. [Why Strands?](#why-strands)
+3. [Core Concepts](#core-concepts)
+4. [Architecture & Design Principles](#architecture--design-principles)
+5. [Getting Started](#getting-started)
+6. [Production Best Practices](#production-best-practices)
+7. [Advanced Features](#advanced-features)
+8. [Migration from LangGraph](#migration-from-langgraph)
+9. [Performance & Optimization](#performance--optimization)
+10. [Common Patterns & Recipes](#common-patterns--recipes)
+
+## Introduction
+
+AWS Strands is a next-generation framework for building AI agents that dramatically simplifies development while providing production-ready features out of the box. This guide consolidates best practices, architectural patterns, and real-world insights from migrating complex AI systems to Strands.
+
+### What Makes This Guide Definitive?
+
+This guide is based on:
+- Deep analysis of the official Strands SDK architecture (1900+ lines of documentation)
+- Real-world migration of a production weather agent system
+- Comprehensive testing of all major Strands features
+- Direct comparison with LangGraph and other orchestration frameworks
+
+## Why Strands?
+
+### The Simplicity Advantage
+
+**Traditional Approach (LangGraph)**:
+```python
+# Complex graph construction
+graph = StateGraph(State)
+graph.add_node("agent", agent_node)
+graph.add_node("tools", tool_node)
+graph.add_edge("agent", "tools")
+graph.add_conditional_edges(
+    "tools",
+    lambda x: "continue" if x["messages"][-1].tool_calls else "end",
+    {"continue": "agent", "end": END}
+)
+# ... 50+ more lines of setup
+```
+
+**Strands Approach**:
+```python
+# Simple, intuitive API
+agent = Agent(
+    model=bedrock_model,
+    tools=mcp_tools,
+    system_prompt="You are a helpful assistant.",
+    conversation_manager=SlidingWindowConversationManager()
+)
+response = agent("What's the weather?")
+```
+
+### Built-in Production Features
+
+1. **Streaming-First Design**: Real-time token streaming with callbacks
+2. **Provider Agnostic**: Switch between Bedrock, Anthropic, OpenAI without code changes
+3. **Automatic Retry Logic**: Handles transient failures gracefully
+4. **Context Management**: Multiple strategies for conversation overflow
+5. **OpenTelemetry Integration**: Production observability out of the box
+
+### Proven Results
+
+From our production migration:
+- **50% Code Reduction**: 500+ lines → ~250 lines
+- **59% Fewer Dependencies**: 32 → 13 packages
+- **Zero Custom Wrappers**: Native MCP integration
+- **Faster Development**: 50% reduction in feature implementation time
+
+## Core Concepts
+
+### 1. Agent-First Architecture
+
+Strands centers around the Agent abstraction:
+
+```python
+from strands import Agent
+from strands.models import BedrockModel
+
+agent = Agent(
+    model=BedrockModel(model_id="us.anthropic.claude-3-7-sonnet-20250219-v1:0"),
+    tools=[...],  # Your tools
+    system_prompt="...",  # Agent behavior
+    conversation_manager=...,  # Context strategy
+    callback_handler=...  # Event handling
+)
+```
+
+### 2. Model Context Protocol (MCP)
+
+MCP provides framework-agnostic tool integration:
+
+```python
+from mcp.client.streamable_http import streamablehttp_client
+from strands.tools.mcp import MCPClient
+
+# Create MCP client
+mcp_client = MCPClient(
+    lambda: streamablehttp_client("http://localhost:8081/mcp")
+)
+
+# Use within context manager
+with mcp_client:
+    tools = mcp_client.list_tools_sync()
+    agent = Agent(model=model, tools=tools)
+    response = agent(query)
+```
+
+**Critical Pattern**: Always create agents within MCP client contexts!
+
+### 3. Streaming & Callbacks
+
+Strands emphasizes real-time interaction:
+
+```python
+class StreamingCallbackHandler:
+    def __call__(self, **kwargs):
+        if "event" in kwargs and hasattr(kwargs["event"], "data"):
+            print(kwargs["event"].data, end="", flush=True)
+        elif "tool_use" in kwargs:
+            print(f"🔧 Using tool: {kwargs['tool_use']['name']}")
+        elif "usage" in kwargs:
+            print(f"📊 Tokens used: {kwargs['usage']}")
+
+agent = Agent(
+    model=model,
+    tools=tools,
+    callback_handler=StreamingCallbackHandler()
+)
+```
+
+### 4. Conversation Management
+
+Handle context windows intelligently:
+
+```python
+from strands.agent.conversation_manager import SlidingWindowConversationManager
+
+conversation_manager = SlidingWindowConversationManager(
+    window_size=40,  # Keep last 40 messages
+    should_truncate_results=True,  # Truncate tool results
+    max_result_length=1000  # Max chars per result
+)
+
+agent = Agent(
+    model=model,
+    conversation_manager=conversation_manager
+)
+```
+
 ## Architecture & Design Principles
 
 ### 🚀 The Fundamental Paradigm Shift
@@ -202,158 +354,6 @@ except ModelThrottledException as e:
     # Respect rate limits
     await asyncio.sleep(e.retry_after)
     response = agent(query)
-```
-
-## Table of Contents
-1. [Architecture & Design Principles](#architecture--design-principles)
-2. [Introduction](#introduction)
-3. [Why Strands?](#why-strands)
-4. [Core Concepts](#core-concepts)
-5. [Getting Started](#getting-started)
-6. [Production Best Practices](#production-best-practices)
-7. [Advanced Features](#advanced-features)
-8. [Migration from LangGraph](#migration-from-langgraph)
-9. [Performance & Optimization](#performance--optimization)
-10. [Common Patterns & Recipes](#common-patterns--recipes)
-
-## Introduction
-
-AWS Strands is a next-generation framework for building AI agents that dramatically simplifies development while providing production-ready features out of the box. This guide consolidates best practices, architectural patterns, and real-world insights from migrating complex AI systems to Strands.
-
-### What Makes This Guide Definitive?
-
-This guide is based on:
-- Deep analysis of the official Strands SDK architecture (1900+ lines of documentation)
-- Real-world migration of a production weather agent system
-- Comprehensive testing of all major Strands features
-- Direct comparison with LangGraph and other orchestration frameworks
-
-## Why Strands?
-
-### The Simplicity Advantage
-
-**Traditional Approach (LangGraph)**:
-```python
-# Complex graph construction
-graph = StateGraph(State)
-graph.add_node("agent", agent_node)
-graph.add_node("tools", tool_node)
-graph.add_edge("agent", "tools")
-graph.add_conditional_edges(
-    "tools",
-    lambda x: "continue" if x["messages"][-1].tool_calls else "end",
-    {"continue": "agent", "end": END}
-)
-# ... 50+ more lines of setup
-```
-
-**Strands Approach**:
-```python
-# Simple, intuitive API
-agent = Agent(
-    model=bedrock_model,
-    tools=mcp_tools,
-    system_prompt="You are a helpful assistant.",
-    conversation_manager=SlidingWindowConversationManager()
-)
-response = agent("What's the weather?")
-```
-
-### Built-in Production Features
-
-1. **Streaming-First Design**: Real-time token streaming with callbacks
-2. **Provider Agnostic**: Switch between Bedrock, Anthropic, OpenAI without code changes
-3. **Automatic Retry Logic**: Handles transient failures gracefully
-4. **Context Management**: Multiple strategies for conversation overflow
-5. **OpenTelemetry Integration**: Production observability out of the box
-
-### Proven Results
-
-From our production migration:
-- **50% Code Reduction**: 500+ lines → ~250 lines
-- **59% Fewer Dependencies**: 32 → 13 packages
-- **Zero Custom Wrappers**: Native MCP integration
-- **Faster Development**: 50% reduction in feature implementation time
-
-## Core Concepts
-
-### 1. Agent-First Architecture
-
-Strands centers around the Agent abstraction:
-
-```python
-from strands import Agent
-from strands.models import BedrockModel
-
-agent = Agent(
-    model=BedrockModel(model_id="us.anthropic.claude-3-7-sonnet-20250219-v1:0"),
-    tools=[...],  # Your tools
-    system_prompt="...",  # Agent behavior
-    conversation_manager=...,  # Context strategy
-    callback_handler=...  # Event handling
-)
-```
-
-### 2. Model Context Protocol (MCP)
-
-MCP provides framework-agnostic tool integration:
-
-```python
-from mcp.client.streamable_http import streamablehttp_client
-from strands.tools.mcp import MCPClient
-
-# Create MCP client
-mcp_client = MCPClient(
-    lambda: streamablehttp_client("http://localhost:8081/mcp")
-)
-
-# Use within context manager
-with mcp_client:
-    tools = mcp_client.list_tools_sync()
-    agent = Agent(model=model, tools=tools)
-    response = agent(query)
-```
-
-**Critical Pattern**: Always create agents within MCP client contexts!
-
-### 3. Streaming & Callbacks
-
-Strands emphasizes real-time interaction:
-
-```python
-class StreamingCallbackHandler:
-    def __call__(self, **kwargs):
-        if "event" in kwargs and hasattr(kwargs["event"], "data"):
-            print(kwargs["event"].data, end="", flush=True)
-        elif "tool_use" in kwargs:
-            print(f"🔧 Using tool: {kwargs['tool_use']['name']}")
-        elif "usage" in kwargs:
-            print(f"📊 Tokens used: {kwargs['usage']}")
-
-agent = Agent(
-    model=model,
-    tools=tools,
-    callback_handler=StreamingCallbackHandler()
-)
-```
-
-### 4. Conversation Management
-
-Handle context windows intelligently:
-
-```python
-from strands.agent.conversation_manager import SlidingWindowConversationManager
-
-conversation_manager = SlidingWindowConversationManager(
-    window_size=40,  # Keep last 40 messages
-    should_truncate_results=True,  # Truncate tool results
-    max_result_length=1000  # Max chars per result
-)
-
-agent = Agent(
-    model=model,
-    conversation_manager=conversation_manager
-)
 ```
 
 ## Getting Started
