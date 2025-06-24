@@ -1,103 +1,109 @@
-"""Data models for weather agent."""
+"""
+Data models for the weather agent system.
 
-from typing import Optional, List, Dict, Any, Literal
-from datetime import date
-from pydantic import BaseModel, Field, field_validator
+This module contains all Pydantic models used throughout the weather agent,
+including structured output models for LangGraph and query classification.
+"""
 
-
-class Location(BaseModel):
-    """Represents a geographic location with coordinates."""
-    name: str = Field(..., description="Human-readable location name")
-    latitude: float = Field(..., ge=-90, le=90, description="Latitude coordinate")
-    longitude: float = Field(..., ge=-180, le=180, description="Longitude coordinate")
-    country: Optional[str] = Field(None, description="Country name")
-    state: Optional[str] = Field(None, description="State or province")
-    timezone: Optional[str] = Field(None, description="IANA timezone identifier")
+from typing import Optional, List, Any, Dict
+from pydantic import BaseModel, Field
+from enum import Enum
 
 
-class DateRange(BaseModel):
-    """Represents a date range for weather queries."""
-    start_date: date = Field(..., description="Start date for the query")
-    end_date: date = Field(..., description="End date for the query")
-    
-    @field_validator('end_date')
-    @classmethod
-    def validate_date_range(cls, v: date, info) -> date:
-        if 'start_date' in info.data and v < info.data['start_date']:
-            raise ValueError('end_date must be after or equal to start_date')
-        return v
+# Structured Output Models for LangGraph
+class WeatherCondition(BaseModel):
+    """Current weather condition."""
+    temperature: Optional[float] = Field(None, description="Temperature in Celsius")
+    humidity: Optional[int] = Field(None, description="Relative humidity percentage")
+    precipitation: Optional[float] = Field(None, description="Current precipitation in mm")
+    wind_speed: Optional[float] = Field(None, description="Wind speed in km/h")
+    conditions: Optional[str] = Field(None, description="Weather description")
 
 
-class WeatherDataPoint(BaseModel):
-    """Dynamic model for Open-Meteo data points."""
-    time: Optional[str] = None
-    values: Dict[str, Any] = Field(default_factory=dict)
-    
-    class Config:
-        extra = "allow"
-    
-    def __init__(self, **data):
-        # Separate time from other values
-        time_val = data.pop('time', None)
-        super().__init__(time=time_val, values=data)
+class DailyForecast(BaseModel):
+    """Daily weather forecast."""
+    date: str = Field(..., description="Date in YYYY-MM-DD format")
+    temperature_max: Optional[float] = Field(None, description="Maximum temperature in Celsius")
+    temperature_min: Optional[float] = Field(None, description="Minimum temperature in Celsius")
+    precipitation_sum: Optional[float] = Field(None, description="Total precipitation in mm")
+    conditions: Optional[str] = Field(None, description="Weather conditions summary")
 
 
-class WeatherResponse(BaseModel):
-    """Dynamic model for Open-Meteo API responses."""
-    latitude: float
-    longitude: float
-    timezone: Optional[str] = None
-    elevation: Optional[float] = None
-    hourly: Optional[Dict[str, List[Any]]] = None
-    daily: Optional[Dict[str, List[Any]]] = None
-    current: Optional[Dict[str, Any]] = None
-    
-    class Config:
-        extra = "allow"  # Allow any additional fields from API
-    
-    def to_structured_data(self) -> List[WeatherDataPoint]:
-        """Convert API response to structured data points."""
-        data_points = []
-        
-        # Process daily data if available
-        if self.daily and 'time' in self.daily:
-            times = self.daily['time']
-            for i, time in enumerate(times):
-                point_data = {'time': time}
-                for key, values in self.daily.items():
-                    if key != 'time' and isinstance(values, list) and i < len(values):
-                        point_data[key] = values[i]
-                data_points.append(WeatherDataPoint(**point_data))
-        
-        # Process hourly data similarly if needed
-        # Process current data if needed
-        
-        return data_points
+class OpenMeteoResponse(BaseModel):
+    """Structured response consolidating Open-Meteo data."""
+    location: str = Field(..., description="Location name")
+    coordinates: Optional[Any] = Field(None, description="Latitude and longitude")
+    timezone: Optional[str] = Field(None, description="Timezone")
+    current_conditions: Optional[WeatherCondition] = Field(None, description="Current weather")
+    daily_forecast: Optional[List[DailyForecast]] = Field(None, description="Daily forecast data")
+    summary: str = Field(..., description="Natural language summary")
+    data_source: str = Field(default="Open-Meteo API", description="Data source")
 
 
-class QueryClassification(BaseModel):
-    """Result of Claude's query classification."""
-    query_type: Literal["forecast", "historical", "agricultural", "general"] = Field(
-        ...,
-        description="Type of weather query"
-    )
-    locations: List[str] = Field(
-        default_factory=list,
-        description="Extracted location references"
-    )
-    time_references: List[str] = Field(
-        default_factory=list,
-        description="Extracted time references"
-    )
-    parameters: List[str] = Field(
-        default_factory=list,
-        description="Weather parameters mentioned or implied"
-    )
-    requires_clarification: bool = Field(
-        False,
-        description="Whether the query needs clarification"
-    )
-    clarification_message: Optional[str] = Field(
-        None,
-        description="Message to show user if clarification needed"
-    )
+class AgricultureAssessment(BaseModel):
+    """Agricultural conditions assessment."""
+    location: str = Field(..., description="Location name")
+    soil_temperature: Optional[float] = Field(None, description="Soil temperature in Celsius")
+    soil_moisture: Optional[float] = Field(None, description="Soil moisture content")
+    evapotranspiration: Optional[float] = Field(None, description="Daily evapotranspiration in mm")
+    planting_conditions: str = Field(..., description="Assessment of planting conditions")
+    recommendations: List[str] = Field(default_factory=list, description="Farming recommendations")
+    summary: str = Field(..., description="Natural language summary")
+
+
+# Query Classification Models (from the /models/ directory)
+class QueryType(str, Enum):
+    """Types of weather queries."""
+    FORECAST = "forecast"
+    HISTORICAL = "historical"
+    AGRICULTURAL = "agricultural"
+    GENERAL = "general"
+    COMPARISON = "comparison"
+    ALERT = "alert"
+
+
+class Coordinates(BaseModel):
+    """Geographic coordinates."""
+    latitude: float = Field(..., ge=-90, le=90, description="Latitude in decimal degrees")
+    longitude: float = Field(..., ge=-180, le=180, description="Longitude in decimal degrees")
+
+
+class LocationInfo(BaseModel):
+    """Complete location information including coordinates."""
+    raw_location: str = Field(..., description="Original location string from query")
+    normalized_name: str = Field(..., description="Normalized location name")
+    coordinates: Optional[Coordinates] = Field(None, description="Geographic coordinates if determined")
+    location_type: str = Field(default="city", description="Type of location (city, region, etc.)")
+    confidence: float = Field(1.0, ge=0.0, le=1.0, description="Confidence in location identification")
+
+
+class TimeRange(BaseModel):
+    """Time range for queries."""
+    start_date: Optional[str] = Field(None, description="Start date in ISO format")
+    end_date: Optional[str] = Field(None, description="End date in ISO format")
+    relative_reference: Optional[str] = Field(None, description="Relative time reference (e.g., 'next week')")
+    is_historical: bool = Field(False, description="Whether this is a historical query")
+
+
+class WeatherParameter(str, Enum):
+    """Available weather parameters."""
+    TEMPERATURE = "temperature"
+    PRECIPITATION = "precipitation"
+    HUMIDITY = "humidity"
+    WIND = "wind"
+    PRESSURE = "pressure"
+    UV_INDEX = "uv_index"
+    VISIBILITY = "visibility"
+    GENERAL = "general"
+
+
+class EnhancedQueryClassification(BaseModel):
+    """Enhanced classification of user weather queries."""
+    query_type: QueryType = Field(..., description="Type of weather query")
+    locations: List[LocationInfo] = Field(..., description="Extracted location information")
+    time_range: Optional[TimeRange] = Field(None, description="Time range for the query")
+    weather_parameters: List[WeatherParameter] = Field(default_factory=list, description="Specific weather parameters requested")
+    intent_summary: str = Field(..., description="Brief summary of user intent")
+    requires_clarification: bool = Field(False, description="Whether the query needs clarification")
+    clarification_reason: Optional[str] = Field(None, description="Reason why clarification is needed")
+    confidence_score: float = Field(1.0, ge=0.0, le=1.0, description="Overall confidence in classification")

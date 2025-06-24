@@ -25,9 +25,7 @@ from mcp_servers.api_utils import OpenMeteoClient
 
 # Import models for structured testing (if available)
 try:
-    from models.inputs import Coordinates, LocationInput, ForecastToolInput
-    from models.weather import WeatherForecastResponse, DailyForecast, WeatherDataPoint
-    from models.responses import ToolResponse
+    from weather_agent.models import Coordinates, DailyForecast
     STRUCTURED_MODELS_AVAILABLE = True
 except ImportError:
     STRUCTURED_MODELS_AVAILABLE = False
