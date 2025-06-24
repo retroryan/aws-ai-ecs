@@ -2,11 +2,18 @@
 """
 MCP Weather Chatbot with Structured Output Support
 
-This demonstrates how MCP servers work with stdio subprocesses and how
-structured output works with LangGraph Option 1:
+This demonstrates how MCP servers work over streaming HTTP and how
+structured output works with LangGraph:
 - Shows tool calls and their raw JSON responses
 - Demonstrates the transformation from raw data to structured output
 - Logs the structured output models for transparency
+- Supports multi-turn conversations with context retention
+
+Usage:
+    python chatbot.py                     # Interactive mode
+    python chatbot.py --demo              # Demo mode with example queries
+    python chatbot.py --multi-turn-demo   # Multi-turn conversation demo
+    python chatbot.py --structured        # Enable structured output display
 """
 
 import asyncio
@@ -14,10 +21,19 @@ import sys
 import json
 from typing import Optional
 
-# Add parent directory to path for imports
-sys.path.append('.')
+# Handle imports whether run from project root or weather_agent directory
+import os
+current_dir = os.path.dirname(os.path.abspath(__file__))
+parent_dir = os.path.dirname(current_dir)
+if os.path.basename(os.getcwd()) == 'weather_agent':
+    # Running from weather_agent directory
+    sys.path.insert(0, parent_dir)
+else:
+    # Running from project root
+    sys.path.insert(0, current_dir)
 
-from weather_agent.mcp_agent import MCPWeatherAgent, OpenMeteoResponse, AgricultureAssessment
+from weather_agent.mcp_agent import MCPWeatherAgent
+from weather_agent.models import OpenMeteoResponse, AgricultureAssessment
 
 
 class SimpleWeatherChatbot:
@@ -335,7 +351,7 @@ async def demo_mode(show_structured: bool = False):
         print("🌤️  MCP Weather Demo")
         print("=" * 50)
         print("This demo shows MCP servers in action.")
-        print("Each server runs as a stdio subprocess.\n")
+        print("Connecting to MCP servers over streaming HTTP.\n")
     
     try:
         await chatbot.initialize()
@@ -388,12 +404,16 @@ async def main():
     
     parser = argparse.ArgumentParser(description="MCP Weather Chatbot with Structured Output")
     parser.add_argument("--demo", action="store_true", help="Run demo mode")
+    parser.add_argument("--multi-turn-demo", action="store_true", dest="multi_turn_demo", help="Run multi-turn conversation demo")
     parser.add_argument("--structured", action="store_true", help="Enable structured output display")
     parser.add_argument("query", nargs="?", help="Single query to process")
     
     args = parser.parse_args()
     
-    if args.demo:
+    if args.multi_turn_demo:
+        from weather_agent.demo_scenarios import run_mcp_multi_turn_demo
+        await run_mcp_multi_turn_demo(structured=args.structured)
+    elif args.demo:
         await demo_mode(show_structured=args.structured)
     elif args.query:
         # Single query mode

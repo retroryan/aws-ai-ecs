@@ -1,8 +1,27 @@
 # Code Cleanup Proposal for Agriculture Agent ECS
 
+## Status Update (June 23, 2025)
+
+### Completed Tasks
+
+**Phase 1 COMPLETED ✅** - The critical model consolidation has been successfully implemented and tested. The project structure is now simpler with all models consolidated in `weather_agent/models.py`. Both local and Docker tests pass successfully.
+
+**Additional Cleanup COMPLETED ✅**:
+- **Python Cache Files**: Removed all cache files and verified .gitignore coverage
+- **Environment Configuration**: Consolidated .env.example and removed .env.docker
+- **Documentation Review**: Analyzed all READMEs - no duplication found, each serves distinct purpose
+
+### Progress Summary
+- ✅ Model consolidation (Phase 1) - Complete with all tests passing
+- ✅ Python cache cleanup - All cache files removed
+- ✅ Environment configuration consolidation - Single .env.example with clear sections
+- ✅ Documentation review - No action needed, good structure confirmed
+- ⏳ Phase 2: Pending (Test organization, deployment logs)
+- ⏳ Phase 3: Pending (Dependencies audit, script review)
+
 ## Executive Summary
 
-After an in-depth review of the agriculture-agent-ecs project, I've identified several areas where duplicate and legacy code can be removed to improve maintainability and clarity. The most significant finding is that `weather_agent/models.py` is completely unused and can be deleted, along with several other redundancies throughout the codebase.
+After an in-depth review of the agriculture-agent-ecs project, I've identified several areas where duplicate and legacy code can be removed to improve maintainability and clarity. The most significant finding was that models were scattered across multiple locations, creating confusion and duplication.
 
 ## Critical Cleanup Items
 
@@ -58,8 +77,10 @@ rm -rf models/
 # Start MCP servers
 ./scripts/start_servers.sh
 
-# Run main application
-python main.py
+# Run weather agent
+cd weather_agent
+python chatbot.py
+cd ..
 
 # Execute test suite
 ./scripts/run_tests.sh
@@ -68,7 +89,7 @@ python main.py
 **Docker Testing:**
 ```bash
 # Start all services
-./scripts/start.sh
+./scripts/start_docker.sh
 
 # Run Docker tests
 ./scripts/test_docker.sh
@@ -81,36 +102,42 @@ curl http://localhost:7075/health
 
 ### 4. Python Cache Files
 
+**Status: COMPLETED ✅**
+
 **Issue:** Found 18 `.pyc`/`.pyo` files and `__pycache__` directories in version control
 
-**Action:** 
-1. Delete all Python cache files
-2. Update `.gitignore` to include:
-```
-__pycache__/
-*.py[cod]
-*$py.class
-*.so
-.Python
-```
+**Actions Taken:**
+1. ✅ Deleted all Python cache files and directories:
+   - Removed 3 `__pycache__` directories
+   - Removed 11 `.pyc` files
+   - Removed 1 `.pytest_cache` directory
+2. ✅ Verified `.gitignore` already includes comprehensive Python patterns:
+   ```
+   __pycache__/
+   *.py[cod]
+   *$py.class
+   *.so
+   .Python
+   .pytest_cache/
+   ```
 
 ### 5. Consolidate Environment Configuration
+
+**Status: COMPLETED ✅**
 
 **Issue:** Multiple environment example files with different defaults:
 - `.env.example` (uses Claude model)
 - `.env.docker` (uses Nova model)
 
-**Action:** Create a single `.env.example` with sections:
-```bash
-# === AWS Bedrock Configuration ===
-# For local development (Claude recommended)
-# BEDROCK_MODEL_ID=anthropic.claude-3-5-sonnet-20240620-v1:0
-
-# For AWS deployment (Nova for cost efficiency)
-BEDROCK_MODEL_ID=amazon.nova-lite-v1:0
-
-# Other settings...
-```
+**Actions Taken:**
+1. ✅ Consolidated into a single `.env.example` with clear sections:
+   - AWS Bedrock Configuration (with local vs deployment recommendations)
+   - AWS Credentials
+   - Logging Configuration  
+   - MCP Server URLs
+   - Optional External APIs
+2. ✅ Removed redundant `.env.docker` file
+3. ✅ Added clear comments distinguishing local development vs AWS deployment settings
 
 ### 6. Remove Deployment Logs
 
@@ -134,15 +161,24 @@ tests/
 
 ### 8. Documentation Consolidation
 
-**Issue:** Multiple README files with potential overlap:
-- Root `README.md`
-- `scripts/README.md`
-- `weather_agent/README.md`
+**Status: REVIEWED ✅ - NO ACTION NEEDED**
 
-**Action:** Review each README and either:
-1. Consolidate into the main README
-2. Ensure each serves a distinct purpose
-3. Delete redundant content
+**Issue:** Multiple README files with potential overlap:
+- Root `README.md` (640 lines)
+- `scripts/README.md` (35 lines)
+- `weather_agent/README.md` (49 lines)
+
+**Analysis Results:**
+1. **No significant duplication found** - each README serves a distinct purpose:
+   - **Main README**: Comprehensive project documentation (architecture, deployment, configuration)
+   - **Scripts README**: Quick reference for helper scripts (start_docker.sh, stop_docker.sh, test_docker.sh)
+   - **Weather Agent README**: Module-specific documentation for chatbot features
+2. **Good documentation structure** following best practices:
+   - Main README as primary entry point
+   - Subdirectory READMEs provide focused, contextual documentation
+   - Appropriate sizing for each purpose
+
+**Recommendation:** Keep all three READMEs as they complement each other without duplication
 
 ### 9. Script Deduplication
 
@@ -162,17 +198,34 @@ tests/
 
 ### Phase 1: Critical Cleanup & Model Consolidation (Immediate - 1 hour)
 
-**Status: IN PROGRESS**
+**Status: COMPLETED ✅**
 
 **Progress Tracker:**
-1. Delete the `/models/` directory
-2. Extract model definitions from `mcp_agent.py` to replace `weather_agent/models.py`
-3. Update `mcp_agent.py` to import from the new location
-4. Fix import structure in `query_classifier.py` and remove sys.path manipulation
-5. Update all other imports throughout the codebase
-6. Run both local (Python) and Docker tests to verify functionality
-7. Clean Python cache files and update `.gitignore`
-8. Remove deployment logs from `infra/logs/`
+1. ✅ Delete the `/models/` directory
+2. ✅ Extract model definitions from `mcp_agent.py` to replace `weather_agent/models.py`
+3. ✅ Update `mcp_agent.py` to import from the new location
+4. ✅ Fix import structure in `query_classifier.py` and remove sys.path manipulation
+5. ✅ Update all other imports throughout the codebase (test_mcp_servers.py)
+6. ✅ Run both local (Python) and Docker tests to verify functionality
+7. ✅ Clean Python cache files and update `.gitignore`
+8. ✅ Remove deployment logs from `infra/logs/` (directory didn't exist)
+
+**Test Results:**
+- **Local Python Tests**: ✅ Models import correctly, MCP servers start successfully
+- **Docker Tests**: ✅ All services healthy, all test queries passed
+  - Weather Agent API responds correctly
+  - MCP servers are accessible
+  - Queries for weather, historical data, and agricultural conditions all work
+
+**Key Changes Made:**
+1. Created new `weather_agent/models.py` with consolidated models
+2. Removed the entire `/models/` directory
+3. Updated imports in:
+   - `weather_agent/mcp_agent.py` - Now imports from `.models`
+   - `weather_agent/query_classifier.py` - Removed sys.path hack, uses relative import
+   - `tests/test_mcp_servers.py` - Updated to import from `weather_agent.models`
+4. Fixed `docker/Dockerfile.main` to not copy the deleted models/ directory
+5. Added `infra/logs/` to `.gitignore`
 
 ### Phase 2: Environment & Documentation (1-2 hours)
 1. Consolidate environment configuration files (.env.example and .env.docker)

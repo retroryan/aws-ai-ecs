@@ -10,7 +10,12 @@ session-based conversation management.
 import asyncio
 import uuid
 from typing import Optional
-from .mcp_agent import create_weather_agent, MCPWeatherAgent
+
+# Handle both module and direct script execution
+try:
+    from .mcp_agent import create_weather_agent, MCPWeatherAgent
+except ImportError:
+    from mcp_agent import create_weather_agent, MCPWeatherAgent
 
 
 async def run_mcp_multi_turn_demo(structured: bool = False):

@@ -4,16 +4,16 @@ Simple scripts for managing the Agriculture Agent Docker services.
 
 ## Scripts
 
-### start.sh
+### start_docker.sh
 Starts all Docker services with AWS credentials (if available).
 ```bash
-./scripts/start.sh
+./scripts/start_docker.sh
 ```
 
-### stop.sh
-Stops all Docker services.
+### stop_docker.sh
+Stops all Docker services.  
 ```bash
-./scripts/stop.sh
+./scripts/stop_docker.sh
 ```
 
 ### test_docker.sh
@@ -24,9 +24,9 @@ Tests the running services by checking endpoints and running sample queries.
 
 ## Typical Workflow
 
-1. Start services: `./scripts/start.sh`
+1. Start services: `./scripts/start_docker.sh`
 2. Test services: `./scripts/test_docker.sh`
-3. Stop services: `./scripts/stop.sh`
+3. Stop services: `./scripts/stop_docker.sh`
 
 ## Notes
 

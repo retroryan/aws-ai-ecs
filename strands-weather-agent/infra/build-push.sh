@@ -8,6 +8,10 @@
 SCRIPT_DIR="$( cd "$( dirname "${BASH_SOURCE[0]}" )" && pwd )"
 source "${SCRIPT_DIR}/common.sh"
 
+# Create logs directory if it doesn't exist
+LOGS_DIR="${SCRIPT_DIR}/logs"
+mkdir -p "${LOGS_DIR}"
+
 # Script configuration
 COMPONENTS=("main" "forecast" "historical" "agricultural")
 ECR_REPO_PREFIX="agriculture-agent"
@@ -126,7 +130,7 @@ for component in "${COMPONENTS[@]}"; do
     fi
     
     # Build the image with version tag (force AMD64 architecture for ECS Fargate)
-    docker build --platform linux/amd64 -t "${IMAGE_NAME}:${VERSION_TAG}" -f "$DOCKERFILE" . > build-${component}.log 2>&1 &
+    docker build --platform linux/amd64 -t "${IMAGE_NAME}:${VERSION_TAG}" -f "$DOCKERFILE" . > "${LOGS_DIR}/build-${component}.log" 2>&1 &
     BUILD_PID=$!
     
     if spin $BUILD_PID "Building ${component} image"; then
@@ -139,7 +143,7 @@ for component in "${COMPONENTS[@]}"; do
         (
             docker push "${IMAGE_NAME}:${VERSION_TAG}" && 
             docker push "${IMAGE_NAME}:latest"
-        ) > push-${component}.log 2>&1 &
+        ) > "${LOGS_DIR}/push-${component}.log" 2>&1 &
         PUSH_PID=$!
         
         if spin $PUSH_PID "Pushing ${component} image"; then
@@ -150,20 +154,20 @@ for component in "${COMPONENTS[@]}"; do
             printf "\r❌ Pushing ${component} image... ${RED}Failed${NC}\n"
             
             # Check if the error is due to expired authorization token
-            if grep -q "Your authorization token has expired" push-${component}.log 2>/dev/null; then
+            if grep -q "Your authorization token has expired" "${LOGS_DIR}/push-${component}.log" 2>/dev/null; then
                 echo ""
                 log_error "Docker authentication token has expired!"
                 log_warn "Please run: ./infra/deploy.sh setup-ecr"
                 log_info "This will re-authenticate Docker with ECR"
             else
-                log_warn "Check push-${component}.log for details"
+                log_warn "Check ${LOGS_DIR}/push-${component}.log for details"
             fi
             
             BUILD_FAILED=true
         fi
     else
         printf "\r❌ Building ${component} image... ${RED}Failed${NC}\n"
-        log_warn "Check build-${component}.log for details"
+        log_warn "Check ${LOGS_DIR}/build-${component}.log for details"
         BUILD_FAILED=true
     fi
 done
@@ -172,7 +176,7 @@ done
 if [ "$BUILD_FAILED" = false ]; then
     echo ""
     echo "🧹 Cleaning up log files..."
-    rm -f build-*.log push-*.log
+    rm -f "${LOGS_DIR}"/build-*.log "${LOGS_DIR}"/push-*.log
 fi
 
 echo ""

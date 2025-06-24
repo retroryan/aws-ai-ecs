@@ -79,7 +79,7 @@ The key to running AWS applications in Docker is proper credential handling. Our
 #### The Magic: AWS Credentials in Docker
 
 ```bash
-# The start.sh script handles this automatically:
+# The start_docker.sh script handles this automatically:
 export $(aws configure export-credentials --format env-no-export 2>/dev/null)
 ```
 
@@ -97,13 +97,13 @@ This command:
 
 ```bash
 # Start all services with AWS credentials
-./scripts/start.sh
+./scripts/start_docker.sh
 
 # Test the services
 ./scripts/test_docker.sh
 
 # Stop all services
-./scripts/stop.sh
+./scripts/stop_docker.sh
 ```
 
 #### Key Docker Patterns
@@ -111,7 +111,7 @@ This command:
 1. **Never hardcode credentials** - Security risk and maintenance nightmare
 2. **Don't use volume mounts for ~/.aws** - Doesn't work with SSO or temporary credentials
 3. **Always export AWS_SESSION_TOKEN** - Required for temporary credentials
-4. **Use start.sh script** - Handles all credential complexities automatically
+4. **Use start_docker.sh script** - Handles all credential complexities automatically
 
 ### Running Locally (Without Docker)
 
@@ -158,7 +158,7 @@ python -m pytest tests/test_weather_agent.py -v
 2. **Environment Variables in docker-compose.yml**:
    ```yaml
    environment:
-     # AWS credentials passed from start.sh
+     # AWS credentials passed from start_docker.sh
      - AWS_ACCESS_KEY_ID=${AWS_ACCESS_KEY_ID}
      - AWS_SECRET_ACCESS_KEY=${AWS_SECRET_ACCESS_KEY}
      - AWS_SESSION_TOKEN=${AWS_SESSION_TOKEN}
@@ -516,7 +516,7 @@ asyncio.run(benchmark())
 ## Important Reminders
 
 ### Docker and AWS Credentials
-1. **Always use the start.sh script** - It handles AWS credential export automatically
+1. **Always use the start_docker.sh script** - It handles AWS credential export automatically
 2. **Never commit credentials** - Use environment variables and .env files (in .gitignore)
 3. **Test with test_docker.sh** - Verifies both health and functionality
 4. **Check AWS identity** - The start script shows which AWS account is being used
@@ -529,7 +529,7 @@ asyncio.run(benchmark())
 
 ### Best Practices
 1. **Use Docker for consistency** - Same environment locally and in production
-2. **Follow the scripts pattern** - start.sh → test_docker.sh → stop.sh
+2. **Follow the scripts pattern** - start_docker.sh → test_docker.sh → stop_docker.sh
 3. **Monitor logs** - Use `docker compose logs -f` for debugging
-4. **Clean restarts** - Use `./scripts/stop.sh && ./scripts/start.sh` for issues
+4. **Clean restarts** - Use `./scripts/stop_docker.sh && ./scripts/start_docker.sh` for issues
 5. **Test locally first** - Always validate with local testing before Docker/deployment

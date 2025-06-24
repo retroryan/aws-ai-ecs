@@ -14,10 +14,10 @@ import sys
 import logging
 from typing import Optional
 
-# Add parent directory to path for imports
-sys.path.append('.')
-
-from .mcp_agent import create_weather_agent, MCPWeatherAgent
+try:
+    from .mcp_agent import create_weather_agent, MCPWeatherAgent
+except ImportError:
+    from mcp_agent import create_weather_agent, MCPWeatherAgent
 
 # Configure logging
 logging.getLogger("strands").setLevel(logging.INFO)
@@ -193,9 +193,21 @@ async def main():
         help='Show debug logging with tool calls'
     )
     
+    parser.add_argument(
+        '--multi-turn-demo',
+        action='store_true',
+        help='Run multi-turn conversation demo'
+    )
+    
     args = parser.parse_args()
     
-    if args.demo:
+    if args.multi_turn_demo:
+        try:
+            from .demo_scenarios import run_mcp_multi_turn_demo
+        except ImportError:
+            from demo_scenarios import run_mcp_multi_turn_demo
+        await run_mcp_multi_turn_demo(structured=args.debug)
+    elif args.demo:
         await demo_mode(show_debug=args.debug)
     else:
         await interactive_mode()

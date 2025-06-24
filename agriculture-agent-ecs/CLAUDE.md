@@ -45,13 +45,13 @@ This project demonstrates how to build a model-agnostic AI agent system using La
 
 ## Key Files
 
-- `main.py`: Application entry point with FastAPI interface
+- `main.py`: Application entry point (interactive chatbot)
 - `weather_agent/mcp_agent.py`: LangGraph agent implementation
 - `mcp_servers/`: FastMCP server implementations
   - `forecast_server.py`: Weather forecast tools
   - `historical_server.py`: Historical weather tools
   - `agricultural_server.py`: Agricultural data tools
-- `models/`: Pydantic models for structured responses
+- `weather_agent/models.py`: Pydantic models for structured responses
 - `start_servers.sh` / `stop_servers.sh`: Server lifecycle management
 
 ## Development Setup
@@ -63,12 +63,14 @@ This project demonstrates how to build a model-agnostic AI agent system using La
 
 ### Installation
 ```bash
-# Install dependencies
-pip install -r requirements.txt
-
 # Copy and configure environment variables
 cp .env.example .env
 # Edit .env and set your BEDROCK_MODEL_ID (required)
+
+# Install dependencies (from weather_agent directory)
+cd weather_agent
+pip install -r requirements.txt
+cd ..
 ```
 
 ### Running the System
@@ -78,16 +80,13 @@ cp .env.example .env
 ./start_servers.sh
 ```
 
-2. Run the main application:
+2. Run the weather agent:
 ```bash
-python main.py
+cd weather_agent
+python chatbot.py
 ```
 
-3. Access the API at http://localhost:7075
-   - Health check: GET /health
-   - Submit query: POST /query
-
-4. Stop servers when done:
+3. Stop servers when done:
 ```bash
 ./stop_servers.sh
 ```

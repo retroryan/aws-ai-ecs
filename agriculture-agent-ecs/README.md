@@ -44,27 +44,70 @@ Everything else in the code is just setup: connecting to MCP servers, discoverin
 
 Before you begin, ensure you have:
 
-✅ **Docker** installed and running  
 ✅ **AWS CLI** configured with credentials (`aws configure`)  
 ✅ **AWS Account** with Bedrock access enabled  
-✅ **Python 3.11+** (for local development without Docker)  
+✅ **Python 3.11+** installed  
+✅ **Docker** installed (for Docker option)  
 
-### Local Development 
+### Local Development: Docker (FastAPI Web Server)
 
-Get the application running locally in just a few steps:
+Run the full application stack with FastAPI web server:
 
 ```bash
 # 1. Configure AWS Bedrock (one-time setup)
 ./scripts/aws-setup.sh
 
 # 2. Start all services with Docker
-./scripts/start.sh
+./scripts/start_docker.sh
 
 # 3. Test the application
 ./scripts/test_docker.sh
 ```
 
-That's it! The application is now running with all MCP servers and the agent ready to answer questions.
+The FastAPI server is now running at http://localhost:7075 with:
+- Health check endpoint: GET /health
+- Query endpoint: POST /query
+- API documentation: GET /docs
+
+### Local Development: Direct Python Execution (Interactive Chatbot)
+
+Run the weather agent chatbot directly for development and debugging:
+
+```bash
+# 1. Configure environment (from project root)
+./scripts/aws-setup.sh
+cp bedrock.env .env
+
+# 2. Start MCP servers (from project root)
+./scripts/start_servers.sh
+
+# 3. Change to weather_agent directory
+cd weather_agent
+
+# 4. Set up Python environment (one-time setup)
+python -m venv venv
+source venv/bin/activate  # On Windows: venv\Scripts\activate
+pip install -r requirements.txt
+
+# 5. Run the weather agent chatbot
+# Interactive mode (default)
+python chatbot.py
+
+# Demo mode with example queries
+python chatbot.py --demo
+
+# Multi-turn conversation demo
+python chatbot.py --multi-turn-demo
+
+# 6. Stop servers when done (from project root)
+cd ..
+./scripts/stop_servers.sh
+```
+
+**Available Options:**
+- No parameters: Interactive chat mode - type your queries and get responses
+- `--demo`: Runs pre-defined demo queries showcasing various capabilities
+- `--multi-turn-demo`: Demonstrates multi-turn conversations with context retention
 
 ### AWS Deployment
 
@@ -109,36 +152,6 @@ User Request → Application Load Balancer → Weather Agent (FastAPI)
 - **MCP Servers**: Specialized tools for different data domains
 - **Service Discovery**: ECS Service Connect for internal communication
 
-### Project Structure
-
-```
-agriculture-agent-ecs/
-├── main.py                    # FastAPI application entry point
-├── weather_agent/             # LangGraph agent implementation
-│   ├── mcp_agent.py          # Core agent with MCP integration
-│   ├── chatbot.py            # Interactive chat interface
-│   └── query_classifier.py    # Intent classification
-├── mcp_servers/              # FastMCP server implementations
-│   ├── forecast_server.py    # 5-day weather forecasts
-│   ├── historical_server.py  # Past 7 days weather data
-│   ├── agricultural_server.py # Crop recommendations
-│   └── api_utils.py          # Open-Meteo API utilities
-├── models/                   # Data models
-│   ├── weather.py           # Weather-specific models
-│   ├── responses.py         # Tool response models
-│   └── queries.py           # Query classification
-├── docker/                   # Docker configurations
-│   └── Dockerfile.*         # Service-specific Dockerfiles
-├── infra/                   # AWS infrastructure code
-│   ├── base.cfn            # VPC, ALB, ECS cluster
-│   ├── services.cfn        # ECS services and tasks
-│   └── *.sh                # Deployment scripts
-├── scripts/                 # Local development scripts
-│   └── *.sh                # Development utilities
-├── tests/                   # Comprehensive test suite
-└── docker-compose.yml       # Local orchestration
-```
-
 ### API Endpoints
 
 #### Weather Agent (Port 7075)
@@ -156,49 +169,6 @@ Each server provides specialized tools discovered dynamically:
 - **Historical Server**: `get_historical_weather` - Past 7 days data  
 - **Agricultural Server**: `get_agricultural_conditions`, `get_frost_risk_assessment`
 
-## Local Development Guide
-
-### Development Setup
-
-#### Option 1: Docker Compose (Recommended)
-Best for testing the full system as it will run in production:
-
-```bash
-# 1. Configure AWS Bedrock
-./scripts/aws-setup.sh
-cp bedrock.env .env
-
-# 2. Start all services
-./scripts/start.sh
-
-# 3. View logs
-docker-compose logs -f
-
-# 4. Stop services
-./scripts/stop.sh
-```
-
-#### Option 2: Direct Python Execution
-Best for development and debugging individual components:
-
-```bash
-# 1. Set up Python environment
-python -m venv venv
-source venv/bin/activate
-pip install -r requirements.txt
-
-# 2. Configure environment
-./scripts/aws-setup.sh
-
-# 3. Start MCP servers
-./scripts/start_servers.sh
-
-# 4. Run main application
-python main.py
-
-# 5. Stop servers when done
-./scripts/stop_servers.sh
-```
 
 ### Working with AWS Credentials in Docker
 
@@ -206,7 +176,7 @@ Docker containers are isolated from your host's AWS credentials, which can cause
 
 #### The Solution
 
-The `scripts/start.sh` script automatically exports your AWS credentials as environment variables:
+The `scripts/start_docker.sh` script automatically exports your AWS credentials as environment variables:
 
 ```bash
 # Export AWS credentials if available
@@ -281,8 +251,8 @@ All scripts in the `scripts/` directory:
 | Script | Purpose |
 |--------|---------|
 | `aws-setup.sh` | Configure AWS Bedrock and create `.env` file |
-| `start.sh` | Start Docker Compose with AWS credentials |
-| `stop.sh` | Stop all Docker containers |
+| `start_docker.sh` | Start Docker Compose with AWS credentials |
+| `stop_docker.sh` | Stop all Docker containers |
 | `test_docker.sh` | Run comprehensive Docker tests |
 | `start_servers.sh` | Start MCP servers locally (Python) |
 | `stop_servers.sh` | Stop local MCP servers |
@@ -530,7 +500,7 @@ docker ps
 
 # Reset Docker state
 docker-compose down -v
-./scripts/start.sh
+./scripts/start_docker.sh
 ```
 
 #### AWS Credentials Error
@@ -539,8 +509,8 @@ docker-compose down -v
 aws sts get-caller-identity
 
 # Re-export credentials
-./scripts/stop.sh
-./scripts/start.sh
+./scripts/stop_docker.sh
+./scripts/start_docker.sh
 ```
 
 #### Port Conflicts
