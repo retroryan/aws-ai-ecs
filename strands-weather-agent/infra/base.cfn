@@ -172,14 +172,19 @@ Resources:
       GroupDescription: Security group for ECS services
       VpcId: !Ref ApplicationVPC
       SecurityGroupIngress:
-        - Description: Allow traffic from ALB
-          FromPort: 8000
-          ToPort: 8000
+        - Description: Allow traffic from ALB to main API
+          FromPort: 8090
+          ToPort: 8090
           IpProtocol: tcp
           SourceSecurityGroupId: !Ref ALBSecurityGroup
-        - Description: Allow inter-service communication
+        - Description: Allow inter-service communication for MCP servers
           FromPort: 8081
           ToPort: 8083
+          IpProtocol: tcp
+          CidrIp: 10.0.0.0/16
+        - Description: Allow main service port for inter-service communication
+          FromPort: 8090
+          ToPort: 8090
           IpProtocol: tcp
           CidrIp: 10.0.0.0/16
       Tags:
@@ -206,7 +211,7 @@ Resources:
     Type: AWS::ElasticLoadBalancingV2::TargetGroup
     Properties:
       Name: strands-weather-agent
-      Port: 8000
+      Port: 8090
       Protocol: HTTP
       VpcId: !Ref ApplicationVPC
       TargetType: ip

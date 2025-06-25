@@ -18,7 +18,7 @@ CHECK_INTERVAL=10
 
 if [ -z "$SERVICE_NAME" ]; then
     echo "Usage: $0 <service-name> [cluster-name] [max-wait-seconds]"
-    echo "Example: $0 spring-ai-mcp-services-server"
+    echo "Example: $0 agent-ecs-services-server"
     exit 1
 fi
 

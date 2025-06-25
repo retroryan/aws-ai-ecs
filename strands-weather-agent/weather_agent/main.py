@@ -29,22 +29,36 @@ async def lifespan(app: FastAPI):
     """Initialize the agent and session manager on startup and cleanup on shutdown."""
     global agent, session_manager
     print("🚀 Starting AWS Strands Weather Agent API...")
-    try:
-        # Initialize agent
-        agent = await create_weather_agent()
-        
-        # Initialize session manager
-        default_ttl = int(os.getenv("SESSION_DEFAULT_TTL_MINUTES", "60"))
-        session_manager = SessionManager(default_ttl_minutes=default_ttl)
-        
-        print("✅ AWS Strands Weather Agent API ready!")
-        yield
-    except Exception as e:
-        logger.error(f"Failed to initialize: {e}")
-        raise
-    finally:
-        # Cleanup (Strands handles this automatically)
-        print("🧹 Shutting down...")
+    
+    # Add retry logic for MCP server connectivity
+    max_retries = 5
+    retry_delay = 10  # seconds
+    
+    for attempt in range(max_retries):
+        try:
+            # Initialize agent
+            agent = await create_weather_agent()
+            
+            # Initialize session manager
+            default_ttl = int(os.getenv("SESSION_DEFAULT_TTL_MINUTES", "60"))
+            session_manager = SessionManager(default_ttl_minutes=default_ttl)
+            
+            print("✅ AWS Strands Weather Agent API ready!")
+            yield
+            break
+        except RuntimeError as e:
+            if "No MCP servers are available" in str(e) and attempt < max_retries - 1:
+                logger.warning(f"MCP servers not ready, attempt {attempt + 1}/{max_retries}. Retrying in {retry_delay}s...")
+                await asyncio.sleep(retry_delay)
+            else:
+                logger.error(f"Failed to initialize after {attempt + 1} attempts: {e}")
+                raise
+        except Exception as e:
+            logger.error(f"Failed to initialize: {e}")
+            raise
+    
+    # Cleanup (Strands handles this automatically)
+    print("🧹 Shutting down...")
 
 # Create FastAPI app
 app = FastAPI(

@@ -146,6 +146,10 @@ Resources:
             - ContainerPort: 8081
               Protocol: tcp
           Environment:
+            - Name: MCP_HOST
+              Value: 0.0.0.0
+            - Name: MCP_PORT
+              Value: 8081
             - Name: LOG_LEVEL
               Value: !Ref LogLevel
           LogConfiguration:
@@ -175,6 +179,10 @@ Resources:
             - ContainerPort: 8082
               Protocol: tcp
           Environment:
+            - Name: MCP_HOST
+              Value: 0.0.0.0
+            - Name: MCP_PORT
+              Value: 8082
             - Name: LOG_LEVEL
               Value: !Ref LogLevel
           LogConfiguration:
@@ -204,6 +212,10 @@ Resources:
             - ContainerPort: 8083
               Protocol: tcp
           Environment:
+            - Name: MCP_HOST
+              Value: 0.0.0.0
+            - Name: MCP_PORT
+              Value: 8083
             - Name: LOG_LEVEL
               Value: !Ref LogLevel
           LogConfiguration:
@@ -242,11 +254,11 @@ Resources:
             - Name: LOG_LEVEL
               Value: !Ref LogLevel
             - Name: MCP_FORECAST_URL
-              Value: http://forecast.strands-weather.local:8081/mcp
+              Value: http://forecast.strands-weather.local:8081/mcp/
             - Name: MCP_HISTORICAL_URL
-              Value: http://historical.strands-weather.local:8082/mcp
+              Value: http://historical.strands-weather.local:8082/mcp/
             - Name: MCP_AGRICULTURAL_URL
-              Value: http://agricultural.strands-weather.local:8083/mcp
+              Value: http://agricultural.strands-weather.local:8083/mcp/
           LogConfiguration:
             LogDriver: awslogs
             Options:
@@ -260,7 +272,7 @@ Resources:
             Interval: 30
             Timeout: 5
             Retries: 3
-            StartPeriod: 60
+            StartPeriod: 120
 
   # ECS Services
   ForecastService:
@@ -349,7 +361,7 @@ Resources:
             Fn::ImportValue: !Sub ${BaseStackName}-target-group
           ContainerName: main-agent
           ContainerPort: 8090
-      HealthCheckGracePeriodSeconds: 60
+      HealthCheckGracePeriodSeconds: 180
 
   # Auto Scaling (Optional)
   MainServiceScalingTarget:
