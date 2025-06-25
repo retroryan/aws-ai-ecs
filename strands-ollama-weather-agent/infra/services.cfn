@@ -1,0 +1,424 @@
+AWSTemplateFormatVersion: "2010-09-09"
+Description: Strands Weather Agent - ECS Services (Main Agent and MCP Servers)
+
+Parameters:
+  BaseStackName:
+    Type: String
+    Default: strands-weather-agent-base
+    Description: Name of the base infrastructure stack
+  
+  
+  MainImageTag:
+    Type: String
+    Default: latest
+    Description: Docker image tag for the main agent
+  
+  ForecastImageTag:
+    Type: String
+    Default: latest
+    Description: Docker image tag for the forecast server
+  
+  HistoricalImageTag:
+    Type: String
+    Default: latest
+    Description: Docker image tag for the historical server
+  
+  AgriculturalImageTag:
+    Type: String
+    Default: latest
+    Description: Docker image tag for the agricultural server
+  
+  BedrockModelId:
+    Type: String
+    Default: amazon.nova-lite-v1:0
+    Description: AWS Bedrock model ID to use
+    AllowedValues:
+      - amazon.nova-lite-v1:0
+      - amazon.nova-pro-v1:0
+      - anthropic.claude-3-5-sonnet-20240620-v1:0
+      - anthropic.claude-3-haiku-20240307-v1:0
+      - anthropic.claude-3-opus-20240229-v1:0
+      - meta.llama3-70b-instruct-v1:0
+      - meta.llama3-1-70b-instruct-v1:0
+      - cohere.command-r-plus-v1:0
+      - cohere.command-r-v1:0
+  
+  BedrockRegion:
+    Type: String
+    Default: us-east-1
+    Description: AWS region for Bedrock
+  
+  BedrockTemperature:
+    Type: String
+    Default: "0"
+    Description: Model temperature (0-1)
+  
+  LogLevel:
+    Type: String
+    Default: INFO
+    Description: Logging level
+    AllowedValues: [DEBUG, INFO, WARNING, ERROR]
+
+Resources:
+  # Log Groups
+  MainLogGroup:
+    Type: AWS::Logs::LogGroup
+    Properties:
+      LogGroupName: /ecs/strands-weather-agent-main
+      RetentionInDays: 7
+
+  ForecastLogGroup:
+    Type: AWS::Logs::LogGroup
+    Properties:
+      LogGroupName: /ecs/strands-weather-agent-forecast
+      RetentionInDays: 7
+
+  HistoricalLogGroup:
+    Type: AWS::Logs::LogGroup
+    Properties:
+      LogGroupName: /ecs/strands-weather-agent-historical
+      RetentionInDays: 7
+
+  AgriculturalLogGroup:
+    Type: AWS::Logs::LogGroup
+    Properties:
+      LogGroupName: /ecs/strands-weather-agent-agricultural
+      RetentionInDays: 7
+
+  # Service Discovery Services
+  ForecastServiceDiscovery:
+    Type: AWS::ServiceDiscovery::Service
+    Properties:
+      Name: forecast
+      NamespaceId:
+        Fn::ImportValue: !Sub ${BaseStackName}-namespace-id
+      DnsConfig:
+        DnsRecords:
+          - Type: A
+            TTL: 60
+      HealthCheckCustomConfig:
+        FailureThreshold: 1
+
+  HistoricalServiceDiscovery:
+    Type: AWS::ServiceDiscovery::Service
+    Properties:
+      Name: historical
+      NamespaceId:
+        Fn::ImportValue: !Sub ${BaseStackName}-namespace-id
+      DnsConfig:
+        DnsRecords:
+          - Type: A
+            TTL: 60
+      HealthCheckCustomConfig:
+        FailureThreshold: 1
+
+  AgriculturalServiceDiscovery:
+    Type: AWS::ServiceDiscovery::Service
+    Properties:
+      Name: agricultural
+      NamespaceId:
+        Fn::ImportValue: !Sub ${BaseStackName}-namespace-id
+      DnsConfig:
+        DnsRecords:
+          - Type: A
+            TTL: 60
+      HealthCheckCustomConfig:
+        FailureThreshold: 1
+
+  # Task Definitions
+  ForecastTaskDefinition:
+    Type: AWS::ECS::TaskDefinition
+    Properties:
+      Family: strands-weather-agent-forecast
+      Cpu: '256'
+      Memory: '512'
+      NetworkMode: awsvpc
+      RequiresCompatibilities:
+        - FARGATE
+      ExecutionRoleArn:
+        Fn::ImportValue: !Sub ${BaseStackName}-execution-role
+      TaskRoleArn:
+        Fn::ImportValue: !Sub ${BaseStackName}-task-role
+      ContainerDefinitions:
+        - Name: forecast-server
+          Image: !Sub ${AWS::AccountId}.dkr.ecr.${AWS::Region}.amazonaws.com/strands-weather-agent-forecast:${ForecastImageTag}
+          PortMappings:
+            - ContainerPort: 8081
+              Protocol: tcp
+          Environment:
+            - Name: MCP_HOST
+              Value: 0.0.0.0
+            - Name: MCP_PORT
+              Value: 8081
+            - Name: LOG_LEVEL
+              Value: !Ref LogLevel
+          LogConfiguration:
+            LogDriver: awslogs
+            Options:
+              awslogs-group: !Ref ForecastLogGroup
+              awslogs-region: !Ref AWS::Region
+              awslogs-stream-prefix: ecs
+
+  HistoricalTaskDefinition:
+    Type: AWS::ECS::TaskDefinition
+    Properties:
+      Family: strands-weather-agent-historical
+      Cpu: '256'
+      Memory: '512'
+      NetworkMode: awsvpc
+      RequiresCompatibilities:
+        - FARGATE
+      ExecutionRoleArn:
+        Fn::ImportValue: !Sub ${BaseStackName}-execution-role
+      TaskRoleArn:
+        Fn::ImportValue: !Sub ${BaseStackName}-task-role
+      ContainerDefinitions:
+        - Name: historical-server
+          Image: !Sub ${AWS::AccountId}.dkr.ecr.${AWS::Region}.amazonaws.com/strands-weather-agent-historical:${HistoricalImageTag}
+          PortMappings:
+            - ContainerPort: 8082
+              Protocol: tcp
+          Environment:
+            - Name: MCP_HOST
+              Value: 0.0.0.0
+            - Name: MCP_PORT
+              Value: 8082
+            - Name: LOG_LEVEL
+              Value: !Ref LogLevel
+          LogConfiguration:
+            LogDriver: awslogs
+            Options:
+              awslogs-group: !Ref HistoricalLogGroup
+              awslogs-region: !Ref AWS::Region
+              awslogs-stream-prefix: ecs
+
+  AgriculturalTaskDefinition:
+    Type: AWS::ECS::TaskDefinition
+    Properties:
+      Family: strands-weather-agent-agricultural
+      Cpu: '256'
+      Memory: '512'
+      NetworkMode: awsvpc
+      RequiresCompatibilities:
+        - FARGATE
+      ExecutionRoleArn:
+        Fn::ImportValue: !Sub ${BaseStackName}-execution-role
+      TaskRoleArn:
+        Fn::ImportValue: !Sub ${BaseStackName}-task-role
+      ContainerDefinitions:
+        - Name: agricultural-server
+          Image: !Sub ${AWS::AccountId}.dkr.ecr.${AWS::Region}.amazonaws.com/strands-weather-agent-agricultural:${AgriculturalImageTag}
+          PortMappings:
+            - ContainerPort: 8083
+              Protocol: tcp
+          Environment:
+            - Name: MCP_HOST
+              Value: 0.0.0.0
+            - Name: MCP_PORT
+              Value: 8083
+            - Name: LOG_LEVEL
+              Value: !Ref LogLevel
+          LogConfiguration:
+            LogDriver: awslogs
+            Options:
+              awslogs-group: !Ref AgriculturalLogGroup
+              awslogs-region: !Ref AWS::Region
+              awslogs-stream-prefix: ecs
+
+  MainTaskDefinition:
+    Type: AWS::ECS::TaskDefinition
+    Properties:
+      Family: strands-weather-agent-main
+      Cpu: '512'
+      Memory: '1024'
+      NetworkMode: awsvpc
+      RequiresCompatibilities:
+        - FARGATE
+      ExecutionRoleArn:
+        Fn::ImportValue: !Sub ${BaseStackName}-execution-role
+      TaskRoleArn:
+        Fn::ImportValue: !Sub ${BaseStackName}-task-role
+      ContainerDefinitions:
+        - Name: main-agent
+          Image: !Sub ${AWS::AccountId}.dkr.ecr.${AWS::Region}.amazonaws.com/strands-weather-agent-main:${MainImageTag}
+          PortMappings:
+            - ContainerPort: 8090
+              Protocol: tcp
+          Environment:
+            - Name: BEDROCK_MODEL_ID
+              Value: !Ref BedrockModelId
+            - Name: BEDROCK_REGION
+              Value: !Ref BedrockRegion
+            - Name: BEDROCK_TEMPERATURE
+              Value: !Ref BedrockTemperature
+            - Name: LOG_LEVEL
+              Value: !Ref LogLevel
+            - Name: MCP_FORECAST_URL
+              Value: http://forecast.strands-weather.local:8081/mcp/
+            - Name: MCP_HISTORICAL_URL
+              Value: http://historical.strands-weather.local:8082/mcp/
+            - Name: MCP_AGRICULTURAL_URL
+              Value: http://agricultural.strands-weather.local:8083/mcp/
+          LogConfiguration:
+            LogDriver: awslogs
+            Options:
+              awslogs-group: !Ref MainLogGroup
+              awslogs-region: !Ref AWS::Region
+              awslogs-stream-prefix: ecs
+          HealthCheck:
+            Command:
+              - CMD-SHELL
+              - curl -f http://localhost:8090/health || exit 1
+            Interval: 30
+            Timeout: 5
+            Retries: 3
+            StartPeriod: 120
+
+  # ECS Services
+  ForecastService:
+    Type: AWS::ECS::Service
+    Properties:
+      ServiceName: strands-weather-agent-forecast
+      Cluster:
+        Fn::ImportValue: !Sub ${BaseStackName}-cluster-name
+      TaskDefinition: !Ref ForecastTaskDefinition
+      DesiredCount: 1
+      LaunchType: FARGATE
+      NetworkConfiguration:
+        AwsvpcConfiguration:
+          Subnets:
+            - Fn::ImportValue: !Sub ${BaseStackName}-private-subnet-1
+            - Fn::ImportValue: !Sub ${BaseStackName}-private-subnet-2
+          SecurityGroups:
+            - Fn::ImportValue: !Sub ${BaseStackName}-service-sg
+          AssignPublicIp: ENABLED
+      ServiceRegistries:
+        - RegistryArn: !GetAtt ForecastServiceDiscovery.Arn
+
+  HistoricalService:
+    Type: AWS::ECS::Service
+    Properties:
+      ServiceName: strands-weather-agent-historical
+      Cluster:
+        Fn::ImportValue: !Sub ${BaseStackName}-cluster-name
+      TaskDefinition: !Ref HistoricalTaskDefinition
+      DesiredCount: 1
+      LaunchType: FARGATE
+      NetworkConfiguration:
+        AwsvpcConfiguration:
+          Subnets:
+            - Fn::ImportValue: !Sub ${BaseStackName}-private-subnet-1
+            - Fn::ImportValue: !Sub ${BaseStackName}-private-subnet-2
+          SecurityGroups:
+            - Fn::ImportValue: !Sub ${BaseStackName}-service-sg
+          AssignPublicIp: ENABLED
+      ServiceRegistries:
+        - RegistryArn: !GetAtt HistoricalServiceDiscovery.Arn
+
+  AgriculturalService:
+    Type: AWS::ECS::Service
+    Properties:
+      ServiceName: strands-weather-agent-agricultural
+      Cluster:
+        Fn::ImportValue: !Sub ${BaseStackName}-cluster-name
+      TaskDefinition: !Ref AgriculturalTaskDefinition
+      DesiredCount: 1
+      LaunchType: FARGATE
+      NetworkConfiguration:
+        AwsvpcConfiguration:
+          Subnets:
+            - Fn::ImportValue: !Sub ${BaseStackName}-private-subnet-1
+            - Fn::ImportValue: !Sub ${BaseStackName}-private-subnet-2
+          SecurityGroups:
+            - Fn::ImportValue: !Sub ${BaseStackName}-service-sg
+          AssignPublicIp: ENABLED
+      ServiceRegistries:
+        - RegistryArn: !GetAtt AgriculturalServiceDiscovery.Arn
+
+  MainService:
+    Type: AWS::ECS::Service
+    DependsOn:
+      - ForecastService
+      - HistoricalService
+      - AgriculturalService
+    Properties:
+      ServiceName: strands-weather-agent-main
+      Cluster:
+        Fn::ImportValue: !Sub ${BaseStackName}-cluster-name
+      TaskDefinition: !Ref MainTaskDefinition
+      DesiredCount: 1
+      LaunchType: FARGATE
+      NetworkConfiguration:
+        AwsvpcConfiguration:
+          Subnets:
+            - Fn::ImportValue: !Sub ${BaseStackName}-private-subnet-1
+            - Fn::ImportValue: !Sub ${BaseStackName}-private-subnet-2
+          SecurityGroups:
+            - Fn::ImportValue: !Sub ${BaseStackName}-service-sg
+          AssignPublicIp: ENABLED
+      LoadBalancers:
+        - TargetGroupArn:
+            Fn::ImportValue: !Sub ${BaseStackName}-target-group
+          ContainerName: main-agent
+          ContainerPort: 8090
+      HealthCheckGracePeriodSeconds: 180
+
+  # Auto Scaling (Optional)
+  MainServiceScalingTarget:
+    Type: AWS::ApplicationAutoScaling::ScalableTarget
+    Properties:
+      ServiceNamespace: ecs
+      ScalableDimension: ecs:service:DesiredCount
+      ResourceId: !Sub
+        - service/${ClusterName}/${ServiceName}
+        - ClusterName:
+            Fn::ImportValue: !Sub ${BaseStackName}-cluster-name
+          ServiceName: !GetAtt MainService.Name
+      MinCapacity: 1
+      MaxCapacity: 3
+      RoleARN: !Sub arn:aws:iam::${AWS::AccountId}:role/aws-service-role/ecs.application-autoscaling.amazonaws.com/AWSServiceRoleForApplicationAutoScaling_ECSService
+
+  MainServiceScalingPolicy:
+    Type: AWS::ApplicationAutoScaling::ScalingPolicy
+    Properties:
+      PolicyName: strands-weather-agent-main-cpu-scaling
+      PolicyType: TargetTrackingScaling
+      ScalingTargetId: !Ref MainServiceScalingTarget
+      TargetTrackingScalingPolicyConfiguration:
+        TargetValue: 70
+        PredefinedMetricSpecification:
+          PredefinedMetricType: ECSServiceAverageCPUUtilization
+        ScaleInCooldown: 300
+        ScaleOutCooldown: 60
+
+Outputs:
+  MainServiceName:
+    Description: Main Agent Service Name
+    Value: !GetAtt MainService.Name
+    Export:
+      Name: !Sub ${AWS::StackName}-main-service
+
+  ForecastServiceName:
+    Description: Forecast Service Name
+    Value: !GetAtt ForecastService.Name
+    Export:
+      Name: !Sub ${AWS::StackName}-forecast-service
+
+  HistoricalServiceName:
+    Description: Historical Service Name
+    Value: !GetAtt HistoricalService.Name
+    Export:
+      Name: !Sub ${AWS::StackName}-historical-service
+
+  AgriculturalServiceName:
+    Description: Agricultural Service Name
+    Value: !GetAtt AgriculturalService.Name
+    Export:
+      Name: !Sub ${AWS::StackName}-agricultural-service
+
+  ApplicationURL:
+    Description: Application URL
+    Value: !Sub
+      - http://${ALBDNSName}
+      - ALBDNSName:
+          Fn::ImportValue: !Sub ${BaseStackName}-alb-dns

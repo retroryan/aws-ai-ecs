@@ -7,7 +7,7 @@ This is the parent project containing multiple subprojects that demonstrate how 
 ### Current Subprojects
 
 1. **agent-ecs-template**: A template project for deploying agent-based applications to AWS ECS with client-server architecture
-2. **strands-weather-agent**: A weather and agricultural data agent system using MCP (Model Context Protocol) servers and AWS Strands
+2. **strands-ollama-weather-agent**: A weather and agricultural data agent system using MCP (Model Context Protocol) servers, AWS Strands, and Ollama for local LLM inference
 
 ## Common Patterns
 

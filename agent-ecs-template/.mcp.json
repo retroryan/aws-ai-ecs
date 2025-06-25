@@ -1,12 +1,30 @@
 {
-	"mcpServers": {
-		"strands": {
-			"command": "uvx",
-			"args": ["strands-agents-mcp-server"]
-		},
-		"aws-documentation": {
-			"command": "uvx",
-			"args": ["awslabs.aws-documentation-mcp-server"]
-		}
+  "mcpServers": {
+    "strands": {
+      "command": "uvx",
+      "args": ["strands-agents-mcp-server"]
+    },
+    "aws-documentation": {
+      "command": "uvx",
+      "args": ["awslabs.aws-documentation-mcp-server"]
+    },
+    "aws-cloudformation": {
+      "command": "uvx",
+      "args": ["awslabs.cloudformation-mcp-server"],
+      "env": {
+        "FASTMCP_LOG_LEVEL": "ERROR"
+      },
+      "disabled": false,
+      "autoApprove": []
+    },
+    "aws-iam": {
+      "command": "uvx",
+      "args": ["awslabs.iam-mcp-server"],
+      "env": {
+        "FASTMCP_LOG_LEVEL": "ERROR"
+      },
+      "disabled": false,
+      "autoApprove": []
+    }
   }
 }
