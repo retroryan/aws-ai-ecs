@@ -932,3 +932,212 @@ self.agent = Agent(
 | Session Management | Custom checkpointer | Automatic |
 | Code Complexity | High | Low |
 | Lines of Code | ~500 | ~250 |
+
+## Common Docker and AWS Infrastructure Issues
+
+### Troubleshooting Guide
+
+When deploying containerized applications to AWS ECS, you may encounter various configuration issues. Here are the most common problems and their solutions:
+
+#### 1. Network Binding Issues
+**Problem**: Services listening on `127.0.0.1` (localhost) instead of `0.0.0.0` (all interfaces)
+```
+# Wrong - only accessible from localhost
+Starting server on http://127.0.0.1:8080
+
+# Correct - accessible from other containers
+Starting server on http://0.0.0.0:8080
+```
+**Solution**: Always bind to `0.0.0.0` in containers. Use environment variables like `HOST=0.0.0.0` or check for Docker environment.
+
+#### 2. URL Format Mismatches
+**Problem**: Trailing slash inconsistencies between environments
+```yaml
+# Docker Compose
+- MCP_URL=http://server:8080/api/
+
+# ECS (missing trailing slash)
+- Name: MCP_URL
+  Value: http://server:8080/api
+```
+**Solution**: Be consistent with trailing slashes. Many HTTP routers treat `/api` and `/api/` as different endpoints.
+
+#### 3. Service Discovery DNS Issues
+**Problem**: Using incorrect DNS names for inter-service communication
+```yaml
+# Wrong - using external DNS
+- API_URL=http://api.example.com:8080
+
+# Correct - using service discovery
+- API_URL=http://api.namespace.local:8080
+```
+**Solution**: Use AWS Service Discovery DNS names (format: `service-name.namespace.local`) for internal communication.
+
+#### 4. Health Check Configuration Errors
+**Problem**: Adding health checks to services that don't support them
+```yaml
+# Wrong - MCP servers don't have REST health endpoints
+HealthCheck:
+  Command: ["CMD", "curl", "-f", "http://localhost:8080/health"]
+```
+**Solution**: Only add health checks to services with proper health endpoints. Some protocols (like JSON-RPC) don't support simple HTTP health checks.
+
+#### 5. Port Mapping Misalignment
+**Problem**: Container port doesn't match application port
+```yaml
+# Container expects port 8080
+PortMappings:
+  - ContainerPort: 80  # Wrong port!
+
+# Application listening on
+app.listen(8080)
+```
+**Solution**: Ensure container port matches the port your application listens on.
+
+#### 6. Missing Environment Variables
+**Problem**: Required environment variables not set in task definitions
+```yaml
+# Application expects DATABASE_URL
+# But task definition missing:
+Environment:
+  - Name: API_KEY
+    Value: xxx
+  # DATABASE_URL missing!
+```
+**Solution**: Review application requirements and ensure all environment variables are defined in task definitions.
+
+#### 7. Security Group Blocking
+**Problem**: Security groups not allowing traffic between services
+```
+# Main service can't connect to backend on port 8081
+Connection refused to backend:8081
+```
+**Solution**: Ensure security groups allow traffic on required ports between services in the same VPC.
+
+#### 8. Docker Image Not Updated
+**Problem**: Deploying with old Docker images after code changes
+```bash
+# Code changed but image not rebuilt
+./deploy.sh services  # Deploys old image!
+```
+**Solution**: Always rebuild and push images after code changes:
+```bash
+./deploy.sh build-push
+./deploy.sh services
+```
+
+#### 9. Insufficient Task Resources
+**Problem**: Container runs out of memory or CPU
+```yaml
+# Too small for application needs
+Cpu: '256'
+Memory: '512'
+```
+**Solution**: Monitor resource usage and allocate sufficient CPU/memory. Common minimums:
+- Simple services: 256 CPU, 512 MB
+- API services: 512 CPU, 1024 MB
+- Heavy workloads: 1024+ CPU, 2048+ MB
+
+#### 10. Incorrect AWS Region
+**Problem**: Resources created in wrong region
+```bash
+# Resources in us-east-1 but trying to deploy to us-west-2
+aws ecs update-service --region us-west-2  # Service not found!
+```
+**Solution**: Ensure consistent region across all commands and configurations.
+
+#### 11. Task Role vs Execution Role Confusion
+**Problem**: Using wrong IAM role for permissions
+```yaml
+# Wrong - Execution role is for pulling images
+ExecutionRoleArn: !Ref TaskRole
+
+# Correct
+ExecutionRoleArn: !Ref ExecutionRole  # For ECR/CloudWatch
+TaskRoleArn: !Ref TaskRole           # For app permissions
+```
+**Solution**: 
+- Execution Role: Permissions for ECS to pull images and write logs
+- Task Role: Permissions for your application (S3, DynamoDB, etc.)
+
+#### 12. CloudWatch Logs Configuration
+**Problem**: Logs not appearing or going to wrong location
+```yaml
+LogConfiguration:
+  LogDriver: awslogs
+  Options:
+    awslogs-group: /ecs/myapp      # Group doesn't exist
+    awslogs-region: us-east-1      # Wrong region
+```
+**Solution**: Create log groups before deployment and ensure region matches.
+
+#### 13. Load Balancer Target Group Issues
+**Problem**: ALB can't reach containers
+```
+# Target group health checks failing
+# All targets showing "unhealthy"
+```
+**Solution**: 
+- Verify container port matches target group port
+- Ensure health check path returns 200 OK
+- Check security group allows ALB to reach containers
+
+#### 14. Service Discovery Registration Failures
+**Problem**: Services not registering with AWS Cloud Map
+```
+# Service discovery enabled but DNS not resolving
+nslookup myservice.namespace.local  # No results
+```
+**Solution**: 
+- Verify service discovery service is created
+- Check task has successfully started
+- Ensure service discovery namespace exists
+
+#### 15. Environment-Specific Configuration
+**Problem**: Hardcoded values that change between environments
+```python
+# Wrong - hardcoded
+api_url = "http://prod-api.example.com"
+
+# Correct - environment variable
+api_url = os.getenv("API_URL", "http://localhost:8080")
+```
+**Solution**: Always use environment variables for configuration that changes between environments.
+
+### Prevention Best Practices
+
+1. **Use Infrastructure as Code**: CloudFormation/CDK for consistent deployments
+2. **Test Locally First**: Docker Compose for local testing before ECS deployment
+3. **Monitor Logs**: Set up CloudWatch dashboards and alarms
+4. **Implement Retry Logic**: Handle transient failures gracefully
+5. **Document Dependencies**: List all required environment variables and ports
+6. **Use Least Privilege**: Grant minimum required IAM permissions
+7. **Version Everything**: Tag Docker images and CloudFormation templates
+8. **Automate Deployments**: Use CI/CD pipelines to prevent manual errors
+9. **Health Checks**: Implement proper health endpoints for monitoring
+10. **Gradual Rollouts**: Use ECS deployment configurations for safe updates
+
+### Quick Debugging Commands
+
+```bash
+# Check ECS service status
+aws ecs describe-services --cluster my-cluster --services my-service
+
+# View recent logs
+aws logs tail /ecs/my-service --follow
+
+# List tasks and their status
+aws ecs list-tasks --cluster my-cluster --service-name my-service
+
+# Describe task failure reasons
+aws ecs describe-tasks --cluster my-cluster --tasks <task-arn>
+
+# Test service discovery DNS
+nslookup myservice.namespace.local
+
+# Check security group rules
+aws ec2 describe-security-groups --group-ids <sg-id>
+
+# Verify task definition environment variables
+aws ecs describe-task-definition --task-definition my-task
+```

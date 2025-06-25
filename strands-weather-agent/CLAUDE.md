@@ -2,6 +2,47 @@
 
 This project demonstrates how to build a model-agnostic AI agent system using AWS Strands for orchestration and FastMCP for distributed tool servers. It showcases a weather and agricultural data agent that can answer questions about weather conditions, forecasts, and agricultural recommendations using any AWS Bedrock foundation model.
 
+## Critical Configuration: MCP Server Health Checks
+
+### Understanding MCP Server Health Checks
+MCP servers using FastMCP don't provide traditional REST health endpoints at the root path. The `/mcp/` endpoint requires specific headers and a session ID, making it unsuitable for simple health checks.
+
+### Health Check Strategy
+
+#### For Local Development (Docker Compose)
+The MCP servers implement custom health endpoints for Docker Compose only:
+
+```python
+from fastmcp import FastMCP
+from starlette.requests import Request
+from starlette.responses import JSONResponse
+
+server = FastMCP(name="my-server")
+
+@server.custom_route("/health", methods=["GET"])
+async def health_check(request: Request) -> JSONResponse:
+    """Simple health check endpoint for Docker health checks."""
+    return JSONResponse({"status": "healthy", "service": "my-server"})
+```
+
+Docker Compose uses these endpoints:
+```yaml
+healthcheck:
+  test: ["CMD", "curl", "-f", "http://localhost:8081/health"]
+```
+
+#### For ECS Deployment
+**IMPORTANT**: Do NOT add health checks to MCP server task definitions in ECS. Unlike traditional REST services, MCP servers:
+1. Use JSON-RPC protocol which requires session management
+2. Register with service discovery immediately on startup
+3. Have built-in retry logic in the main service to handle connection timing
+
+### Current Implementation Status
+- ✅ All MCP servers have `/health` endpoints implemented (for Docker only)
+- ✅ Docker Compose has health checks configured
+- ✅ ECS task definitions correctly have NO health checks for MCP servers
+- ✅ Main service has proper health check configuration and retry logic
+
 ## Architecture Overview
 
 ### Core Technologies

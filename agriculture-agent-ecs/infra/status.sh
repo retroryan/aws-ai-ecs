@@ -1,6 +1,6 @@
 #!/bin/bash
 
-# Spring AI MCP Agent Infrastructure Status Script
+# Agriculture Agent Infrastructure Status Script
 
 set -e
 
@@ -31,13 +31,13 @@ check_ecs_service_status() {
         RUNNING_COUNT=$(echo $SERVICE_INFO | jq -r '.runningCount // 0')
         PENDING_COUNT=$(echo $SERVICE_INFO | jq -r '.pendingCount // 0')
         
-        echo "  $service_type Service:"
+        echo "  $service_type:"
         echo "    Desired: $DESIRED_COUNT"
         echo "    Running: $RUNNING_COUNT"
         echo "    Pending: $PENDING_COUNT"
         
     else
-        echo "  $service_type Service: NOT FOUND"
+        echo "  $service_type: NOT FOUND"
     fi
 }
 
@@ -52,7 +52,7 @@ check_status() {
         
         if [ "$STATUS" = "CREATE_COMPLETE" ] || [ "$STATUS" = "UPDATE_COMPLETE" ]; then
             # Get outputs using common functions
-            LB_DNS=$(get_stack_output "$BASE_STACK_NAME" "LoadBalancerDNS" "$REGION")
+            LB_DNS=$(get_stack_output "$BASE_STACK_NAME" "ALBDNSName" "$REGION")
             VPC_ID=$(get_stack_output "$BASE_STACK_NAME" "VPCId" "$REGION")
             CLUSTER_NAME=$(get_stack_output "$BASE_STACK_NAME" "ClusterName" "$REGION")
             
@@ -70,102 +70,113 @@ check_status() {
         echo "  Status: $STATUS"
         
         if [ "$STATUS" = "CREATE_COMPLETE" ] || [ "$STATUS" = "UPDATE_COMPLETE" ]; then
-            # Get service names using common functions
-            CLIENT_SERVICE=$(get_stack_output "$SERVICES_STACK_NAME" "ClientServiceName" "$REGION")
-            SERVER_SERVICE=$(get_stack_output "$SERVICES_STACK_NAME" "ServerServiceName" "$REGION")
+            # Get service names from stack outputs
+            MAIN_SERVICE=$(get_stack_output "$SERVICES_STACK_NAME" "MainServiceName" "$REGION")
+            FORECAST_SERVICE=$(get_stack_output "$SERVICES_STACK_NAME" "ForecastServiceName" "$REGION")
+            HISTORICAL_SERVICE=$(get_stack_output "$SERVICES_STACK_NAME" "HistoricalServiceName" "$REGION")
+            AGRICULTURAL_SERVICE=$(get_stack_output "$SERVICES_STACK_NAME" "AgriculturalServiceName" "$REGION")
             
-            # If outputs don't exist, use default names
-            if [ -z "$CLIENT_SERVICE" ] || [ "$CLIENT_SERVICE" = "null" ]; then
-                CLIENT_SERVICE="${SERVICES_STACK_NAME}-client"
-            fi
-            if [ -z "$SERVER_SERVICE" ] || [ "$SERVER_SERVICE" = "null" ]; then
-                SERVER_SERVICE="${SERVICES_STACK_NAME}-server"
-            fi
-            
-            # Get log groups using common functions
-            CLIENT_LOG_GROUP=$(get_stack_output "$SERVICES_STACK_NAME" "ClientLogGroup" "$REGION")
-            SERVER_LOG_GROUP=$(get_stack_output "$SERVICES_STACK_NAME" "ServerLogGroup" "$REGION")
-            
-            # If log group outputs don't exist, use default names
-            if [ -z "$CLIENT_LOG_GROUP" ] || [ "$CLIENT_LOG_GROUP" = "null" ]; then
-                CLIENT_LOG_GROUP="/ecs/spring-ai-mcp-agent-client"
-            fi
-            if [ -z "$SERVER_LOG_GROUP" ] || [ "$SERVER_LOG_GROUP" = "null" ]; then
-                SERVER_LOG_GROUP="/ecs/spring-ai-mcp-agent-server"
-            fi
+            # Log groups are hardcoded in services.cfn
+            MAIN_LOG_GROUP="/ecs/agriculture-agent-main"
+            FORECAST_LOG_GROUP="/ecs/agriculture-agent-forecast"
+            HISTORICAL_LOG_GROUP="/ecs/agriculture-agent-historical"
+            AGRICULTURAL_LOG_GROUP="/ecs/agriculture-agent-agricultural"
             
             # Display log groups
             print_section "CloudWatch Log Groups"
-            echo "  Client: $CLIENT_LOG_GROUP"
-            echo "  Server: $SERVER_LOG_GROUP"
+            echo "  Main Agent: $MAIN_LOG_GROUP"
+            echo "  Forecast Server: $FORECAST_LOG_GROUP"
+            echo "  Historical Server: $HISTORICAL_LOG_GROUP"
+            echo "  Agricultural Server: $AGRICULTURAL_LOG_GROUP"
             
             # Get cluster name from base stack
             if [ -n "$CLUSTER_NAME" ]; then
                 print_section "ECS Services Status"
                 
-                # Check client service
-                check_ecs_service_status "$CLUSTER_NAME" "$CLIENT_SERVICE" "Client"
-                
-                # Add separator
+                # Check all four services
+                check_ecs_service_status "$CLUSTER_NAME" "$MAIN_SERVICE" "Main Agent Service"
                 echo ""
+                check_ecs_service_status "$CLUSTER_NAME" "$FORECAST_SERVICE" "Forecast Server"
+                echo ""
+                check_ecs_service_status "$CLUSTER_NAME" "$HISTORICAL_SERVICE" "Historical Server"
+                echo ""
+                check_ecs_service_status "$CLUSTER_NAME" "$AGRICULTURAL_SERVICE" "Agricultural Server"
                 
-                # Check server service
-                check_ecs_service_status "$CLUSTER_NAME" "$SERVER_SERVICE" "Server"
-                
-                # Always check for stopped tasks
+                # Check for stopped tasks for all services
                 print_section "Recent Task Status"
                 
-                # Check client stopped tasks
-                STOPPED_CLIENT_TASKS=$(aws ecs list-tasks \
+                # Check stopped tasks for each service
+                STOPPED_MAIN_TASKS=$(aws ecs list-tasks \
                     --cluster "$CLUSTER_NAME" \
-                    --service-name "$CLIENT_SERVICE" \
+                    --service-name "$MAIN_SERVICE" \
                     --desired-status STOPPED \
                     --max-items 3 \
                     --query 'length(taskArns)' \
                     --output text 2>/dev/null || echo "0")
                 
-                # Check server stopped tasks
-                STOPPED_SERVER_TASKS=$(aws ecs list-tasks \
+                STOPPED_FORECAST_TASKS=$(aws ecs list-tasks \
                     --cluster "$CLUSTER_NAME" \
-                    --service-name "$SERVER_SERVICE" \
+                    --service-name "$FORECAST_SERVICE" \
+                    --desired-status STOPPED \
+                    --max-items 3 \
+                    --query 'length(taskArns)' \
+                    --output text 2>/dev/null || echo "0")
+                
+                STOPPED_HISTORICAL_TASKS=$(aws ecs list-tasks \
+                    --cluster "$CLUSTER_NAME" \
+                    --service-name "$HISTORICAL_SERVICE" \
+                    --desired-status STOPPED \
+                    --max-items 3 \
+                    --query 'length(taskArns)' \
+                    --output text 2>/dev/null || echo "0")
+                
+                STOPPED_AGRICULTURAL_TASKS=$(aws ecs list-tasks \
+                    --cluster "$CLUSTER_NAME" \
+                    --service-name "$AGRICULTURAL_SERVICE" \
                     --desired-status STOPPED \
                     --max-items 3 \
                     --query 'length(taskArns)' \
                     --output text 2>/dev/null || echo "0")
                 
                 echo "  Recently stopped tasks:"
-                echo "    Client: $STOPPED_CLIENT_TASKS"
-                echo "    Server: $STOPPED_SERVER_TASKS"
+                echo "    Main Agent: $STOPPED_MAIN_TASKS"
+                echo "    Forecast Server: $STOPPED_FORECAST_TASKS"
+                echo "    Historical Server: $STOPPED_HISTORICAL_TASKS"
+                echo "    Agricultural Server: $STOPPED_AGRICULTURAL_TASKS"
                 
-                if [ "$STOPPED_CLIENT_TASKS" -gt 0 ] || [ "$STOPPED_SERVER_TASKS" -gt 0 ]; then
-                    echo -e "    ${YELLOW}Note: Services may be experiencing issues${NC}"
+                TOTAL_STOPPED=$((STOPPED_MAIN_TASKS + STOPPED_FORECAST_TASKS + STOPPED_HISTORICAL_TASKS + STOPPED_AGRICULTURAL_TASKS))
+                if [ "$TOTAL_STOPPED" -gt 0 ]; then
+                    echo -e "    ${YELLOW}Note: Some services may be experiencing issues${NC}"
                 fi
             fi
             
-            # Check if services are healthy
+            # Check main agent health (only service exposed via ALB)
             print_section "Service Health Check"
             if [ -n "$LB_DNS" ]; then
-                echo "  Testing client endpoint..."
-                HEALTH_CHECK=$(curl -s -o /dev/null -w "%{http_code}" "http://$LB_DNS/actuator/health" 2>/dev/null || echo "000")
+                echo "  Testing main agent endpoint..."
+                HEALTH_CHECK=$(curl -s -o /dev/null -w "%{http_code}" "http://$LB_DNS/health" 2>/dev/null || echo "000")
                 if [ "$HEALTH_CHECK" = "200" ]; then
-                    echo -e "  Client: ${GREEN}HEALTHY${NC}"
+                    echo -e "  Main Agent: ${GREEN}HEALTHY${NC}"
                 else
-                    echo -e "  Client: ${RED}UNHEALTHY${NC} (HTTP $HEALTH_CHECK)"
+                    echo -e "  Main Agent: ${RED}UNHEALTHY${NC} (HTTP $HEALTH_CHECK)"
                 fi
                 
-                echo "  Server: Internal service (not exposed via Load Balancer)"
-                echo "         Access via Service Connect: mcp-server.${BASE_STACK_NAME}:8081"
+                echo ""
+                echo "  MCP Servers: Internal services (not exposed via Load Balancer)"
+                echo "    - Forecast Server: forecast.agriculture.local:7071"
+                echo "    - Historical Server: historical.agriculture.local:7072"
+                echo "    - Agricultural Server: agricultural.agriculture.local:7073"
             fi
             
-            # Always check for recent errors in logs
-            print_section "Recent Log Errors"
+            # Check for recent errors in main agent logs only
+            print_section "Recent Log Errors (Main Agent)"
             echo "  Checking for errors in the last 5 minutes..."
             
-            # Check client logs
-            if [ -n "$CLIENT_LOG_GROUP" ]; then
-                echo -n "  Client: "
+            # Check main agent logs only
+            if [ -n "$MAIN_LOG_GROUP" ]; then
+                echo -n "  Main Agent: "
                 ERROR_COUNT=$(aws logs filter-log-events \
-                    --log-group-name "$CLIENT_LOG_GROUP" \
+                    --log-group-name "$MAIN_LOG_GROUP" \
                     --start-time $(date -v-5M +%s)000 \
                     --filter-pattern "ERROR" \
                     --query 'length(events)' \
@@ -176,33 +187,7 @@ check_status() {
                     # Show a few recent errors
                     echo "    Recent errors:"
                     aws logs filter-log-events \
-                        --log-group-name "$CLIENT_LOG_GROUP" \
-                        --start-time $(date -v-5M +%s)000 \
-                        --filter-pattern "ERROR" \
-                        --max-items 3 \
-                        --query 'events[*].message' \
-                        --output text 2>/dev/null | head -3 | sed 's/^/      - /'
-                else
-                    echo -e "${GREEN}No errors${NC}"
-                fi
-            fi
-            
-            # Check server logs
-            if [ -n "$SERVER_LOG_GROUP" ]; then
-                echo -n "  Server: "
-                ERROR_COUNT=$(aws logs filter-log-events \
-                    --log-group-name "$SERVER_LOG_GROUP" \
-                    --start-time $(date -v-5M +%s)000 \
-                    --filter-pattern "ERROR" \
-                    --query 'length(events)' \
-                    --output text 2>/dev/null || echo "0")
-                if [ "$ERROR_COUNT" -gt 0 ]; then
-                    echo -e "${RED}$ERROR_COUNT errors found${NC}"
-                    
-                    # Show a few recent errors
-                    echo "    Recent errors:"
-                    aws logs filter-log-events \
-                        --log-group-name "$SERVER_LOG_GROUP" \
+                        --log-group-name "$MAIN_LOG_GROUP" \
                         --start-time $(date -v-5M +%s)000 \
                         --filter-pattern "ERROR" \
                         --max-items 3 \
@@ -221,13 +206,25 @@ check_status() {
     print_section "Next Steps"
     if [ -n "$LB_DNS" ]; then
         echo "  Test the API:"
-        echo "    curl -X POST --location \"http://$LB_DNS/inquire\" \\"
+        echo ""
+        echo "  # Weather query example:"
+        echo "    curl -X POST \"http://$LB_DNS/query\" \\"
         echo "        -H \"Content-Type: application/json\" \\"
-        echo "        -d '{\"question\": \"Get employees that have skills related to Java\"}'"
+        echo "        -d '{\"query\": \"What is the weather like in Chicago?\"}'"
+        echo ""
+        echo "  # Agricultural query example:"
+        echo "    curl -X POST \"http://$LB_DNS/query\" \\"
+        echo "        -H \"Content-Type: application/json\" \\"
+        echo "        -d '{\"query\": \"Are conditions good for planting corn in Iowa?\"}'"
         echo ""
         echo "  View logs:"
-        echo "    aws logs tail $CLIENT_LOG_GROUP --follow"
-        echo "    aws logs tail $SERVER_LOG_GROUP --follow"
+        echo "    # Main agent logs:"
+        echo "    aws logs tail $MAIN_LOG_GROUP --follow"
+        echo ""
+        echo "    # MCP server logs (if needed for debugging):"
+        echo "    aws logs tail $FORECAST_LOG_GROUP --follow"
+        echo "    aws logs tail $HISTORICAL_LOG_GROUP --follow"
+        echo "    aws logs tail $AGRICULTURAL_LOG_GROUP --follow"
     fi
 }
 

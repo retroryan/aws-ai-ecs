@@ -154,7 +154,7 @@ check_status() {
                 fi
                 
                 echo "  Server: Internal service (not exposed via Load Balancer)"
-                echo "         Access via Service Connect: mcp-server.${BASE_STACK_NAME}:8081"
+                echo "         Access via Service Connect: agent-server.${BASE_STACK_NAME}:8081"
             fi
             
             # Always check for recent errors in logs
