@@ -199,17 +199,20 @@ BEDROCK_MODEL_ID="anthropic.claude-3-haiku-20240307-v1:0" ./infra/deploy.sh all
 
 ```mermaid
 graph TB
-    subgraph "AWS ECS Cluster"
-        User["👤 User Request"] --> ALB["Application Load<br/>Balancer (ALB)"]
-        
-        ALB --> WA["Weather Agent Service<br/>(AWS Strands + FastAPI)<br/>🐳 ECS Service"]
-        
-        WA --> SD["Service Discovery<br/>(Internal: *.local)"]
-        
-        SD --> FS["Forecast Server<br/>(Port 8081)<br/>🐳 ECS Service"]
-        SD --> HS["Historical Server<br/>(Port 8082)<br/>🐳 ECS Service"]
-        SD --> AS["Agricultural Server<br/>(Port 8083)<br/>🐳 ECS Service"]
-    end
+    User["👤 User Request"] --> ALB["Application Load<br/>Balancer (ALB)"]
+    
+    ALB --> WA["Weather Agent Service<br/>(AWS Strands + FastAPI)"]
+    
+    WA --> Bedrock["AWS Bedrock<br/>(Foundation Models)"]
+    WA --> SD["MCP Service Discovery<br/>(Internal: *.local)"]
+    
+    SD --> FS["Forecast Server<br/>(Port 8081)"]
+    SD --> HS["Historical Server<br/>(Port 8082)"]
+    SD --> AS["Agricultural Server<br/>(Port 8083)"]
+    
+    FS --> OM["Open-Meteo API<br/>(Weather Data)"]
+    HS --> OM
+    AS --> OM
     
     style User fill:#e1f5ff,stroke:#0288d1,stroke-width:2px
     style ALB fill:#fff3e0,stroke:#ff6f00,stroke-width:2px
@@ -218,7 +221,11 @@ graph TB
     style FS fill:#fce4ec,stroke:#c2185b,stroke-width:2px
     style HS fill:#fce4ec,stroke:#c2185b,stroke-width:2px
     style AS fill:#fce4ec,stroke:#c2185b,stroke-width:2px
+    style Bedrock fill:#fff8e1,stroke:#f57c00,stroke-width:2px
+    style OM fill:#e3f2fd,stroke:#1976d2,stroke-width:2px
 ```
+
+**Note**: All components run as containerized services in AWS ECS with auto-scaling, health monitoring, and CloudWatch logging.
 
 **Key Advantages over LangGraph:**
 - **Native MCP Client**: No custom HTTP clients or tool wrappers
