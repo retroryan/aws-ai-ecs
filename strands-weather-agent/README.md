@@ -197,24 +197,27 @@ BEDROCK_MODEL_ID="anthropic.claude-3-haiku-20240307-v1:0" ./infra/deploy.sh all
 
 ### System Design
 
-```
-┌─────────────────┐     ┌──────────────────────────────────────┐
-│   User Request  │────▶│         Application Load          │
-└─────────────────┘     │          Balancer (ALB)            │
-                        └────────────────┬─────────────────────┘
-                                        │
-                        ┌───────────────▼─────────────────┐
-                        │    Weather Agent Service        │
-                        │     (AWS Strands + FastAPI)     │
-                        └───────┬────────┬────────┬───────┘
-                                │        │        │
-                   Service Discovery (Internal: *.local)
-                                │        │        │
-                 ┌──────────────▼──┐ ┌──▼───────┐ ┌──▼──────────────┐
-                 │ Forecast Server │ │Historical│ │  Agricultural   │
-                 │   (Port 8081)   │ │  Server  │ │     Server      │
-                 └─────────────────┘ │(Port 8082)│ │  (Port 8083)    │
-                                    └──────────┘ └─────────────────┘
+```mermaid
+graph TB
+    subgraph "AWS ECS Cluster"
+        User["👤 User Request"] --> ALB["Application Load<br/>Balancer (ALB)"]
+        
+        ALB --> WA["Weather Agent Service<br/>(AWS Strands + FastAPI)<br/>🐳 ECS Service"]
+        
+        WA --> SD["Service Discovery<br/>(Internal: *.local)"]
+        
+        SD --> FS["Forecast Server<br/>(Port 8081)<br/>🐳 ECS Service"]
+        SD --> HS["Historical Server<br/>(Port 8082)<br/>🐳 ECS Service"]
+        SD --> AS["Agricultural Server<br/>(Port 8083)<br/>🐳 ECS Service"]
+    end
+    
+    style User fill:#e1f5ff,stroke:#0288d1,stroke-width:2px
+    style ALB fill:#fff3e0,stroke:#ff6f00,stroke-width:2px
+    style WA fill:#e8f5e9,stroke:#388e3c,stroke-width:3px
+    style SD fill:#f3e5f5,stroke:#7b1fa2,stroke-width:2px
+    style FS fill:#fce4ec,stroke:#c2185b,stroke-width:2px
+    style HS fill:#fce4ec,stroke:#c2185b,stroke-width:2px
+    style AS fill:#fce4ec,stroke:#c2185b,stroke-width:2px
 ```
 
 **Key Advantages over LangGraph:**
