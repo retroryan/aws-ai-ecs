@@ -6,23 +6,7 @@ This repository demonstrates the future of software development: AI-powered appl
 
 The repository contains three example projects that showcase the evolution of AI application development on AWS infrastructure. Each project demonstrates running AI Services on ECS + Bedrock, highlighting different levels of sophistication in the new era of model-driven development:
 
-### 1. Agent ECS Template
-A foundational template project for deploying agent-based AI applications to AWS ECS. This project demonstrates:
-- Client-server architecture patterns for AI agents
-- **Direct AWS Bedrock integration using boto3** for foundational model access
-- Proper containerization of AI workloads
-- Health monitoring and service management
-- CloudFormation infrastructure as code
-
-### 2. Agriculture Agent ECS
-A practical implementation of an AI-powered weather and agricultural data agent system. This project features:
-- **LangGraph integration with AWS Bedrock** for orchestrating complex AI workflows
-- Integration with MCP (Model Context Protocol) servers
-- Real-world use case for agricultural data analysis
-- Weather data processing and insights
-- Production-ready deployment patterns
-
-### 3. Strands Weather Agent ⭐ (Most Important Demo)
+### 1. [Strands Weather Agent](./strands-weather-agent) ⭐ (Most Important Demo)
 **The pinnacle demonstration of model-driven development** - this project showcases the true power of the new era of software development. Built with AWS Strands, it represents a paradigm shift where agents orchestrate complex workflows with minimal code:
 - **Model-driven architecture**: Define what you want, let the agent figure out how to get it
 - **Agent orchestration**: The agent automatically manages tool selection, execution, and data flow
@@ -30,6 +14,22 @@ A practical implementation of an AI-powered weather and agricultural data agent 
 - **Minimal code, maximum capability**: Complete weather analysis system in just a few lines
 - **Type-safe structured outputs**: Automatic response validation and formatting
 - Shows how AWS Strands eliminates hundreds of lines of orchestration code
+
+### 2. [Agent ECS Template](./agent-ecs-template)
+A foundational template project for deploying agent-based AI applications to AWS ECS. This project demonstrates:
+- Client-server architecture patterns for AI agents
+- **Direct AWS Bedrock integration using boto3** for foundational model access
+- Proper containerization of AI workloads
+- Health monitoring and service management
+- CloudFormation infrastructure as code
+
+### 3. [Agriculture Agent ECS](./agriculture-agent-ecs)
+A practical implementation of an AI-powered weather and agricultural data agent system. This project features:
+- **LangGraph integration with AWS Bedrock** for orchestrating complex AI workflows
+- Integration with MCP (Model Context Protocol) servers
+- Real-world use case for agricultural data analysis
+- Weather data processing and insights
+- Production-ready deployment patterns
 
 ## Why This Repository?
 
