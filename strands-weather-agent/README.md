@@ -250,23 +250,184 @@ BEDROCK_MODEL_ID="anthropic.claude-3-haiku-20240307-v1:0" ./infra/deploy.sh all
 4. Agent executes tools with appropriate parameters
 5. Responses automatically formatted and streamed back to user
 
-### Project Structure
+## Key Features & Benefits
 
+### AWS Strands Advantages
+
+1. **Significant Less Code**: Compare our `mcp_agent.py` to LangGraph implementations
+2. **Native MCP**: No custom HTTP clients or tool wrappers
+3. **Automatic Discovery**: Tools found at runtime
+4. **Built-in Features**: Streaming, sessions, error handling
+
+### Key Capabilities
+
+- **Health Checks**: All services monitored with custom health endpoints
+- **Structured Logging**: JSON logs for analysis
+- **Error Handling**: Graceful degradation
+- **Auto-scaling**: ECS handles load automatically
+- **Multi-turn Conversations**: Context retention across queries
+- **Structured Output**: Type-safe responses with Pydantic models
+
+### Developer Experience
+
+- **One-command Operations**: Scripts handle complexity
+- **AWS Credential Magic**: Works with any auth method (SSO, profiles, IAM roles)
+- **Comprehensive Testing**: Unit and integration tests
+- **Clear Documentation**: In-code and README guides
+- **Local Development**: Run with Python or Docker
+- **Quick Demos**: Interactive chatbot and API modes
+
+## Example Queries
+
+The system handles various types of weather and agricultural queries:
+
+### Weather Queries
+- "What's the weather like in Chicago?"
+- "Give me a 5-day forecast for Seattle"
+- "What were the temperatures in New York last week?"
+- "Compare the weather between Miami and Denver"
+- "Weather at coordinates 40.7128, -74.0060"
+
+### Agricultural Queries  
+- "Are conditions good for planting corn in Iowa?"
+- "What's the frost risk for tomatoes in Minnesota?"
+- "Best time to plant wheat in Kansas?"
+- "Soil conditions for vineyards in Napa Valley?"
+
+### Multi-Turn Context Examples
+- **Turn 1:** "Weather in Portland"
+- **Turn 2:** "How about Seattle?" (compares to Portland)
+- **Turn 3:** "Which is better for farming?" (considers both cities)
+
+### Structured Output Examples
+The structured output preserves all geographic intelligence and weather data:
+
+```python
+# Returns WeatherQueryResponse with:
+# - query_type: "current", "forecast", "historical", "agricultural"
+# - locations: [ExtractedLocation(...)] with precise coordinates
+# - weather_data: WeatherDataSummary with conditions
+# - agricultural_assessment: Agricultural recommendations (if applicable)
+# - processing_time_ms: Response timing
 ```
-strands-weather-agent/
-├── main.py                    # FastAPI application entry point
-├── weather_agent/             # AWS Strands agent implementation
-│   ├── mcp_agent.py          # Simplified agent with Strands
-│   ├── prompts.py            # System prompts manager
-│   └── structured_output_demo.py # Structured output examples
-├── mcp_servers/              # FastMCP server implementations
-│   ├── forecast_server.py    # 5-day weather forecasts
-│   ├── historical_server.py  # Past 7 days weather data
-│   └── agricultural_server.py # Crop recommendations
-├── docker/                   # Docker configurations
-├── infra/                   # AWS infrastructure code
-├── scripts/                 # Development & deployment scripts
-└── tests/                   # Comprehensive test suite
+
+## Demo and Testing
+
+### Running Interactive Demos
+
+#### 1. Simple Interactive Chatbot
+```bash
+# Start MCP servers and run chatbot
+./scripts/start_servers.sh
+python -m weather_agent.main               # Interactive mode
+python -m weather_agent.main --demo        # Demo mode with examples
+./scripts/stop_servers.sh
+```
+
+#### 2. Multi-Turn Conversation Demos 🎯 **NEW - Context Retention**
+```bash
+# Basic multi-turn conversation demo
+python -m weather_agent.demo_scenarios
+
+# Context switching demo (advanced scenarios)
+python -m weather_agent.demo_scenarios --context-switching
+
+# Show detailed tool calls during demo
+python -m weather_agent.demo_scenarios --structured
+```
+
+**What the multi-turn demos showcase:**
+- **Turn 1:** "What's the weather like in Seattle?"
+- **Turn 2:** "How does it compare to Portland?" (remembers Seattle)
+- **Turn 3:** "Which city would be better for outdoor activities?" (remembers both cities)
+- **Turn 4:** Agricultural queries with location context
+- **Turn 5:** Comprehensive summaries using accumulated context
+
+#### 3. Structured Output Demo
+```bash
+# Comprehensive structured output demonstration
+python -m examples.structured_output_demo
+
+# Quick structured output test
+python -c "
+import asyncio
+from weather_agent.mcp_agent import MCPWeatherAgent
+
+async def test():
+    agent = MCPWeatherAgent()
+    response = await agent.query_structured('Weather in Chicago?')
+    print('Query type:', response.query_type)
+    print('Locations found:', len(response.locations))
+    if response.locations:
+        loc = response.locations[0]
+        print(f'Location: {loc.name} at ({loc.latitude}, {loc.longitude})')
+
+asyncio.run(test())
+"
+```
+
+#### 4. Context Retention Testing 🧪 **NEW**
+```bash
+# Comprehensive context retention test suite
+python test_context_retention.py
+
+# Expected output:
+# 🎉 All Tests Completed Successfully!
+# ✅ Basic context retention: PASSED
+# ✅ Context switching: PASSED  
+# ✅ Structured output context: PASSED
+# ✅ Session management: PASSED
+```
+
+### Running Test Suites
+
+```bash
+# Comprehensive testing with one command
+./scripts/run_tests.sh
+
+# With Docker integration tests
+./scripts/run_tests.sh --with-docker
+
+# Quick test of core functionality
+./scripts/test_agent.sh
+
+# Run specific test modules
+python -m pytest tests/test_mcp_servers.py -v
+python -m pytest tests/test_weather_agent.py -v
+python -m pytest tests/test_coordinates_consolidated.py -v
+```
+
+## API Usage
+
+### REST API Endpoints
+
+```bash
+# Health check
+curl http://localhost:8090/health
+
+# Simple query
+curl -X POST http://localhost:8090/query \
+  -H "Content-Type: application/json" \
+  -d '{"query": "What is the weather like in Chicago?"}'
+
+# Structured output query
+curl -X POST http://localhost:8090/query/structured \
+  -H "Content-Type: application/json" \
+  -d '{"query": "What is the weather like in Seattle?"}'
+
+# Multi-turn conversation with session
+curl -X POST http://localhost:8090/query \
+  -H "Content-Type: application/json" \
+  -d '{"query": "What is the weather in Denver?", "session_id": "conversation_1"}'
+
+curl -X POST http://localhost:8090/query \
+  -H "Content-Type: application/json" \
+  -d '{"query": "How does it compare to Phoenix?", "session_id": "conversation_1"}'
+
+# Session management endpoints
+curl http://localhost:8090/session/conversation_1         # Get session info
+curl -X DELETE http://localhost:8090/session/conversation_1  # Clear session
+curl http://localhost:8090/mcp/status                     # Check MCP server status
 ```
 
 
@@ -476,237 +637,6 @@ async def get_weather_alerts(location: str) -> dict:
     return {"alerts": [...]}
 ```
 
-## Key Features & Benefits
-
-### AWS Strands Advantages
-
-1. **50% Less Code**: Compare our `mcp_agent.py` to LangGraph implementations
-2. **Native MCP**: No custom HTTP clients or tool wrappers
-3. **Automatic Discovery**: Tools found at runtime
-4. **Built-in Features**: Streaming, sessions, error handling
-
-### Key Capabilities
-
-- **Health Checks**: All services monitored with custom health endpoints
-- **Structured Logging**: JSON logs for analysis
-- **Error Handling**: Graceful degradation
-- **Auto-scaling**: ECS handles load automatically
-- **Multi-turn Conversations**: Context retention across queries
-- **Structured Output**: Type-safe responses with Pydantic models
-
-### Developer Experience
-
-- **One-command Operations**: Scripts handle complexity
-- **AWS Credential Magic**: Works with any auth method (SSO, profiles, IAM roles)
-- **Comprehensive Testing**: Unit and integration tests
-- **Clear Documentation**: In-code and README guides
-- **Local Development**: Run with Python or Docker
-- **Quick Demos**: Interactive chatbot and API modes
-
-## Example Queries
-
-The system handles various types of weather and agricultural queries:
-
-### Weather Queries
-- "What's the weather like in Chicago?"
-- "Give me a 5-day forecast for Seattle"
-- "What were the temperatures in New York last week?"
-- "Compare the weather between Miami and Denver"
-- "Weather at coordinates 40.7128, -74.0060"
-
-### Agricultural Queries  
-- "Are conditions good for planting corn in Iowa?"
-- "What's the frost risk for tomatoes in Minnesota?"
-- "Best time to plant wheat in Kansas?"
-- "Soil conditions for vineyards in Napa Valley?"
-
-### Multi-Turn Context Examples
-- **Turn 1:** "Weather in Portland"
-- **Turn 2:** "How about Seattle?" (compares to Portland)
-- **Turn 3:** "Which is better for farming?" (considers both cities)
-
-### Structured Output Examples
-The structured output preserves all geographic intelligence and weather data:
-
-```python
-# Returns WeatherQueryResponse with:
-# - query_type: "current", "forecast", "historical", "agricultural"
-# - locations: [ExtractedLocation(...)] with precise coordinates
-# - weather_data: WeatherDataSummary with conditions
-# - agricultural_assessment: Agricultural recommendations (if applicable)
-# - processing_time_ms: Response timing
-```
-
-## Demo and Testing
-
-### Running Interactive Demos
-
-#### 1. Simple Interactive Chatbot
-```bash
-# Start MCP servers and run chatbot
-./scripts/start_servers.sh
-python -m weather_agent.main               # Interactive mode
-python -m weather_agent.main --demo        # Demo mode with examples
-./scripts/stop_servers.sh
-```
-
-#### 2. Multi-Turn Conversation Demos 🎯 **NEW - Context Retention**
-```bash
-# Basic multi-turn conversation demo
-python -m weather_agent.demo_scenarios
-
-# Context switching demo (advanced scenarios)
-python -m weather_agent.demo_scenarios --context-switching
-
-# Show detailed tool calls during demo
-python -m weather_agent.demo_scenarios --structured
-```
-
-**What the multi-turn demos showcase:**
-- **Turn 1:** "What's the weather like in Seattle?"
-- **Turn 2:** "How does it compare to Portland?" (remembers Seattle)
-- **Turn 3:** "Which city would be better for outdoor activities?" (remembers both cities)
-- **Turn 4:** Agricultural queries with location context
-- **Turn 5:** Comprehensive summaries using accumulated context
-
-#### 3. Structured Output Demo
-```bash
-# Comprehensive structured output demonstration
-python -m examples.structured_output_demo
-
-# Quick structured output test
-python -c "
-import asyncio
-from weather_agent.mcp_agent import MCPWeatherAgent
-
-async def test():
-    agent = MCPWeatherAgent()
-    response = await agent.query_structured('Weather in Chicago?')
-    print('Query type:', response.query_type)
-    print('Locations found:', len(response.locations))
-    if response.locations:
-        loc = response.locations[0]
-        print(f'Location: {loc.name} at ({loc.latitude}, {loc.longitude})')
-
-asyncio.run(test())
-"
-```
-
-#### 4. Context Retention Testing 🧪 **NEW**
-```bash
-# Comprehensive context retention test suite
-python test_context_retention.py
-
-# Expected output:
-# 🎉 All Tests Completed Successfully!
-# ✅ Basic context retention: PASSED
-# ✅ Context switching: PASSED  
-# ✅ Structured output context: PASSED
-# ✅ Session management: PASSED
-```
-
-### Running Test Suites
-
-```bash
-# Comprehensive testing with one command
-./scripts/run_tests.sh
-
-# With Docker integration tests
-./scripts/run_tests.sh --with-docker
-
-# Quick test of core functionality
-./scripts/test_agent.sh
-
-# Run specific test modules
-python -m pytest tests/test_mcp_servers.py -v
-python -m pytest tests/test_weather_agent.py -v
-python -m pytest tests/test_coordinates_consolidated.py -v
-```
-
-## API Usage
-
-### REST API Endpoints
-
-```bash
-# Health check
-curl http://localhost:8090/health
-
-# Simple query
-curl -X POST http://localhost:8090/query \
-  -H "Content-Type: application/json" \
-  -d '{"query": "What is the weather like in Chicago?"}'
-
-# Structured output query
-curl -X POST http://localhost:8090/query/structured \
-  -H "Content-Type: application/json" \
-  -d '{"query": "What is the weather like in Seattle?"}'
-
-# Multi-turn conversation with session
-curl -X POST http://localhost:8090/query \
-  -H "Content-Type: application/json" \
-  -d '{"query": "What is the weather in Denver?", "session_id": "conversation_1"}'
-
-curl -X POST http://localhost:8090/query \
-  -H "Content-Type: application/json" \
-  -d '{"query": "How does it compare to Phoenix?", "session_id": "conversation_1"}'
-
-# Session management endpoints
-curl http://localhost:8090/session/conversation_1         # Get session info
-curl -X DELETE http://localhost:8090/session/conversation_1  # Clear session
-curl http://localhost:8090/mcp/status                     # Check MCP server status
-```
-
-### Programmatic Usage
-
-```python
-from weather_agent.mcp_agent import MCPWeatherAgent
-
-# Initialize agent with optional configuration
-agent = MCPWeatherAgent(
-    debug_logging=True,                    # Show detailed tool calls
-    prompt_type="agriculture",             # Use agriculture-focused prompts
-    session_storage_dir="./sessions"      # Enable persistent sessions
-)
-
-# Test connectivity
-connectivity = await agent.test_connectivity()
-print("MCP server status:", connectivity)
-
-# Single query (creates new session automatically)
-response = await agent.query("What's the weather forecast for Iowa?")
-print(response)
-
-# Multi-turn conversation with explicit session
-session_id = "farming_consultation"
-
-# Turn 1: Get weather
-response1 = await agent.query(
-    "What's the weather in Des Moines, Iowa?", 
-    session_id=session_id
-)
-
-# Turn 2: Agent remembers Des Moines context
-response2 = await agent.query(
-    "Are conditions good for planting corn?", 
-    session_id=session_id
-)
-
-# Get structured response with context
-structured = await agent.query_structured(
-    "Give me a complete agricultural assessment", 
-    session_id=session_id
-)
-
-print(f"Location: {structured.get_primary_location().name}")
-print(f"Agricultural assessment: {structured.agricultural_assessment}")
-
-# Session management
-session_info = agent.get_session_info(session_id)
-print(f"Session has {session_info['conversation_turns']} turns")
-
-# Clear session when done
-agent.clear_session(session_id)
-```
 
 ## Troubleshooting
 
@@ -934,6 +864,139 @@ self.agent = Agent(
 | Lines of Code | ~500 | ~250 |
 
 ## Common Docker and AWS Infrastructure Issues
+
+### 🎯 How We Got Docker and AWS Working: A Journey of Fixes
+
+This project went through multiple rounds of debugging to get both Docker and AWS deployments working. Here's the complete story of what went wrong and how we fixed it, so you can avoid the same pain.
+
+### The Investigation Journey
+
+We went through 3 rounds of investigation and fixes before achieving a successful deployment:
+
+#### Round 1: Health Check Configuration Error
+**The Problem**: MCP servers had health checks in ECS task definitions, but MCP servers using FastMCP don't provide traditional REST health endpoints - they use JSON-RPC which requires session management.
+
+**The Fix**: Removed health checks from all MCP server task definitions in services.cfn. Only the main service should have health checks.
+
+**Key Learning**: Not all services support simple HTTP health checks. Understand your protocol before adding health checks.
+
+#### Round 2: URL Trailing Slash Mismatch
+**The Problem**: Docker Compose used `/mcp/` (with trailing slash) but ECS used `/mcp` (without). This small difference caused connection failures because HTTP routers can treat these as different endpoints.
+
+**The Fix**: Added trailing slashes to all MCP URLs in services.cfn to match Docker configuration.
+
+**Key Learning**: Always ensure exact URL consistency between environments. A single character difference can break everything.
+
+#### Round 3: Network Binding Issue
+**The Problem**: MCP servers were listening on `127.0.0.1` (localhost) instead of `0.0.0.0` (all interfaces), making them inaccessible from other containers in the ECS network.
+
+**The Root Cause**: The MCP_HOST environment variable wasn't set in task definitions, so servers defaulted to localhost.
+
+**The Fix**: Added `MCP_HOST=0.0.0.0` and `MCP_PORT=[port]` environment variables to all MCP server task definitions.
+
+**Key Learning**: Containers must bind to 0.0.0.0, not 127.0.0.1. Always explicitly set host bindings in containerized environments.
+
+### The Complete Recipe for Success
+
+Here's exactly how to get Docker and AWS working based on our hard-won experience:
+
+#### 1. Docker Development Setup
+```bash
+# Always use the start script that exports AWS credentials
+./scripts/start_docker.sh
+
+# This script does the magic:
+export $(aws configure export-credentials --format env-no-export 2>/dev/null)
+
+# Why this works:
+# - Extracts credentials from ANY AWS auth method (SSO, profiles, IAM roles)
+# - Passes them as environment variables to Docker
+# - Works with temporary credentials and session tokens
+```
+
+#### 2. Critical Docker Configuration
+```yaml
+# docker-compose.yml essentials
+services:
+  mcp-server:
+    environment:
+      - MCP_HOST=0.0.0.0  # MUST bind to all interfaces
+      - MCP_PORT=8081
+      # AWS credentials from start_docker.sh
+      - AWS_ACCESS_KEY_ID=${AWS_ACCESS_KEY_ID}
+      - AWS_SECRET_ACCESS_KEY=${AWS_SECRET_ACCESS_KEY}
+      - AWS_SESSION_TOKEN=${AWS_SESSION_TOKEN}
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:8081/health"]
+      # Health checks OK in Docker, NOT in ECS for MCP servers
+```
+
+#### 3. ECS Task Definition Requirements
+```yaml
+# Critical environment variables for MCP servers
+Environment:
+  - Name: MCP_HOST
+    Value: 0.0.0.0  # MUST be 0.0.0.0, not 127.0.0.1
+  - Name: MCP_PORT
+    Value: 8081
+# NO HealthCheck section for MCP servers!
+```
+
+#### 4. URL Consistency
+```yaml
+# Ensure trailing slashes match everywhere
+# Docker Compose:
+- MCP_URL=http://server:8081/mcp/
+
+# ECS Task Definition:
+- Name: MCP_URL
+  Value: http://server.namespace.local:8081/mcp/  # Same trailing slash!
+```
+
+### Deployment Workflow That Actually Works
+
+1. **Make code changes**
+2. **ALWAYS rebuild images** (this step is often forgotten!):
+   ```bash
+   ./infra/deploy.sh build-push
+   ```
+3. **Deploy to ECS**:
+   ```bash
+   ./infra/deploy.sh services
+   ```
+4. **Test the deployment**:
+   ```bash
+   ./infra/test_services.sh
+   ```
+5. **Monitor logs if issues**:
+   ```bash
+   aws logs tail /ecs/strands-weather-agent-main --follow
+   ```
+
+### Critical Success Factors
+
+1. **Docker ≠ Production**: What works in Docker might not work in ECS. Always test both.
+2. **Rebuild Images**: After ANY code change, rebuild. Stale images are a silent killer.
+3. **Network Bindings**: 0.0.0.0 for containers, always. 127.0.0.1 only works locally.
+4. **URL Exactness**: Every character matters. `/api` ≠ `/api/`
+5. **Health Checks**: Understand your protocol. Not everything supports HTTP GET /health.
+6. **Environment Variables**: Explicitly set everything. Don't rely on defaults.
+7. **Service Discovery**: Use the correct DNS format: `service.namespace.local`
+8. **Logs Are Truth**: When in doubt, check CloudWatch logs. They reveal all.
+
+### The "Never Again" Checklist
+
+Before deploying, verify:
+- [ ] All services bind to 0.0.0.0, not 127.0.0.1
+- [ ] URLs have consistent trailing slashes across all configs
+- [ ] Docker images are freshly built after code changes
+- [ ] Health checks are only on services that support them
+- [ ] All required environment variables are explicitly set
+- [ ] Service discovery names match the pattern: service.namespace.local
+- [ ] Security groups allow traffic on all required ports
+- [ ] Task definitions have sufficient CPU/memory
+- [ ] Execution role can pull images and write logs
+- [ ] Task role has permissions for application needs
 
 ### Troubleshooting Guide
 
