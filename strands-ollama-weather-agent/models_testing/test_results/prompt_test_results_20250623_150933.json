@@ -1,0 +1,224 @@
+{
+  "system_prompt.txt": {
+    "prompt_file": "system_prompt.txt",
+    "model": "anthropic.claude-3-7-sonnet-20250219-v1:0",
+    "queries": [
+      {
+        "query": "What's the weather in New York?",
+        "score": 65.0,
+        "issues": [
+          "Invalid location name: 'Unknown'",
+          "Missing coordinates for Unknown",
+          "Low confidence (0.00) for Unknown",
+          "Missing proper timezone for Unknown",
+          "Query type should be more specific than 'general'"
+        ],
+        "locations_extracted": 1,
+        "location_details": [
+          {
+            "name": "Unknown",
+            "lat": 0.0,
+            "lon": 0.0,
+            "confidence": 0.0
+          }
+        ]
+      },
+      {
+        "query": "Temperature at 40.7128, -74.0060",
+        "score": 65.0,
+        "issues": [
+          "Invalid location name: 'Unknown'",
+          "Missing coordinates for Unknown",
+          "Low confidence (0.00) for Unknown",
+          "Missing proper timezone for Unknown",
+          "Query type should be more specific than 'general'"
+        ],
+        "locations_extracted": 1,
+        "location_details": [
+          {
+            "name": "Unknown",
+            "lat": 0.0,
+            "lon": 0.0,
+            "confidence": 0.0
+          }
+        ]
+      },
+      {
+        "query": "Compare weather in London, Tokyo, and Sydney",
+        "score": 65.0,
+        "issues": [
+          "Invalid location name: 'Unknown'",
+          "Missing coordinates for Unknown",
+          "Low confidence (0.00) for Unknown",
+          "Missing proper timezone for Unknown",
+          "Query type should be more specific than 'general'"
+        ],
+        "locations_extracted": 1,
+        "location_details": [
+          {
+            "name": "Unknown",
+            "lat": 0.0,
+            "lon": 0.0,
+            "confidence": 0.0
+          }
+        ]
+      }
+    ],
+    "overall_score": 65.0,
+    "issues": [
+      "Low confidence (0.00) for Unknown",
+      "Missing coordinates for Unknown",
+      "Missing proper timezone for Unknown",
+      "Invalid location name: 'Unknown'",
+      "Query type should be more specific than 'general'"
+    ]
+  },
+  "system_prompt_simple.txt": {
+    "prompt_file": "system_prompt_simple.txt",
+    "model": "anthropic.claude-3-7-sonnet-20250219-v1:0",
+    "queries": [
+      {
+        "query": "What's the weather in New York?",
+        "score": 65.0,
+        "issues": [
+          "Invalid location name: 'Unknown'",
+          "Missing coordinates for Unknown",
+          "Low confidence (0.00) for Unknown",
+          "Missing proper timezone for Unknown",
+          "Query type should be more specific than 'general'"
+        ],
+        "locations_extracted": 1,
+        "location_details": [
+          {
+            "name": "Unknown",
+            "lat": 0.0,
+            "lon": 0.0,
+            "confidence": 0.0
+          }
+        ]
+      },
+      {
+        "query": "Temperature at 40.7128, -74.0060",
+        "score": 65.0,
+        "issues": [
+          "Invalid location name: 'Unknown'",
+          "Missing coordinates for Unknown",
+          "Low confidence (0.00) for Unknown",
+          "Missing proper timezone for Unknown",
+          "Query type should be more specific than 'general'"
+        ],
+        "locations_extracted": 1,
+        "location_details": [
+          {
+            "name": "Unknown",
+            "lat": 0.0,
+            "lon": 0.0,
+            "confidence": 0.0
+          }
+        ]
+      },
+      {
+        "query": "Compare weather in London, Tokyo, and Sydney",
+        "score": 65.0,
+        "issues": [
+          "Invalid location name: 'Unknown'",
+          "Missing coordinates for Unknown",
+          "Low confidence (0.00) for Unknown",
+          "Missing proper timezone for Unknown",
+          "Query type should be more specific than 'general'"
+        ],
+        "locations_extracted": 1,
+        "location_details": [
+          {
+            "name": "Unknown",
+            "lat": 0.0,
+            "lon": 0.0,
+            "confidence": 0.0
+          }
+        ]
+      }
+    ],
+    "overall_score": 65.0,
+    "issues": [
+      "Low confidence (0.00) for Unknown",
+      "Missing coordinates for Unknown",
+      "Missing proper timezone for Unknown",
+      "Invalid location name: 'Unknown'",
+      "Query type should be more specific than 'general'"
+    ]
+  },
+  "system_prompt_agriculture.txt": {
+    "prompt_file": "system_prompt_agriculture.txt",
+    "model": "anthropic.claude-3-7-sonnet-20250219-v1:0",
+    "queries": [
+      {
+        "query": "What's the weather in New York?",
+        "score": 65.0,
+        "issues": [
+          "Invalid location name: 'Unknown'",
+          "Missing coordinates for Unknown",
+          "Low confidence (0.00) for Unknown",
+          "Missing proper timezone for Unknown",
+          "Query type should be more specific than 'general'"
+        ],
+        "locations_extracted": 1,
+        "location_details": [
+          {
+            "name": "Unknown",
+            "lat": 0.0,
+            "lon": 0.0,
+            "confidence": 0.0
+          }
+        ]
+      },
+      {
+        "query": "Temperature at 40.7128, -74.0060",
+        "score": 65.0,
+        "issues": [
+          "Invalid location name: 'Unknown'",
+          "Missing coordinates for Unknown",
+          "Low confidence (0.00) for Unknown",
+          "Missing proper timezone for Unknown",
+          "Query type should be more specific than 'general'"
+        ],
+        "locations_extracted": 1,
+        "location_details": [
+          {
+            "name": "Unknown",
+            "lat": 0.0,
+            "lon": 0.0,
+            "confidence": 0.0
+          }
+        ]
+      },
+      {
+        "query": "Compare weather in London, Tokyo, and Sydney",
+        "score": 65.0,
+        "issues": [
+          "Invalid location name: 'Unknown'",
+          "Missing coordinates for Unknown",
+          "Low confidence (0.00) for Unknown",
+          "Missing proper timezone for Unknown",
+          "Query type should be more specific than 'general'"
+        ],
+        "locations_extracted": 1,
+        "location_details": [
+          {
+            "name": "Unknown",
+            "lat": 0.0,
+            "lon": 0.0,
+            "confidence": 0.0
+          }
+        ]
+      }
+    ],
+    "overall_score": 65.0,
+    "issues": [
+      "Low confidence (0.00) for Unknown",
+      "Missing coordinates for Unknown",
+      "Missing proper timezone for Unknown",
+      "Invalid location name: 'Unknown'",
+      "Query type should be more specific than 'general'"
+    ]
+  }
+}

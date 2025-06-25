@@ -1,4 +1,4 @@
-# Strands Weather Agent - Model-Agnostic AI Agent with AWS Strands
+# Strands Ollama Weather Agent - Model-Agnostic AI Agent with AWS Strands
 
 ## 🚀 Paradigm Shift: Agent-Driven Orchestration
 
@@ -47,11 +47,12 @@ This paradigm shift enables you to build powerful AI applications with minimal c
 
 ## Overview
 
-This project demonstrates how to build model-agnostic AI agent systems using **AWS Strands** for orchestration, **FastMCP** for distributed tool servers, and **AWS Bedrock** for foundation models. It showcases a streamlined multi-service architecture: **User → Agent → MCP Servers → Weather APIs**.
+This project demonstrates how to build model-agnostic AI agent systems using **AWS Strands** for orchestration, **FastMCP** for distributed tool servers, and either **AWS Bedrock** or **Ollama** for foundation models. It showcases a streamlined multi-service architecture: **User → Agent → MCP Servers → Weather APIs**.
 
 This demonstration showcases:
-- **True Model Agnosticism**: Switch between Claude, Llama, Cohere, and Amazon Nova models via environment variable
-- **Zero Code Changes Required**: Model selection happens entirely through configuration
+- **True Model Agnosticism**: Switch between AWS Bedrock models (Claude, Llama, Nova) or local Ollama models via environment variable
+- **Local LLM Support**: Run completely offline with Ollama for privacy and cost savings
+- **Zero Code Changes Required**: Model provider and model selection happens entirely through configuration
 - **Docker Containerized**: Ready for local development and AWS ECS deployment
 - **Distributed Architecture**: Multiple MCP servers for different data domains
 - **Real Weather Data**: Integration with Open-Meteo API for live weather information (no API key required)
@@ -86,23 +87,39 @@ agent = Agent(
 ### Prerequisites
 
 ✅ **Docker** installed and running  
+✅ **Python 3.12** (for direct Python execution)
+
+**For AWS Bedrock (cloud models):**
 ✅ **AWS CLI** configured with credentials (`aws configure`)  
 ✅ **AWS Account** with Bedrock access enabled  
-✅ **Python 3.12** (for direct Python execution)
+
+**For Ollama (local models):**
+✅ **Ollama** installed locally or ready to run in Docker
+✅ At least one Ollama model pulled (e.g., `ollama pull llama3.2`)
 
 ### Local Development: Docker (FastAPI Web Server)
 
 Run the weather agent as a web API server with all services containerized:
 
 ```bash
-# 1. Configure AWS Bedrock model
+# 1. Configure environment
 cp .env.example .env
-# Edit .env and set BEDROCK_MODEL_ID
+# Edit .env and set MODEL_PROVIDER:
+#   - For Ollama: MODEL_PROVIDER=ollama (default)
+#   - For AWS Bedrock: MODEL_PROVIDER=bedrock
 
-# 2. Start all services with AWS credentials
+# 2. Start all services
+# For Ollama (runs Ollama in container):
+./scripts/start_docker_ollama.sh
+
+# For AWS Bedrock (requires AWS credentials):
 ./scripts/start_docker.sh
 
 # 3. Test the services
+# For Ollama:
+./scripts/test_ollama.sh
+
+# For Bedrock:
 ./scripts/test_docker.sh
 
 # 4. Stop services when done
@@ -114,25 +131,35 @@ cp .env.example .env
 Run the weather agent as an interactive chatbot:
 
 ```bash
-# 1. Configure AWS Bedrock access
-./scripts/aws-setup.sh
+# 1. Configure environment
+cp .env.example .env
+# Edit .env to choose your model provider:
+#   - Set MODEL_PROVIDER=ollama for local models
+#   - Set MODEL_PROVIDER=bedrock for AWS models
 
-# 2. Start MCP servers (runs in background)
-./scripts/start_servers.sh
+# 2. Set up chosen provider
+# For Ollama:
+ollama serve  # Start Ollama if not running
+ollama pull llama3.2  # Pull model specified in .env
 
-# 3. Navigate to weather agent directory
-cd weather_agent
+# For AWS Bedrock:
+./scripts/aws-setup.sh  # Configure AWS credentials
 
-# 4. Set Python version and install dependencies
-pyenv local 3.12.10
+# 3. Install dependencies
 pip install -r requirements.txt
 
-# 5. Run the interactive chatbot
+# 4. Start MCP servers (runs in background)
+./scripts/start_servers.sh
+
+# 5. Navigate to weather agent directory
+cd weather_agent
+
+# 6. Run the interactive chatbot
 python chatbot.py                    # Interactive mode
 python chatbot.py --demo             # Demo mode with example queries
 python chatbot.py --multi-turn-demo  # Multi-turn conversation demo
 
-# 6. Stop servers when done (from project root)
+# 7. Stop servers when done (from project root)
 cd .. && ./scripts/stop_servers.sh
 ```
 
@@ -535,20 +562,29 @@ The deployment creates AWS infrastructure using CloudFormation:
 Create a `.env` file with:
 
 ```bash
-# Required - AWS Bedrock Model
+# Model Provider Selection (Required)
+MODEL_PROVIDER=ollama  # or 'bedrock'
+
+# For Ollama (Local Models)
+OLLAMA_MODEL=llama3.2  # or any pulled model
+OLLAMA_HOST=http://localhost:11434  # or http://ollama:11434 for Docker
+OLLAMA_TEMPERATURE=0.7
+OLLAMA_MAX_TOKENS=4096
+OLLAMA_TOP_P=0.9
+OLLAMA_TIMEOUT=60
+
+# For AWS Bedrock (Cloud Models)
 BEDROCK_MODEL_ID=amazon.nova-lite-v1:0  # or any supported model
 BEDROCK_REGION=us-east-1
-
-# Optional
 BEDROCK_TEMPERATURE=0
+
+# General Configuration
 LOG_LEVEL=INFO
 SYSTEM_PROMPT=default  # or 'agriculture', 'concise'
 
-# AWS Credentials (if not using IAM role)
+# AWS Credentials (if using Bedrock without IAM role)
 AWS_ACCESS_KEY_ID=your_access_key
 AWS_SECRET_ACCESS_KEY=your_secret_key
-
-# AWS credentials handled automatically by scripts
 ```
 
 ### Supported AWS Bedrock Models
@@ -574,19 +610,96 @@ The system works with any Bedrock model that supports tool/function calling:
 - `cohere.command-r-plus-v1:0` - Optimized for RAG and tool use
 - `cohere.command-r-v1:0` - Efficient alternative
 
-### Model Selection
+### Supported Ollama Models
 
-Simply change the `BEDROCK_MODEL_ID` environment variable:
+The system works with any Ollama model. Popular choices include:
+
+#### Recommended Models
+- `llama3.2:3b` (3B) - Fast but limited tool calling ability
+- `llama3.1:8b` (8B) - Better tool calling support ⭐
+- `mistral:7b` (7B) - Strong performance, good balance ⭐
+- `gemma2:9b` (9B) - Google's model, multilingual support
+- `qwen2.5:7b` (7B) - Excellent reasoning capabilities
+
+**Note**: For reliable tool calling (MCP servers), we recommend using models with 7B+ parameters. Smaller models may struggle with the structured tool calling format.
+
+#### Model Selection
+
+##### Switching Between Providers
+
+To switch between Ollama and Bedrock, simply edit the `MODEL_PROVIDER` line in your `.env` file:
 
 ```bash
-# For best performance
-export BEDROCK_MODEL_ID="anthropic.claude-3-5-sonnet-20241022-v2:0"
+# Edit .env file
+MODEL_PROVIDER=ollama    # Use this for local Ollama models
+# MODEL_PROVIDER=bedrock  # Comment out Ollama and uncomment this for AWS
 
-# For cost-effective operation
-export BEDROCK_MODEL_ID="amazon.nova-lite-v1:0"
+# No code changes needed - just restart the application!
+```
 
-# For open source
-export BEDROCK_MODEL_ID="meta.llama3-70b-instruct-v1:0"
+##### Complete `.env` Configuration Examples
+
+**For Ollama (Local Models):**
+```bash
+# Set provider to ollama
+MODEL_PROVIDER=ollama
+OLLAMA_MODEL=llama3.2
+OLLAMA_HOST=http://localhost:11434
+```
+
+**For AWS Bedrock (Cloud Models):**
+```bash
+# Set provider to bedrock
+MODEL_PROVIDER=bedrock
+BEDROCK_MODEL_ID=amazon.nova-lite-v1:0
+BEDROCK_REGION=us-west-2
+```
+
+##### Pull Ollama Models
+```bash
+# Download models before using them
+ollama pull llama3.2
+ollama pull mistral
+ollama list  # See available models
+```
+
+### Testing Ollama Integration
+
+The project includes comprehensive Ollama testing capabilities:
+
+#### 1. Docker Testing with Ollama
+```bash
+# Start services with Ollama in container
+./scripts/start_docker_ollama.sh
+
+# Run Ollama-specific tests
+./scripts/test_ollama.sh
+
+# This will:
+# - Check Ollama container health
+# - Verify model availability
+# - Test basic model responses
+# - Test weather agent API with Ollama
+# - Check for errors in logs
+```
+
+#### 2. Mock Mode Testing
+For testing without MCP servers, use mock mode:
+```python
+# Test with mock tools (no MCP servers needed)
+python test_ollama_mock.py
+```
+
+This is useful for:
+- Rapid development and testing
+- CI/CD pipelines
+- Debugging Ollama-specific issues
+- Testing tool calling capabilities
+
+#### 3. Basic Connectivity Test
+```bash
+# Simple test to verify Ollama is working
+python test_ollama/test_ollama_simple.py
 ```
 
 ### AWS Setup and Configuration
@@ -704,6 +817,12 @@ async def get_weather_alerts(location: str) -> dict:
    docker-compose config  # Shows resolved configuration
    ```
 
+5. **Ollama in Docker**: When using Ollama with Docker
+   - Ollama runs as a separate container using Docker profiles
+   - The weather agent connects to `http://ollama:11434` internally
+   - Models are persisted in a Docker volume
+   - First run will pull the model (may take a few minutes)
+
 ### AWS Deployment Issues
 
 1. **CloudFormation Stack Fails**:
@@ -775,6 +894,70 @@ Modify `weather_agent/mcp_agent.py` to:
 - Add new response formats
 - Implement custom tool selection logic
 - Add new structured output models
+
+## Troubleshooting Common Issues
+
+### MCP Server Connection Errors
+
+**Error**: `mcp.shared.exceptions.McpError: Session terminated`
+
+**Solutions**:
+1. Ensure MCP servers are running:
+   ```bash
+   # Check if servers are running
+   lsof -ti:8081,8082,8083
+   
+   # If ports are in use by stale processes, kill them
+   ./scripts/stop_servers.sh
+   lsof -ti:8081,8082,8083 | xargs kill -9
+   
+   # Start fresh
+   ./scripts/start_servers.sh
+   ```
+
+2. Check server logs:
+   ```bash
+   tail -f logs/forecast.log
+   tail -f logs/historical.log
+   tail -f logs/agricultural.log
+   ```
+
+### Ollama Model Errors
+
+**Error**: `model "llama3.2" not found, try pulling it first`
+
+**Solution**:
+```bash
+# Pull the model
+ollama pull llama3.2
+
+# For better tool calling, use larger models
+ollama pull llama3.1:8b
+ollama pull mistral:7b
+```
+
+### Poor Tool Calling Performance
+
+**Issue**: Model returns unstructured text instead of calling tools
+
+**Solution**: Use larger models (7B+ parameters) for reliable tool calling:
+```bash
+# Update .env file
+OLLAMA_MODEL=llama3.1:8b  # or mistral:7b
+```
+
+### Docker Issues
+
+**Error**: Cannot connect to Ollama from Docker
+
+**Solution**: Ensure Ollama is accessible:
+```bash
+# For Docker Desktop (Mac/Windows)
+OLLAMA_HOST=http://host.docker.internal:11434
+
+# For Linux
+OLLAMA_HOST=http://172.17.0.1:11434
+```
 
 ## Making This Production-Ready
 
