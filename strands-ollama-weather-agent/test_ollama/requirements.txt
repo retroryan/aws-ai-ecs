@@ -1,7 +1,0 @@
-# Strands packages with Ollama support
-strands-agents
-strands-agents-tools
-strands-agents[ollama]
-
-# HTTP client for testing Ollama connectivity
-requests>=2.31.0
