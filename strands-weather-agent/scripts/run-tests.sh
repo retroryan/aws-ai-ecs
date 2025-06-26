@@ -95,9 +95,9 @@ fi
 # Run the test suite
 echo -e "\n${GREEN}Executing test suite...${NC}"
 echo "----------------------------------------"
-# Run as Python module to handle relative imports properly
+# Run the comprehensive test script from tests directory
 cd "$PROJECT_ROOT"
-python -m weather_agent.test_mcp_agent
+python tests/test_mcp_agent_strands.py
 
 # Capture test exit code
 TEST_EXIT_CODE=$?
@@ -109,7 +109,7 @@ if [ $TEST_EXIT_CODE -eq 0 ]; then
     
     # Run a quick demo
     echo -e "${YELLOW}Running structured output demo...${NC}"
-    python -m weather_agent.structured_output_demo
+    python examples/structured_output_demo.py
     
     echo -e "\n${GREEN}✅ All tests and demos completed successfully!${NC}"
 else
