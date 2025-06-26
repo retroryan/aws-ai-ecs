@@ -546,9 +546,18 @@ class MCPWeatherAgent:
             
             # Use native Strands structured output
             try:
+                # Add explicit instruction to ensure all required fields are populated
+                structured_prompt = f"""{message}
+
+Please provide a complete response with:
+- A comprehensive summary of the weather information
+- Extracted location details with coordinates
+- Weather data if available
+- Query classification and confidence"""
+                
                 response = agent.structured_output(
                     WeatherQueryResponse,
-                    prompt=message
+                    prompt=structured_prompt
                 )
                 return response, agent.messages
                 

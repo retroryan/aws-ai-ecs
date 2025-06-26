@@ -16,7 +16,7 @@ sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 # Import all test modules
 from test_simple_coordinate import test_simple
 from test_coordinate_usage import test_coordinate_provision
-from test_coordinates import test_coordinates
+from test_coordinates import test_coordinates_simple as test_coordinates
 from test_diverse_cities import test_diverse_city_coordinates
 from test_coordinate_handling import test_forecast_server
 
