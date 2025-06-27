@@ -11,7 +11,7 @@ from starlette.requests import Request
 from starlette.responses import JSONResponse
 
 # Import shared utilities
-from api_utils import get_coordinates, OpenMeteoClient, get_daily_params, get_hourly_params
+from api_utils import get_coordinates, OpenMeteoClient, get_daily_params, get_hourly_params, API_TYPE_FORECAST
 
 # Initialize FastMCP server
 server = FastMCP(name="openmeteo-forecast")
@@ -73,7 +73,7 @@ async def get_weather_forecast(
             "timezone": "auto"
         }
         
-        data = await client.get("forecast", params)
+        data = await client.get(API_TYPE_FORECAST, params)
         
         # Add location info
         data["location_info"] = {
