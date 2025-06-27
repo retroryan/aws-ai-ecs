@@ -10,7 +10,7 @@ from starlette.requests import Request
 from starlette.responses import JSONResponse
 
 # Import shared utilities
-from api_utils import get_coordinates, OpenMeteoClient
+from api_utils import get_coordinates, OpenMeteoClient, API_TYPE_FORECAST
 
 # Initialize FastMCP server
 server = FastMCP(name="openmeteo-agricultural")
@@ -72,7 +72,7 @@ async def get_agricultural_conditions(
             "timezone": "auto"
         }
         
-        data = await client.get("forecast", params)
+        data = await client.get(API_TYPE_FORECAST, params)
         
         # Add location info
         data["location_info"] = {

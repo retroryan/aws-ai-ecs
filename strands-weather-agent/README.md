@@ -353,28 +353,7 @@ python -m weather_agent.demo_scenarios --structured
 - **Turn 4:** Agricultural queries with location context
 - **Turn 5:** Comprehensive summaries using accumulated context
 
-#### 3. Structured Output Demo
-```bash
-# Comprehensive structured output demonstration
-python -m examples.structured_output_demo
 
-# Quick structured output test
-python -c "
-import asyncio
-from weather_agent.mcp_agent import MCPWeatherAgent
-
-async def test():
-    agent = MCPWeatherAgent()
-    response = await agent.query_structured('Weather in Chicago?')
-    print('Query type:', response.query_type)
-    print('Locations found:', len(response.locations))
-    if response.locations:
-        loc = response.locations[0]
-        print(f'Location: {loc.name} at ({loc.latitude}, {loc.longitude})')
-
-asyncio.run(test())
-"
-```
 
 #### 4. Context Retention Testing 🧪 **NEW**
 ```bash

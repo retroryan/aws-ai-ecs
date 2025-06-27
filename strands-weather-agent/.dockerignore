@@ -1,0 +1,41 @@
+# Git
+.git
+.gitignore
+.gitattributes
+
+# Docker
+.dockerignore
+docker-compose.yml
+
+# Python
+__pycache__/
+*.pyc
+*.pyo
+*.pyd
+.env
+bedrock.env
+*.egg-info/
+dist/
+build/
+venv/
+.venv/
+
+# Logs and test results
+logs/
+*.log
+models_testing/test_results/
+
+# Documentation
+*.md
+
+# Tests, infrastructure, and examples
+tests/
+models_testing/
+infra/
+scripts/
+examples/
+
+# IDE/Editor specific
+.vscode/
+.idea/
+*.swp

@@ -11,7 +11,7 @@ from starlette.requests import Request
 from starlette.responses import JSONResponse
 
 # Import shared utilities
-from api_utils import get_coordinates, OpenMeteoClient, get_daily_params, get_hourly_params
+from api_utils import get_coordinates, OpenMeteoClient, get_daily_params, get_hourly_params, API_TYPE_ARCHIVE
 
 # Initialize FastMCP server
 server = FastMCP(name="openmeteo-historical")
@@ -91,7 +91,7 @@ async def get_historical_weather(
             "timezone": "auto"
         }
         
-        data = await client.get("archive", params)
+        data = await client.get(API_TYPE_ARCHIVE, params)
         
         # Add location info
         data["location_info"] = {
