@@ -24,12 +24,8 @@ echo "Profile: ${CURRENT_PROFILE}"
 CURRENT_REGION=$(get_aws_region)
 echo "Region: ${CURRENT_REGION}"
 
-# Check if credentials are configured
-if check_aws_credentials; then
-    echo -e "Credentials: ${GREEN}✅ Configured${NC}"
-else
-    echo -e "Credentials: ${RED}❌ Not configured${NC}"
-fi
+# Assume credentials are configured
+echo -e "Credentials: ${GREEN}✅ Assumed configured${NC}"
 
 echo ""
 

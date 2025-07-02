@@ -1,0 +1,18 @@
+POST http://localhost:8011/inquire
+Content-Type: application/json
+
+{"question": "Get agriculture experts that have skills related to Hydroponics"}
+
+###
+
+POST http://localhost:8011/inquire
+Content-Type: application/json
+
+{"question": "what skills do our agriculture experts have?"}
+
+###
+
+POST http://localhost:8011/inquire
+Content-Type: application/json
+
+{"question": "list our agriculture experts with Organic Farming skills"}
