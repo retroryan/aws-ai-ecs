@@ -1,0 +1,643 @@
+{
+ "Description": "Hello World Lambda Function with Function URL - dev environment",
+ "Metadata": {
+  "cdk_nag": {
+   "rules_to_suppress": [
+    {
+     "reason": "Using AWS managed policy AWSLambdaBasicExecutionRole for Lambda execution role is a best practice for basic Lambda functions",
+     "id": "AwsSolutions-IAM4"
+    },
+    {
+     "reason": "Using Python 3.11 which is the latest supported runtime version for Lambda at time of deployment",
+     "id": "AwsSolutions-L1"
+    }
+   ]
+  }
+ },
+ "Resources": {
+  "HelloWorldLambdaLogGroup666B8FFF": {
+   "Type": "AWS::Logs::LogGroup",
+   "Properties": {
+    "LogGroupName": "/aws/lambda/hello-world-lambda-dev",
+    "RetentionInDays": 7,
+    "Tags": [
+     {
+      "Key": "Environment",
+      "Value": "dev"
+     },
+     {
+      "Key": "ManagedBy",
+      "Value": "CDK"
+     },
+     {
+      "Key": "Owner",
+      "Value": "Development"
+     },
+     {
+      "Key": "Project",
+      "Value": "HelloWorldLambda"
+     },
+     {
+      "Key": "SecurityReview",
+      "Value": "CDK-Nag-Applied"
+     }
+    ]
+   },
+   "UpdateReplacePolicy": "Delete",
+   "DeletionPolicy": "Delete",
+   "Metadata": {
+    "aws:cdk:path": "HelloWorldLambdaStack-dev/HelloWorldLambdaLogGroup/Resource"
+   }
+  },
+  "HelloWorldLambdaDLQF311D978": {
+   "Type": "AWS::SQS::Queue",
+   "Properties": {
+    "MessageRetentionPeriod": 1209600,
+    "QueueName": "hello-world-lambda-dlq-dev",
+    "Tags": [
+     {
+      "Key": "Environment",
+      "Value": "dev"
+     },
+     {
+      "Key": "ManagedBy",
+      "Value": "CDK"
+     },
+     {
+      "Key": "Owner",
+      "Value": "Development"
+     },
+     {
+      "Key": "Project",
+      "Value": "HelloWorldLambda"
+     },
+     {
+      "Key": "SecurityReview",
+      "Value": "CDK-Nag-Applied"
+     }
+    ],
+    "VisibilityTimeout": 900
+   },
+   "UpdateReplacePolicy": "Delete",
+   "DeletionPolicy": "Delete",
+   "Metadata": {
+    "aws:cdk:path": "HelloWorldLambdaStack-dev/HelloWorldLambdaDLQ/Resource"
+   }
+  },
+  "HelloWorldLambdaRoleFB273E80": {
+   "Type": "AWS::IAM::Role",
+   "Properties": {
+    "AssumeRolePolicyDocument": {
+     "Statement": [
+      {
+       "Action": "sts:AssumeRole",
+       "Effect": "Allow",
+       "Principal": {
+        "Service": "lambda.amazonaws.com"
+       }
+      }
+     ],
+     "Version": "2012-10-17"
+    },
+    "Description": "IAM role for Hello World Lambda function - dev",
+    "ManagedPolicyArns": [
+     {
+      "Fn::Join": [
+       "",
+       [
+        "arn:",
+        {
+         "Ref": "AWS::Partition"
+        },
+        ":iam::aws:policy/service-role/AWSLambdaBasicExecutionRole"
+       ]
+      ]
+     }
+    ],
+    "Policies": [
+     {
+      "PolicyDocument": {
+       "Statement": [
+        {
+         "Action": [
+          "logs:CreateLogStream",
+          "logs:PutLogEvents"
+         ],
+         "Effect": "Allow",
+         "Resource": {
+          "Fn::GetAtt": [
+           "HelloWorldLambdaLogGroup666B8FFF",
+           "Arn"
+          ]
+         }
+        }
+       ],
+       "Version": "2012-10-17"
+      },
+      "PolicyName": "CloudWatchLogsPolicy"
+     }
+    ],
+    "Tags": [
+     {
+      "Key": "Environment",
+      "Value": "dev"
+     },
+     {
+      "Key": "ManagedBy",
+      "Value": "CDK"
+     },
+     {
+      "Key": "Owner",
+      "Value": "Development"
+     },
+     {
+      "Key": "Project",
+      "Value": "HelloWorldLambda"
+     },
+     {
+      "Key": "SecurityReview",
+      "Value": "CDK-Nag-Applied"
+     }
+    ]
+   },
+   "Metadata": {
+    "aws:cdk:path": "HelloWorldLambdaStack-dev/HelloWorldLambdaRole/Resource"
+   }
+  },
+  "HelloWorldLambdaRoleDefaultPolicy8FDCEE16": {
+   "Type": "AWS::IAM::Policy",
+   "Properties": {
+    "PolicyDocument": {
+     "Statement": [
+      {
+       "Action": "sqs:SendMessage",
+       "Effect": "Allow",
+       "Resource": {
+        "Fn::GetAtt": [
+         "HelloWorldLambdaDLQF311D978",
+         "Arn"
+        ]
+       }
+      },
+      {
+       "Action": [
+        "xray:PutTelemetryRecords",
+        "xray:PutTraceSegments"
+       ],
+       "Effect": "Allow",
+       "Resource": "*"
+      }
+     ],
+     "Version": "2012-10-17"
+    },
+    "PolicyName": "HelloWorldLambdaRoleDefaultPolicy8FDCEE16",
+    "Roles": [
+     {
+      "Ref": "HelloWorldLambdaRoleFB273E80"
+     }
+    ]
+   },
+   "Metadata": {
+    "aws:cdk:path": "HelloWorldLambdaStack-dev/HelloWorldLambdaRole/DefaultPolicy/Resource"
+   }
+  },
+  "HelloWorldLambdaFunction9B5EE56C": {
+   "Type": "AWS::Lambda::Function",
+   "Properties": {
+    "Architectures": [
+     "arm64"
+    ],
+    "Code": {
+     "S3Bucket": "cdk-hnb659fds-assets-123456789012-us-east-1",
+     "S3Key": "60127ef319730f108a16f2395a273ac4f4a202cb2c746fdffe47709c3c123d3a.zip"
+    },
+    "DeadLetterConfig": {
+     "TargetArn": {
+      "Fn::GetAtt": [
+       "HelloWorldLambdaDLQF311D978",
+       "Arn"
+      ]
+     }
+    },
+    "Description": "Hello World Lambda function with Function URL - dev",
+    "Environment": {
+     "Variables": {
+      "LOG_LEVEL": "DEBUG",
+      "ENVIRONMENT": "dev",
+      "POWERTOOLS_SERVICE_NAME": "hello-world-lambda",
+      "POWERTOOLS_METRICS_NAMESPACE": "HelloWorld/dev"
+     }
+    },
+    "FunctionName": "hello-world-lambda-dev",
+    "Handler": "lambda_function.lambda_handler",
+    "LoggingConfig": {
+     "LogGroup": {
+      "Ref": "HelloWorldLambdaLogGroup666B8FFF"
+     }
+    },
+    "MemorySize": 128,
+    "Role": {
+     "Fn::GetAtt": [
+      "HelloWorldLambdaRoleFB273E80",
+      "Arn"
+     ]
+    },
+    "Runtime": "python3.11",
+    "Tags": [
+     {
+      "Key": "Environment",
+      "Value": "dev"
+     },
+     {
+      "Key": "ManagedBy",
+      "Value": "CDK"
+     },
+     {
+      "Key": "Owner",
+      "Value": "Development"
+     },
+     {
+      "Key": "Project",
+      "Value": "HelloWorldLambda"
+     },
+     {
+      "Key": "SecurityReview",
+      "Value": "CDK-Nag-Applied"
+     }
+    ],
+    "Timeout": 30,
+    "TracingConfig": {
+     "Mode": "Active"
+    }
+   },
+   "DependsOn": [
+    "HelloWorldLambdaRoleDefaultPolicy8FDCEE16",
+    "HelloWorldLambdaRoleFB273E80"
+   ],
+   "Metadata": {
+    "aws:cdk:path": "HelloWorldLambdaStack-dev/HelloWorldLambdaFunction/Resource",
+    "aws:asset:path": "asset.60127ef319730f108a16f2395a273ac4f4a202cb2c746fdffe47709c3c123d3a",
+    "aws:asset:is-bundled": false,
+    "aws:asset:property": "Code"
+   }
+  },
+  "HelloWorldLambdaFunctionEventInvokeConfig5B29896F": {
+   "Type": "AWS::Lambda::EventInvokeConfig",
+   "Properties": {
+    "FunctionName": {
+     "Ref": "HelloWorldLambdaFunction9B5EE56C"
+    },
+    "MaximumRetryAttempts": 0,
+    "Qualifier": "$LATEST"
+   },
+   "Metadata": {
+    "aws:cdk:path": "HelloWorldLambdaStack-dev/HelloWorldLambdaFunction/EventInvokeConfig/Resource"
+   }
+  },
+  "HelloWorldLambdaFunctionFunctionUrl026250B9": {
+   "Type": "AWS::Lambda::Url",
+   "Properties": {
+    "AuthType": "NONE",
+    "Cors": {
+     "AllowCredentials": false,
+     "AllowHeaders": [
+      "Content-Type",
+      "X-Amz-Date",
+      "Authorization",
+      "X-Api-Key"
+     ],
+     "AllowMethods": [
+      "GET",
+      "POST"
+     ],
+     "AllowOrigins": [
+      "*"
+     ],
+     "MaxAge": 3600
+    },
+    "TargetFunctionArn": {
+     "Fn::GetAtt": [
+      "HelloWorldLambdaFunction9B5EE56C",
+      "Arn"
+     ]
+    }
+   },
+   "Metadata": {
+    "aws:cdk:path": "HelloWorldLambdaStack-dev/HelloWorldLambdaFunction/FunctionUrl/Resource",
+    "cdk_nag": {
+     "rules_to_suppress": [
+      {
+       "reason": "Development environment allows public access for testing. Production should use AWS_IAM auth type.",
+       "id": "AwsSolutions-Lambda2"
+      }
+     ]
+    }
+   }
+  },
+  "HelloWorldLambdaFunctioninvokefunctionurlD18E53AB": {
+   "Type": "AWS::Lambda::Permission",
+   "Properties": {
+    "Action": "lambda:InvokeFunctionUrl",
+    "FunctionName": {
+     "Fn::GetAtt": [
+      "HelloWorldLambdaFunction9B5EE56C",
+      "Arn"
+     ]
+    },
+    "FunctionUrlAuthType": "NONE",
+    "Principal": "*"
+   },
+   "Metadata": {
+    "aws:cdk:path": "HelloWorldLambdaStack-dev/HelloWorldLambdaFunction/invoke-function-url"
+   }
+  },
+  "HelloWorldLambdaFunctionAllowPublicInvoke79BEE7F7": {
+   "Type": "AWS::Lambda::Permission",
+   "Properties": {
+    "Action": "lambda:InvokeFunctionUrl",
+    "FunctionName": {
+     "Fn::GetAtt": [
+      "HelloWorldLambdaFunction9B5EE56C",
+      "Arn"
+     ]
+    },
+    "FunctionUrlAuthType": "NONE",
+    "Principal": "*"
+   },
+   "Metadata": {
+    "aws:cdk:path": "HelloWorldLambdaStack-dev/HelloWorldLambdaFunction/AllowPublicInvoke"
+   }
+  },
+  "HelloWorldLambdaErrorAlarm9ADBF591": {
+   "Type": "AWS::CloudWatch::Alarm",
+   "Properties": {
+    "AlarmDescription": "Lambda function error rate alarm - dev",
+    "AlarmName": "hello-world-lambda-errors-dev",
+    "ComparisonOperator": "GreaterThanOrEqualToThreshold",
+    "Dimensions": [
+     {
+      "Name": "FunctionName",
+      "Value": {
+       "Ref": "HelloWorldLambdaFunction9B5EE56C"
+      }
+     }
+    ],
+    "EvaluationPeriods": 2,
+    "MetricName": "Errors",
+    "Namespace": "AWS/Lambda",
+    "Period": 300,
+    "Statistic": "Sum",
+    "Tags": [
+     {
+      "Key": "Environment",
+      "Value": "dev"
+     },
+     {
+      "Key": "ManagedBy",
+      "Value": "CDK"
+     },
+     {
+      "Key": "Owner",
+      "Value": "Development"
+     },
+     {
+      "Key": "Project",
+      "Value": "HelloWorldLambda"
+     },
+     {
+      "Key": "SecurityReview",
+      "Value": "CDK-Nag-Applied"
+     }
+    ],
+    "Threshold": 5,
+    "TreatMissingData": "notBreaching"
+   },
+   "Metadata": {
+    "aws:cdk:path": "HelloWorldLambdaStack-dev/HelloWorldLambdaErrorAlarm/Resource"
+   }
+  },
+  "HelloWorldLambdaDurationAlarm609B7093": {
+   "Type": "AWS::CloudWatch::Alarm",
+   "Properties": {
+    "AlarmDescription": "Lambda function duration alarm - dev",
+    "AlarmName": "hello-world-lambda-duration-dev",
+    "ComparisonOperator": "GreaterThanOrEqualToThreshold",
+    "Dimensions": [
+     {
+      "Name": "FunctionName",
+      "Value": {
+       "Ref": "HelloWorldLambdaFunction9B5EE56C"
+      }
+     }
+    ],
+    "EvaluationPeriods": 3,
+    "MetricName": "Duration",
+    "Namespace": "AWS/Lambda",
+    "Period": 300,
+    "Statistic": "Average",
+    "Tags": [
+     {
+      "Key": "Environment",
+      "Value": "dev"
+     },
+     {
+      "Key": "ManagedBy",
+      "Value": "CDK"
+     },
+     {
+      "Key": "Owner",
+      "Value": "Development"
+     },
+     {
+      "Key": "Project",
+      "Value": "HelloWorldLambda"
+     },
+     {
+      "Key": "SecurityReview",
+      "Value": "CDK-Nag-Applied"
+     }
+    ],
+    "Threshold": 10000,
+    "TreatMissingData": "notBreaching"
+   },
+   "Metadata": {
+    "aws:cdk:path": "HelloWorldLambdaStack-dev/HelloWorldLambdaDurationAlarm/Resource"
+   }
+  },
+  "HelloWorldLambdaThrottleAlarm6008F86C": {
+   "Type": "AWS::CloudWatch::Alarm",
+   "Properties": {
+    "AlarmDescription": "Lambda function throttle alarm - dev",
+    "AlarmName": "hello-world-lambda-throttles-dev",
+    "ComparisonOperator": "GreaterThanOrEqualToThreshold",
+    "Dimensions": [
+     {
+      "Name": "FunctionName",
+      "Value": {
+       "Ref": "HelloWorldLambdaFunction9B5EE56C"
+      }
+     }
+    ],
+    "EvaluationPeriods": 1,
+    "MetricName": "Throttles",
+    "Namespace": "AWS/Lambda",
+    "Period": 300,
+    "Statistic": "Sum",
+    "Tags": [
+     {
+      "Key": "Environment",
+      "Value": "dev"
+     },
+     {
+      "Key": "ManagedBy",
+      "Value": "CDK"
+     },
+     {
+      "Key": "Owner",
+      "Value": "Development"
+     },
+     {
+      "Key": "Project",
+      "Value": "HelloWorldLambda"
+     },
+     {
+      "Key": "SecurityReview",
+      "Value": "CDK-Nag-Applied"
+     }
+    ],
+    "Threshold": 1,
+    "TreatMissingData": "notBreaching"
+   },
+   "Metadata": {
+    "aws:cdk:path": "HelloWorldLambdaStack-dev/HelloWorldLambdaThrottleAlarm/Resource"
+   }
+  },
+  "CDKMetadata": {
+   "Type": "AWS::CDK::Metadata",
+   "Properties": {
+    "Analytics": "v2:deflate64:H4sIAAAAAAAA/2WPQU/DMAyFf8vuqaGrxH2bACEhUTpxnrI060zTeMTJqinKf0fJNi6c3uf3niV7CfVTDfVCzlypfqwM7iFuvVSjkDPvoqGBIb7T8OoonMTmYO+cBP8wxM+gg85+gSRQThA7MsUr2pJBdcnjlZIwctr3EuJLsMoj2Zz98fNZW/9mzzTqDdkDDjn9b977X87kwk1a7SZkRrJJcLOTzNozrLIIbmAd1Kj9WrIWylDoZ+nVEeLKSDfl9QIpiU4zBae0KJtbLwe05Y6P4E/Bl9dulSTaiz+SfWigXkL9uPhmxMoF63HS0F31F44n7FFmAQAA"
+   },
+   "Metadata": {
+    "aws:cdk:path": "HelloWorldLambdaStack-dev/CDKMetadata/Default"
+   }
+  }
+ },
+ "Outputs": {
+  "LambdaFunctionName": {
+   "Description": "Name of the Lambda function",
+   "Value": {
+    "Ref": "HelloWorldLambdaFunction9B5EE56C"
+   },
+   "Export": {
+    "Name": "HelloWorldLambdaFunctionName-dev"
+   }
+  },
+  "LambdaFunctionArn": {
+   "Description": "ARN of the Lambda function",
+   "Value": {
+    "Fn::GetAtt": [
+     "HelloWorldLambdaFunction9B5EE56C",
+     "Arn"
+    ]
+   },
+   "Export": {
+    "Name": "HelloWorldLambdaFunctionArn-dev"
+   }
+  },
+  "FunctionUrl": {
+   "Description": "Lambda Function URL endpoint",
+   "Value": {
+    "Fn::GetAtt": [
+     "HelloWorldLambdaFunctionFunctionUrl026250B9",
+     "FunctionUrl"
+    ]
+   },
+   "Export": {
+    "Name": "HelloWorldLambdaFunctionUrl-dev"
+   }
+  },
+  "HealthCheckUrl": {
+   "Description": "Health check endpoint URL",
+   "Value": {
+    "Fn::Join": [
+     "",
+     [
+      {
+       "Fn::GetAtt": [
+        "HelloWorldLambdaFunctionFunctionUrl026250B9",
+        "FunctionUrl"
+       ]
+      },
+      "health"
+     ]
+    ]
+   },
+   "Export": {
+    "Name": "HelloWorldLambdaHealthCheckUrl-dev"
+   }
+  },
+  "HelloWorldUrl": {
+   "Description": "Hello World endpoint URL with example parameter",
+   "Value": {
+    "Fn::Join": [
+     "",
+     [
+      {
+       "Fn::GetAtt": [
+        "HelloWorldLambdaFunctionFunctionUrl026250B9",
+        "FunctionUrl"
+       ]
+      },
+      "hello?name=CDK"
+     ]
+    ]
+   },
+   "Export": {
+    "Name": "HelloWorldLambdaHelloUrl-dev"
+   }
+  },
+  "DeadLetterQueueUrl": {
+   "Description": "Dead Letter Queue URL for failed Lambda invocations",
+   "Value": {
+    "Ref": "HelloWorldLambdaDLQF311D978"
+   },
+   "Export": {
+    "Name": "HelloWorldLambdaDLQUrl-dev"
+   }
+  }
+ },
+ "Parameters": {
+  "BootstrapVersion": {
+   "Type": "AWS::SSM::Parameter::Value<String>",
+   "Default": "/cdk-bootstrap/hnb659fds/version",
+   "Description": "Version of the CDK Bootstrap resources in this environment, automatically retrieved from SSM Parameter Store. [cdk:skip]"
+  }
+ },
+ "Rules": {
+  "CheckBootstrapVersion": {
+   "Assertions": [
+    {
+     "Assert": {
+      "Fn::Not": [
+       {
+        "Fn::Contains": [
+         [
+          "1",
+          "2",
+          "3",
+          "4",
+          "5"
+         ],
+         {
+          "Ref": "BootstrapVersion"
+         }
+        ]
+       }
+      ]
+     },
+     "AssertDescription": "CDK bootstrap stack version 6 required. Please run 'cdk bootstrap' with a recent version of the CDK CLI."
+    }
+   ]
+  }
+ }
+}

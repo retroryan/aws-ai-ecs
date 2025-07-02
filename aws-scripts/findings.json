@@ -1,0 +1,269 @@
+{
+  "account_id": "123456789012",
+  "analysis_date": "2025-07-02T20:37:06.551616+00:00",
+  "security_score": 65,
+  "total_findings": 3,
+  "filtered_findings": 3,
+  "findings_by_severity": {
+    "critical": 0,
+    "high": 1,
+    "medium": 1,
+    "low": 1,
+    "info": 0
+  },
+  "executive_summary": "IAM Security Assessment Summary\nAccount: 123456789012\nRisk Level: HIGH\nSecurity Score: 65/100\nAction Required: Urgent remediation needed\n\nFindings Summary:\n- Critical: 0\n- High: 1\n- Medium: 1\n- Low: 1\n- Info: 0\n\nTop Risks Identified:\n- No password policy configured",
+  "findings": [
+    {
+      "finding_id": "IAM-NO-PASSWORD-POLICY",
+      "title": "No password policy configured",
+      "description": "Account has no password policy set",
+      "severity": "high",
+      "resource": "Account Password Policy",
+      "recommendation": "Configure a strong password policy",
+      "risk": "Default password requirements are insufficient",
+      "compliance": [
+        "CIS-AWS-1.5-1.11"
+      ],
+      "references": []
+    },
+    {
+      "finding_id": "IAM-UNUSED-ROLE-AWSReservedSSO_AdministratorAccess_3deeead673ca77e9",
+      "title": "Unused role: AWSReservedSSO_AdministratorAccess_3deeead673ca77e9",
+      "description": "Role has never been used",
+      "severity": "low",
+      "resource": "Role: AWSReservedSSO_AdministratorAccess_3deeead673ca77e9",
+      "recommendation": "Remove unused roles to reduce attack surface",
+      "risk": "Unused roles can be compromised and go unnoticed",
+      "compliance": [
+        "AWS-WAF-SEC13"
+      ],
+      "references": []
+    },
+    {
+      "finding_id": "IAM-GROUP-003",
+      "title": "Users with direct policy attachments",
+      "description": "Found 1 users with policies attached directly instead of through groups",
+      "severity": "medium",
+      "resource": "IAM Users",
+      "recommendation": "Move user permissions to groups for better management",
+      "risk": "Direct policy attachments are harder to manage and audit",
+      "compliance": [
+        "AWS-WAF-SEC09"
+      ],
+      "references": []
+    }
+  ],
+  "recommendations": [
+    {
+      "recommendation_id": "REC-POLICY-001",
+      "title": "Implement Least Privilege Access",
+      "description": "Review and restrict overly permissive IAM policies",
+      "severity": "high",
+      "category": "Access Control",
+      "impact": "Reduces blast radius of compromised credentials",
+      "effort": "High",
+      "related_findings": [
+        "IAM-NO-PASSWORD-POLICY"
+      ],
+      "remediation_steps": [
+        {
+          "step_number": 1,
+          "description": "Analyze current permissions usage",
+          "commands": [
+            "# Use IAM Access Analyzer to review permissions",
+            "aws accessanalyzer create-analyzer --analyzer-name iam-least-privilege --type ACCOUNT",
+            "# Generate policy based on actual usage",
+            "aws accessanalyzer start-policy-generation --policy-generation-details file://policy-gen-details.json"
+          ],
+          "prerequisites": [
+            "IAM Access Analyzer enabled"
+          ],
+          "validation": "aws accessanalyzer list-analyzers",
+          "rollback": null,
+          "estimated_time": "1 hour",
+          "automation_safe": true,
+          "requires_human_review": false
+        },
+        {
+          "step_number": 2,
+          "description": "Replace wildcard policies",
+          "commands": [
+            "# Create specific policy replacing wildcards",
+            "aws iam create-policy --policy-name SpecificPolicy --policy-document '{\n  \"Version\": \"2012-10-17\",\n  \"Statement\": [\n    {\n      \"Effect\": \"Allow\",\n      \"Action\": [\n        \"s3:GetObject\",\n        \"s3:PutObject\"\n      ],\n      \"Resource\": \"arn:aws:s3:::my-bucket/*\"\n    }\n  ]\n}'"
+          ],
+          "prerequisites": [
+            "List of required permissions"
+          ],
+          "validation": "aws iam get-policy --policy-arn <new-policy-arn>",
+          "rollback": null,
+          "estimated_time": "30 minutes per policy",
+          "automation_safe": true,
+          "requires_human_review": false
+        },
+        {
+          "step_number": 3,
+          "description": "Test with restricted permissions",
+          "commands": [
+            "# Attach new policy to test user/role",
+            "aws iam attach-user-policy --user-name test-user --policy-arn <new-policy-arn>",
+            "# Test all required functionality",
+            "# Monitor CloudTrail for access denied errors"
+          ],
+          "prerequisites": [
+            "Test environment",
+            "Test scenarios"
+          ],
+          "validation": "# Run application test suite",
+          "rollback": "aws iam detach-user-policy --user-name test-user --policy-arn <new-policy-arn>",
+          "estimated_time": "2 hours",
+          "automation_safe": true,
+          "requires_human_review": false
+        }
+      ],
+      "alternative_approaches": [
+        "Use AWS managed policies as a starting point",
+        "Implement permission boundaries for delegated administration",
+        "Use SCPs for organization-wide guardrails"
+      ],
+      "prevention_tips": [
+        "Review policies before deployment",
+        "Use policy simulator to test permissions",
+        "Implement policy validation in CI/CD pipeline"
+      ]
+    }
+  ],
+  "execution_plan": {
+    "critical": [],
+    "high": [
+      {
+        "recommendation_id": "REC-POLICY-001",
+        "title": "Implement Least Privilege Access",
+        "description": "Review and restrict overly permissive IAM policies",
+        "severity": "high",
+        "category": "Access Control",
+        "impact": "Reduces blast radius of compromised credentials",
+        "effort": "High",
+        "related_findings": [
+          "IAM-NO-PASSWORD-POLICY"
+        ],
+        "remediation_steps": [
+          {
+            "step_number": 1,
+            "description": "Analyze current permissions usage",
+            "commands": [
+              "# Use IAM Access Analyzer to review permissions",
+              "aws accessanalyzer create-analyzer --analyzer-name iam-least-privilege --type ACCOUNT",
+              "# Generate policy based on actual usage",
+              "aws accessanalyzer start-policy-generation --policy-generation-details file://policy-gen-details.json"
+            ],
+            "prerequisites": [
+              "IAM Access Analyzer enabled"
+            ],
+            "validation": "aws accessanalyzer list-analyzers",
+            "rollback": null,
+            "estimated_time": "1 hour",
+            "automation_safe": true,
+            "requires_human_review": false
+          },
+          {
+            "step_number": 2,
+            "description": "Replace wildcard policies",
+            "commands": [
+              "# Create specific policy replacing wildcards",
+              "aws iam create-policy --policy-name SpecificPolicy --policy-document '{\n  \"Version\": \"2012-10-17\",\n  \"Statement\": [\n    {\n      \"Effect\": \"Allow\",\n      \"Action\": [\n        \"s3:GetObject\",\n        \"s3:PutObject\"\n      ],\n      \"Resource\": \"arn:aws:s3:::my-bucket/*\"\n    }\n  ]\n}'"
+            ],
+            "prerequisites": [
+              "List of required permissions"
+            ],
+            "validation": "aws iam get-policy --policy-arn <new-policy-arn>",
+            "rollback": null,
+            "estimated_time": "30 minutes per policy",
+            "automation_safe": true,
+            "requires_human_review": false
+          },
+          {
+            "step_number": 3,
+            "description": "Test with restricted permissions",
+            "commands": [
+              "# Attach new policy to test user/role",
+              "aws iam attach-user-policy --user-name test-user --policy-arn <new-policy-arn>",
+              "# Test all required functionality",
+              "# Monitor CloudTrail for access denied errors"
+            ],
+            "prerequisites": [
+              "Test environment",
+              "Test scenarios"
+            ],
+            "validation": "# Run application test suite",
+            "rollback": "aws iam detach-user-policy --user-name test-user --policy-arn <new-policy-arn>",
+            "estimated_time": "2 hours",
+            "automation_safe": true,
+            "requires_human_review": false
+          }
+        ],
+        "alternative_approaches": [
+          "Use AWS managed policies as a starting point",
+          "Implement permission boundaries for delegated administration",
+          "Use SCPs for organization-wide guardrails"
+        ],
+        "prevention_tips": [
+          "Review policies before deployment",
+          "Use policy simulator to test permissions",
+          "Implement policy validation in CI/CD pipeline"
+        ]
+      }
+    ],
+    "medium": [],
+    "low": []
+  },
+  "best_practices": {
+    "root_user": [
+      "Never use root user for daily tasks",
+      "Enable MFA on root user account",
+      "Delete all root user access keys",
+      "Store root credentials in secure vault",
+      "Document root password recovery process",
+      "Only use root for account-level changes"
+    ],
+    "iam_users": [
+      "Enable MFA on all IAM users",
+      "Use groups for permission management",
+      "Apply least privilege principle",
+      "Rotate access keys every 90 days",
+      "Remove unused access keys",
+      "Use strong password policy",
+      "Regular access reviews (quarterly)"
+    ],
+    "groups": [
+      "Use groups instead of direct policy attachment",
+      "Create role-based groups (Admin, Developer, ReadOnly)",
+      "Regularly audit group memberships",
+      "Document group purposes",
+      "Avoid nested group memberships"
+    ],
+    "policies": [
+      "Avoid wildcard (*) permissions",
+      "Use AWS managed policies when possible",
+      "Version custom policies",
+      "Use policy conditions for additional security",
+      "Regular policy reviews",
+      "Use IAM Access Analyzer"
+    ],
+    "access_keys": [
+      "Rotate keys every 90 days maximum",
+      "Use temporary credentials when possible",
+      "Never embed keys in code",
+      "Use IAM roles for EC2/Lambda",
+      "Monitor key usage with CloudTrail",
+      "Delete unused keys immediately"
+    ],
+    "general": [
+      "Enable CloudTrail for audit logging",
+      "Use AWS Organizations for multi-account",
+      "Implement SCPs for guardrails",
+      "Use IAM Access Analyzer",
+      "Regular security assessments",
+      "Automate compliance checks"
+    ]
+  }
+}

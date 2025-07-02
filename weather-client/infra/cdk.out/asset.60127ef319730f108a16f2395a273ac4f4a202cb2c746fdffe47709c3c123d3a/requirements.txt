@@ -1,0 +1,11 @@
+# AWS SDK for Python
+boto3==1.34.144
+
+# AWS Lambda Powertools for structured logging, metrics, and tracing
+aws-lambda-powertools[all]==2.43.0
+
+# For local testing with Lambda Runtime Interface Emulator
+awslambdaric==2.0.7
+
+# Additional dependencies for enhanced functionality
+requests==2.31.0

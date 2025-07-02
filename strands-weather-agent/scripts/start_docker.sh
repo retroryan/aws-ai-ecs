@@ -3,7 +3,15 @@
 # Start script for Docker Compose with AWS credentials
 set -e
 
-echo "Starting Strands Weather Agent services..."
+# Check for add-experts parameter
+COMPOSE_PROFILES=""
+if [ "$1" = "add-experts" ]; then
+    COMPOSE_PROFILES="--profile experts"
+    echo "Starting Strands Weather Agent services with Experts server..."
+else
+    echo "Starting Strands Weather Agent services (without Experts server)..."
+    echo "Use './scripts/start_docker.sh add-experts' to include the Experts server"
+fi
 
 # Navigate to project root
 cd "$(dirname "$0")/.."
@@ -37,8 +45,11 @@ if [ -z "${BEDROCK_MODEL_ID}" ]; then
 fi
 
 # Start services, forcing a rebuild
-docker compose up --build -d
+docker compose $COMPOSE_PROFILES up --build -d
 
 echo ""
 echo "Services started!"
+if [ "$1" = "add-experts" ]; then
+    echo "Experts server included on port 8010"
+fi
 echo "Run ./scripts/test_docker.sh to test the services"

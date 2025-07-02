@@ -110,6 +110,15 @@ if ! check_service "Agricultural Server" "http://localhost:8083/health"; then
     services_ok=false
 fi
 
+# Check if experts server is running (optional profile)
+if docker ps --filter "name=mcp-experts-server" -q | grep -q .; then
+    if ! check_service "Experts Server" "http://localhost:8010/health"; then
+        services_ok=false
+    fi
+else
+    echo "Experts Server... (not running - use './scripts/start_docker.sh add-experts' to enable)"
+fi
+
 # Check Weather Agent (has proper health endpoint)
 if ! check_service "Weather Agent" "http://localhost:8090/health"; then
     services_ok=false
@@ -214,6 +223,9 @@ echo "   MCP Servers:"
 echo "   - Forecast: http://localhost:8081/health"
 echo "   - Historical: http://localhost:8082/health"
 echo "   - Agricultural: http://localhost:8083/health"
+if docker ps --filter "name=mcp-experts-server" -q | grep -q .; then
+    echo "   - Experts: http://localhost:8010/health"
+fi
 echo ""
 
 echo -e "${GREEN}✅ All tests passed!${NC}"
