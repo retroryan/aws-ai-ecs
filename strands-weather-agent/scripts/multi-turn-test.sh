@@ -19,7 +19,7 @@ CYAN='\033[0;36m'
 NC='\033[0m' # No Color
 
 # API endpoint
-API_URL="${API_URL:-http://localhost:8090}"
+API_URL="${API_URL:-http://localhost:7777}"
 
 # Check if jq is installed
 if ! command -v jq &> /dev/null; then

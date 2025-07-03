@@ -36,22 +36,22 @@ ServiceDiscoveryNamespace:
 
 # services.cfn - INCORRECT
 - Name: MCP_FORECAST_URL
-  Value: http://forecast.agriculture.local:8081/mcp
+  Value: http://forecast.agriculture.local:7778/mcp
 - Name: MCP_HISTORICAL_URL
-  Value: http://historical.agriculture.local:8082/mcp
+  Value: http://historical.agriculture.local:7779/mcp
 - Name: MCP_AGRICULTURAL_URL
-  Value: http://agricultural.agriculture.local:8083/mcp
+  Value: http://agricultural.agriculture.local:7780/mcp
 ```
 
 **Proposed Fix**:
 ```yaml
 # services.cfn - CORRECTED
 - Name: MCP_FORECAST_URL
-  Value: http://forecast.strands-weather.local:8081/mcp
+  Value: http://forecast.strands-weather.local:7778/mcp
 - Name: MCP_HISTORICAL_URL
-  Value: http://historical.strands-weather.local:8082/mcp
+  Value: http://historical.strands-weather.local:7779/mcp
 - Name: MCP_AGRICULTURAL_URL
-  Value: http://agricultural.strands-weather.local:8083/mcp
+  Value: http://agricultural.strands-weather.local:7780/mcp
 ```
 
 ### 2. Documentation String Inconsistencies ✅ FIXED

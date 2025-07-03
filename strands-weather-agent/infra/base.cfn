@@ -173,18 +173,18 @@ Resources:
       VpcId: !Ref ApplicationVPC
       SecurityGroupIngress:
         - Description: Allow traffic from ALB to main API
-          FromPort: 8090
-          ToPort: 8090
+          FromPort: 7777
+          ToPort: 7777
           IpProtocol: tcp
           SourceSecurityGroupId: !Ref ALBSecurityGroup
         - Description: Allow inter-service communication for MCP servers
-          FromPort: 8081
-          ToPort: 8083
+          FromPort: 7778
+          ToPort: 7780
           IpProtocol: tcp
           CidrIp: 10.0.0.0/16
         - Description: Allow main service port for inter-service communication
-          FromPort: 8090
-          ToPort: 8090
+          FromPort: 7777
+          ToPort: 7777
           IpProtocol: tcp
           CidrIp: 10.0.0.0/16
       Tags:
@@ -211,7 +211,7 @@ Resources:
     Type: AWS::ElasticLoadBalancingV2::TargetGroup
     Properties:
       Name: strands-weather-agent
-      Port: 8090
+      Port: 7777
       Protocol: HTTP
       VpcId: !Ref ApplicationVPC
       TargetType: ip

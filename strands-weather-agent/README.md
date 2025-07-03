@@ -142,20 +142,20 @@ When running with Docker, the weather agent runs as a FastAPI web server. Test i
 
 ```bash
 # Health check
-curl http://localhost:8090/health
+curl http://localhost:7777/health
 
 # Get weather forecast
-curl -X POST http://localhost:8090/query \
+curl -X POST http://localhost:7777/query \
   -H "Content-Type: application/json" \
   -d '{"query": "What is the weather forecast for Seattle?"}'
 
 # Get structured weather data
-curl -X POST http://localhost:8090/query/structured \
+curl -X POST http://localhost:7777/query/structured \
   -H "Content-Type: application/json" \
   -d '{"query": "Show me the temperature in Chicago"}'
 
 # Check MCP server connectivity
-curl http://localhost:8090/mcp/status
+curl http://localhost:7777/mcp/status
 ```
 
 ### AWS ECS Deployment
@@ -206,9 +206,9 @@ graph TB
     WA --> Bedrock["AWS Bedrock<br/>(Foundation Models)"]
     WA --> SD["MCP Service Discovery<br/>(Internal: *.local)"]
     
-    SD --> FS["Forecast Server<br/>(Port 8081)"]
-    SD --> HS["Historical Server<br/>(Port 8082)"]
-    SD --> AS["Agricultural Server<br/>(Port 8083)"]
+    SD --> FS["Forecast Server<br/>(Port 7778)"]
+    SD --> HS["Historical Server<br/>(Port 7779)"]
+    SD --> AS["Agricultural Server<br/>(Port 7780)"]
     
     FS --> OM["Open-Meteo API<br/>(Weather Data)"]
     HS --> OM
@@ -392,31 +392,31 @@ python -m pytest tests/test_coordinates_consolidated.py -v
 
 ```bash
 # Health check
-curl http://localhost:8090/health
+curl http://localhost:7777/health
 
 # Simple query
-curl -X POST http://localhost:8090/query \
+curl -X POST http://localhost:7777/query \
   -H "Content-Type: application/json" \
   -d '{"query": "What is the weather like in Chicago?"}'
 
 # Structured output query
-curl -X POST http://localhost:8090/query/structured \
+curl -X POST http://localhost:7777/query/structured \
   -H "Content-Type: application/json" \
   -d '{"query": "What is the weather like in Seattle?"}'
 
 # Multi-turn conversation with session
-curl -X POST http://localhost:8090/query \
+curl -X POST http://localhost:7777/query \
   -H "Content-Type: application/json" \
   -d '{"query": "What is the weather in Denver?", "session_id": "conversation_1"}'
 
-curl -X POST http://localhost:8090/query \
+curl -X POST http://localhost:7777/query \
   -H "Content-Type: application/json" \
   -d '{"query": "How does it compare to Phoenix?", "session_id": "conversation_1"}'
 
 # Session management endpoints
-curl http://localhost:8090/session/conversation_1         # Get session info
-curl -X DELETE http://localhost:8090/session/conversation_1  # Clear session
-curl http://localhost:8090/mcp/status                     # Check MCP server status
+curl http://localhost:7777/session/conversation_1         # Get session info
+curl -X DELETE http://localhost:7777/session/conversation_1  # Clear session
+curl http://localhost:7777/mcp/status                     # Check MCP server status
 ```
 
 
@@ -605,7 +605,7 @@ export BEDROCK_MODEL_ID="meta.llama3-70b-instruct-v1:0"
 MCP servers using FastMCP don't provide traditional REST health endpoints. Use JSON-RPC:
 
 ```bash
-curl -X POST http://localhost:8081/mcp/ \
+curl -X POST http://localhost:7778/mcp/ \
   -H "Content-Type: application/json" \
   -H "Accept: application/json, text/event-stream" \
   -d '{"jsonrpc": "2.0", "method": "mcp/list_tools", "id": 1}'
@@ -638,9 +638,9 @@ async def get_weather_alerts(location: str) -> dict:
 
 2. **Servers not starting**: Check if ports are already in use
    ```bash
-   lsof -i :8081
-   lsof -i :8082
-   lsof -i :8083
+   lsof -i :7778
+   lsof -i :7779
+   lsof -i :7780
    ```
 
 3. **Missing BEDROCK_MODEL_ID**: The application requires this environment variable
@@ -910,13 +910,13 @@ services:
   mcp-server:
     environment:
       - MCP_HOST=0.0.0.0  # MUST bind to all interfaces
-      - MCP_PORT=8081
+      - MCP_PORT=7778
       # AWS credentials from start_docker.sh
       - AWS_ACCESS_KEY_ID=${AWS_ACCESS_KEY_ID}
       - AWS_SECRET_ACCESS_KEY=${AWS_SECRET_ACCESS_KEY}
       - AWS_SESSION_TOKEN=${AWS_SESSION_TOKEN}
     healthcheck:
-      test: ["CMD", "curl", "-f", "http://localhost:8081/health"]
+      test: ["CMD", "curl", "-f", "http://localhost:7778/health"]
       # Health checks OK in Docker, NOT in ECS for MCP servers
 ```
 
@@ -927,7 +927,7 @@ Environment:
   - Name: MCP_HOST
     Value: 0.0.0.0  # MUST be 0.0.0.0, not 127.0.0.1
   - Name: MCP_PORT
-    Value: 8081
+    Value: 7778
 # NO HealthCheck section for MCP servers!
 ```
 
@@ -935,11 +935,11 @@ Environment:
 ```yaml
 # Ensure trailing slashes match everywhere
 # Docker Compose:
-- MCP_URL=http://server:8081/mcp/
+- MCP_URL=http://server:7778/mcp/
 
 # ECS Task Definition:
 - Name: MCP_URL
-  Value: http://server.namespace.local:8081/mcp/  # Same trailing slash!
+  Value: http://server.namespace.local:7778/mcp/  # Same trailing slash!
 ```
 
 ### Deployment Workflow That Actually Works
@@ -1061,8 +1061,8 @@ Environment:
 #### 7. Security Group Blocking
 **Problem**: Security groups not allowing traffic between services
 ```
-# Main service can't connect to backend on port 8081
-Connection refused to backend:8081
+# Main service can't connect to backend on port 7778
+Connection refused to backend:7778
 ```
 **Solution**: Ensure security groups allow traffic on required ports between services in the same VPC.
 

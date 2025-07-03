@@ -304,7 +304,7 @@ from strands.tools.mcp import MCPClient
 
 # Create MCP client
 mcp_client = MCPClient(
-    lambda: streamablehttp_client("http://localhost:8081/mcp")
+    lambda: streamablehttp_client("http://localhost:7778/mcp")
 )
 
 # Use within context manager
@@ -406,7 +406,7 @@ from strands.tools.mcp import MCPClient
 
 # Create MCP client
 mcp_client = MCPClient(
-    lambda: streamablehttp_client("http://localhost:8081/mcp")
+    lambda: streamablehttp_client("http://localhost:7778/mcp")
 )
 
 # Use within context

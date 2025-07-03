@@ -280,7 +280,7 @@ class PromptTester:
 async def main():
     """Run prompt tests."""
     # Ensure MCP servers are running
-    print("⚠️  Make sure MCP servers are running on ports 8081-8083")
+    print("⚠️  Make sure MCP servers are running on ports 7778-7780")
     print("   Run: ./scripts/start_servers.sh\n")
     
     tester = PromptTester()

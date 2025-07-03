@@ -196,9 +196,9 @@ check_status() {
                 echo ""
                 echo "  MCP Servers: Internal services (not exposed via Load Balancer)"
                 echo "  Access via Service Connect:"
-                echo "    - Forecast Server: forecast-server.${BASE_STACK_NAME}:8081"
-                echo "    - Historical Server: historical-server.${BASE_STACK_NAME}:8082"
-                echo "    - Agricultural Server: agricultural-server.${BASE_STACK_NAME}:8083"
+                echo "    - Forecast Server: forecast-server.${BASE_STACK_NAME}:7778"
+                echo "    - Historical Server: historical-server.${BASE_STACK_NAME}:7779"
+                echo "    - Agricultural Server: agricultural-server.${BASE_STACK_NAME}:7780"
             fi
             
             # Always check for recent errors in logs

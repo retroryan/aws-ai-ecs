@@ -167,13 +167,13 @@ Resources:
         - Name: forecast-server
           Image: !Sub ${AWS::AccountId}.dkr.ecr.${AWS::Region}.amazonaws.com/strands-weather-agent-forecast:${ForecastImageTag}
           PortMappings:
-            - ContainerPort: 8081
+            - ContainerPort: 7778
               Protocol: tcp
           Environment:
             - Name: MCP_HOST
               Value: 0.0.0.0
             - Name: MCP_PORT
-              Value: 8081
+              Value: 7778
             - Name: LOG_LEVEL
               Value: !Ref LogLevel
           LogConfiguration:
@@ -200,13 +200,13 @@ Resources:
         - Name: historical-server
           Image: !Sub ${AWS::AccountId}.dkr.ecr.${AWS::Region}.amazonaws.com/strands-weather-agent-historical:${HistoricalImageTag}
           PortMappings:
-            - ContainerPort: 8082
+            - ContainerPort: 7779
               Protocol: tcp
           Environment:
             - Name: MCP_HOST
               Value: 0.0.0.0
             - Name: MCP_PORT
-              Value: 8082
+              Value: 7779
             - Name: LOG_LEVEL
               Value: !Ref LogLevel
           LogConfiguration:
@@ -233,13 +233,13 @@ Resources:
         - Name: agricultural-server
           Image: !Sub ${AWS::AccountId}.dkr.ecr.${AWS::Region}.amazonaws.com/strands-weather-agent-agricultural:${AgriculturalImageTag}
           PortMappings:
-            - ContainerPort: 8083
+            - ContainerPort: 7780
               Protocol: tcp
           Environment:
             - Name: MCP_HOST
               Value: 0.0.0.0
             - Name: MCP_PORT
-              Value: 8083
+              Value: 7780
             - Name: LOG_LEVEL
               Value: !Ref LogLevel
           LogConfiguration:
@@ -266,13 +266,13 @@ Resources:
         - Name: experts-server
           Image: !Sub spring-agriculture-experts:${ExpertsImageTag}
           PortMappings:
-            - ContainerPort: 8010
+            - ContainerPort: 7781
               Protocol: tcp
           Environment:
             - Name: MCP_HOST
               Value: 0.0.0.0
             - Name: MCP_PORT
-              Value: 8010
+              Value: 7781
             - Name: LOG_LEVEL
               Value: !Ref LogLevel
           LogConfiguration:
@@ -299,7 +299,7 @@ Resources:
         - Name: main-agent
           Image: !Sub ${AWS::AccountId}.dkr.ecr.${AWS::Region}.amazonaws.com/strands-weather-agent-main:${MainImageTag}
           PortMappings:
-            - ContainerPort: 8090
+            - ContainerPort: 7777
               Protocol: tcp
           Environment:
             - Name: BEDROCK_MODEL_ID
@@ -311,13 +311,13 @@ Resources:
             - Name: LOG_LEVEL
               Value: !Ref LogLevel
             - Name: MCP_FORECAST_URL
-              Value: http://forecast.strands-weather.local:8081/mcp/
+              Value: http://forecast.strands-weather.local:7778/mcp/
             - Name: MCP_HISTORICAL_URL
-              Value: http://historical.strands-weather.local:8082/mcp/
+              Value: http://historical.strands-weather.local:7779/mcp/
             - Name: MCP_AGRICULTURAL_URL
-              Value: http://agricultural.strands-weather.local:8083/mcp/
+              Value: http://agricultural.strands-weather.local:7780/mcp/
             - Name: MCP_EXPERTS_URL
-              Value: http://experts.strands-weather.local:8010/mcp/
+              Value: http://experts.strands-weather.local:7781/mcp/
           LogConfiguration:
             LogDriver: awslogs
             Options:
@@ -327,7 +327,7 @@ Resources:
           HealthCheck:
             Command:
               - CMD-SHELL
-              - curl -f http://localhost:8090/health || exit 1
+              - curl -f http://localhost:7777/health || exit 1
             Interval: 30
             Timeout: 5
             Retries: 3
@@ -440,7 +440,7 @@ Resources:
         - TargetGroupArn:
             Fn::ImportValue: !Sub ${BaseStackName}-target-group
           ContainerName: main-agent
-          ContainerPort: 8090
+          ContainerPort: 7777
       HealthCheckGracePeriodSeconds: 180
 
   # Auto Scaling (Optional)

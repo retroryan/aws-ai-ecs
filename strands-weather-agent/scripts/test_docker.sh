@@ -98,21 +98,21 @@ echo ""
 services_ok=true
 
 # Check MCP servers (they have /health endpoints in our setup)
-if ! check_service "Forecast Server" "http://localhost:8081/health"; then
+if ! check_service "Forecast Server" "http://localhost:7778/health"; then
     services_ok=false
 fi
 
-if ! check_service "Historical Server" "http://localhost:8082/health"; then
+if ! check_service "Historical Server" "http://localhost:7779/health"; then
     services_ok=false
 fi
 
-if ! check_service "Agricultural Server" "http://localhost:8083/health"; then
+if ! check_service "Agricultural Server" "http://localhost:7780/health"; then
     services_ok=false
 fi
 
 # Check if experts server is running (optional profile)
 if docker ps --filter "name=mcp-experts-server" -q | grep -q .; then
-    if ! check_service "Experts Server" "http://localhost:8010/health"; then
+    if ! check_service "Experts Server" "http://localhost:7781/health"; then
         services_ok=false
     fi
 else
@@ -120,7 +120,7 @@ else
 fi
 
 # Check Weather Agent (has proper health endpoint)
-if ! check_service "Weather Agent" "http://localhost:8090/health"; then
+if ! check_service "Weather Agent" "http://localhost:7777/health"; then
     services_ok=false
 fi
 
@@ -144,7 +144,7 @@ test_query() {
     local query=$1
     echo "Query: \"$query\""
     
-    response=$(curl -s -X POST http://localhost:8090/query \
+    response=$(curl -s -X POST http://localhost:7777/query \
         -H "Content-Type: application/json" \
         -d "{\"query\": \"$query\"}" 2>/dev/null || echo '{"response": "Error: Failed to connect"}')
     
@@ -191,7 +191,7 @@ echo -n "Testing session endpoint..."
 # Get a session ID from the last query (if jq is available)
 if command -v jq &> /dev/null; then
     # Make a query to get a session ID
-    session_response=$(curl -s -X POST http://localhost:8090/query \
+    session_response=$(curl -s -X POST http://localhost:7777/query \
         -H "Content-Type: application/json" \
         -d '{"query": "test session"}' 2>/dev/null)
     
@@ -199,7 +199,7 @@ if command -v jq &> /dev/null; then
     
     if [[ -n "$test_session_id" ]] && [[ "$test_session_id" != "null" ]]; then
         # Test GET session info
-        session_info=$(curl -s "http://localhost:8090/session/$test_session_id" 2>/dev/null)
+        session_info=$(curl -s "http://localhost:7777/session/$test_session_id" 2>/dev/null)
         if echo "$session_info" | jq -e '.session_id' &> /dev/null; then
             echo -e " ${GREEN}✓${NC}"
             echo "Session info retrieved successfully"
@@ -215,16 +215,16 @@ fi
 
 echo ""
 echo "5. Service URLs:"
-echo "   - Weather Agent API: http://localhost:8090"
-echo "   - API Docs: http://localhost:8090/docs"
-echo "   - Health Check: http://localhost:8090/health"
+echo "   - Weather Agent API: http://localhost:7777"
+echo "   - API Docs: http://localhost:7777/docs"
+echo "   - Health Check: http://localhost:7777/health"
 echo ""
 echo "   MCP Servers:"
-echo "   - Forecast: http://localhost:8081/health"
-echo "   - Historical: http://localhost:8082/health"
-echo "   - Agricultural: http://localhost:8083/health"
+echo "   - Forecast: http://localhost:7778/health"
+echo "   - Historical: http://localhost:7779/health"
+echo "   - Agricultural: http://localhost:7780/health"
 if docker ps --filter "name=mcp-experts-server" -q | grep -q .; then
-    echo "   - Experts: http://localhost:8010/health"
+    echo "   - Experts: http://localhost:7781/health"
 fi
 echo ""
 
