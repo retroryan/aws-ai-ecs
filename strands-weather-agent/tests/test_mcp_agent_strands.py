@@ -292,6 +292,62 @@ async def test_error_handling():
         return False
 
 
+async def test_mcp_client_identification():
+    """Test MCP client identification and management."""
+    print("\n🧪 Testing MCP Client Identification...")
+    print("-" * 50)
+    
+    try:
+        agent = MCPWeatherAgent()
+        
+        # Test 1: Check that clients are created
+        num_clients = len(agent.mcp_clients)
+        results.add_test("MCP Clients Created", num_clients > 0, f"Created {num_clients} clients")
+        print(f"📊 Number of MCP clients: {num_clients}")
+        
+        # Test 2: Verify client list structure
+        # Currently returns List[MCPClient], test if this causes issues
+        if hasattr(agent.mcp_clients, '__iter__'):
+            results.add_test("MCP Clients Iterable", True, "Clients can be iterated")
+        else:
+            results.add_test("MCP Clients Iterable", False, "Clients not iterable")
+        
+        # Test 3: Test connectivity with indexed access
+        # This simulates the current implementation
+        connectivity = await agent.test_connectivity()
+        connected_count = sum(1 for v in connectivity.values() if v)
+        results.add_test("MCP Client Connectivity", connected_count > 0, 
+                        f"{connected_count}/{len(connectivity)} servers connected")
+        
+        # Test 4: Demonstrate potential issue with list approach
+        # If we need to identify which client failed, we can't easily map back
+        server_names = ["forecast", "historical", "agricultural"]
+        if len(agent.mcp_clients) == len(server_names):
+            results.add_test("Client-Server Mapping", True, 
+                           "Client count matches expected servers")
+        else:
+            results.add_test("Client-Server Mapping", False,
+                           f"Mismatch: {len(agent.mcp_clients)} clients vs {len(server_names)} servers")
+        
+        # Test 5: Demonstrate the improvement with dict approach
+        # This would be the improved version:
+        # if isinstance(agent.mcp_clients, dict):
+        #     for name, client in agent.mcp_clients.items():
+        #         print(f"  - {name}: {type(client).__name__}")
+        
+        print("\n📝 Current implementation uses List[MCPClient]")
+        print("   - Pros: Simple, works for current use case")
+        print("   - Cons: Can't identify which server a client belongs to")
+        print("   - Risk: Low (current code doesn't need server identification)")
+        
+        return True
+        
+    except Exception as e:
+        results.add_test("MCP Client Identification", False, str(e))
+        print(f"❌ MCP client test failed: {e}")
+        return False
+
+
 async def test_tool_integration():
     """Test integration with MCP tools."""
     print("\n🧪 Testing MCP Tool Integration...")
@@ -345,6 +401,7 @@ async def main():
     await test_structured_output()
     
     print("\n📋 Running Integration Tests...")
+    await test_mcp_client_identification()
     await test_tool_integration()
     await test_error_handling()
     

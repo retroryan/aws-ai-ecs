@@ -246,7 +246,7 @@ class HelloWorldLambdaStack(Stack):
         CfnOutput(
             self,
             "HealthCheckUrl",
-            value=f"{self.function_url.url}health",
+            value=f"{self.function_url.url}/health",
             description="Health check endpoint URL",
             export_name=f"HelloWorldLambdaHealthCheckUrl-{self.env_name}"
         )
