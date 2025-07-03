@@ -3,7 +3,34 @@
 # Start script for Docker Compose with AWS credentials
 set -e
 
-echo "Starting Strands Weather Agent services..."
+# Parse command line arguments
+DEBUG_MODE=""
+while [[ $# -gt 0 ]]; do
+    case $1 in
+        --debug|-d)
+            DEBUG_MODE="true"
+            shift
+            ;;
+        --help|-h)
+            echo "Usage: $0 [OPTIONS]"
+            echo "Options:"
+            echo "  --debug, -d    Enable debug logging"
+            echo "  --help, -h     Show this help message"
+            exit 0
+            ;;
+        *)
+            echo "Unknown option: $1"
+            echo "Use --help for usage information"
+            exit 1
+            ;;
+    esac
+done
+
+if [ "$DEBUG_MODE" = "true" ]; then
+    echo "Starting Strands Weather Agent services with DEBUG logging enabled..."
+else
+    echo "Starting Strands Weather Agent services..."
+fi
 
 # Navigate to project root
 cd "$(dirname "$0")/.."
@@ -28,6 +55,12 @@ fi
 
 # Set AWS_SESSION_TOKEN to empty if not set (to avoid docker-compose warning)
 export AWS_SESSION_TOKEN=${AWS_SESSION_TOKEN:-}
+
+# Export debug mode if enabled
+if [ "$DEBUG_MODE" = "true" ]; then
+    export WEATHER_AGENT_DEBUG=true
+    echo "✓ Debug mode enabled (WEATHER_AGENT_DEBUG=true)"
+fi
 
 # Check if BEDROCK_MODEL_ID is set
 if [ -z "${BEDROCK_MODEL_ID}" ]; then

@@ -88,6 +88,8 @@ services:
       - API_PORT=7777
       # Logging
       - LOG_LEVEL=${LOG_LEVEL:-INFO}
+      # Debug Mode
+      - WEATHER_AGENT_DEBUG=${WEATHER_AGENT_DEBUG:-false}
     depends_on:
       forecast-server:
         condition: service_healthy

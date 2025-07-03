@@ -10,9 +10,18 @@ from typing import Optional, Dict, Any
 import asyncio
 import uvicorn
 import os
-from .mcp_agent import create_weather_agent, MCPWeatherAgent
-from .models.structured_responses import WeatherQueryResponse, ValidationResult
-from .session_manager import SessionManager, SessionData
+import sys
+import argparse
+from datetime import datetime
+from pathlib import Path
+try:
+    from .mcp_agent import create_weather_agent, MCPWeatherAgent
+    from .models.structured_responses import WeatherQueryResponse, ValidationResult
+    from .session_manager import SessionManager, SessionData
+except ImportError:
+    from mcp_agent import create_weather_agent, MCPWeatherAgent
+    from models.structured_responses import WeatherQueryResponse, ValidationResult
+    from session_manager import SessionManager, SessionData
 from contextlib import asynccontextmanager
 import logging
 
@@ -23,6 +32,69 @@ logger = logging.getLogger(__name__)
 # Global instances
 agent: Optional[MCPWeatherAgent] = None
 session_manager: Optional[SessionManager] = None
+debug_mode: bool = False
+
+
+def configure_debug_logging(enable_debug: bool = False):
+    """
+    Configure debug logging for AWS Strands with file output.
+    
+    Args:
+        enable_debug: Whether to enable debug logging
+    """
+    if not enable_debug:
+        return
+    
+    # Create logs directory if it doesn't exist
+    logs_dir = Path(__file__).parent.parent / "logs"
+    logs_dir.mkdir(exist_ok=True)
+    
+    # Create timestamped log file
+    timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")
+    log_file = logs_dir / f"weather_api_debug_{timestamp}.log"
+    
+    # Configure root logger for debug
+    root_logger = logging.getLogger()
+    root_logger.setLevel(logging.DEBUG)
+    
+    # Clear existing handlers
+    root_logger.handlers.clear()
+    
+    # Console handler - INFO level for cleaner output
+    console_handler = logging.StreamHandler(sys.stdout)
+    console_handler.setLevel(logging.INFO)
+    console_formatter = logging.Formatter("%(levelname)s | %(name)s | %(message)s")
+    console_handler.setFormatter(console_formatter)
+    
+    # File handler - DEBUG level for detailed logs
+    file_handler = logging.FileHandler(log_file, encoding='utf-8')
+    file_handler.setLevel(logging.DEBUG)
+    file_formatter = logging.Formatter(
+        "%(asctime)s | %(levelname)s | %(name)s | %(funcName)s:%(lineno)d | %(message)s"
+    )
+    file_handler.setFormatter(file_formatter)
+    
+    # Add handlers
+    root_logger.addHandler(console_handler)
+    root_logger.addHandler(file_handler)
+    
+    # Enable debug for specific Strands modules as per the guide
+    logging.getLogger("strands").setLevel(logging.DEBUG)
+    logging.getLogger("strands.tools").setLevel(logging.DEBUG)
+    logging.getLogger("strands.models").setLevel(logging.DEBUG)
+    logging.getLogger("strands.event_loop").setLevel(logging.DEBUG)
+    logging.getLogger("strands.agent").setLevel(logging.DEBUG)
+    
+    # Also enable debug for our modules
+    logging.getLogger("weather_agent").setLevel(logging.DEBUG)
+    logging.getLogger("__main__").setLevel(logging.DEBUG)
+    
+    # FastAPI/Uvicorn specific loggers
+    logging.getLogger("uvicorn").setLevel(logging.DEBUG)
+    logging.getLogger("uvicorn.access").setLevel(logging.DEBUG)
+    
+    print(f"\n🔍 Debug logging enabled. Logs will be written to: {log_file}")
+    print("📊 Console will show INFO level, file will contain DEBUG details.\n")
 
 @asynccontextmanager
 async def lifespan(app: FastAPI):
@@ -36,8 +108,8 @@ async def lifespan(app: FastAPI):
     
     for attempt in range(max_retries):
         try:
-            # Initialize agent
-            agent = await create_weather_agent()
+            # Initialize agent with debug mode if enabled
+            agent = await create_weather_agent(debug_logging=debug_mode)
             
             # Initialize session manager
             default_ttl = int(os.getenv("SESSION_DEFAULT_TTL_MINUTES", "60"))
@@ -328,12 +400,42 @@ async def clear_session(session_id: str):
         raise HTTPException(status_code=500, detail=str(e))
 
 if __name__ == "__main__":
+    # Parse command line arguments
+    parser = argparse.ArgumentParser(
+        description="AWS Strands Weather Agent API Server"
+    )
+    parser.add_argument(
+        '--debug',
+        action='store_true',
+        help='Enable debug logging with detailed Strands traces to file'
+    )
+    parser.add_argument(
+        '--port',
+        type=int,
+        default=int(os.getenv("API_PORT", "7777")),
+        help='Port to run the server on (default: 7777)'
+    )
+    parser.add_argument(
+        '--reload',
+        action='store_true',
+        default=True,
+        help='Enable auto-reload for development (default: True)'
+    )
+    
+    args = parser.parse_args()
+    
+    # Set global debug mode - check both CLI arg and environment variable
+    debug_mode = args.debug or os.getenv("WEATHER_AGENT_DEBUG", "false").lower() == "true"
+    
+    # Configure debug logging if requested
+    if debug_mode:
+        configure_debug_logging(enable_debug=True)
+    
     # Run the server
-    port = int(os.getenv("API_PORT", "7777"))
     uvicorn.run(
         "weather_agent.main:app",
         host="0.0.0.0",
-        port=port,
-        reload=True,
-        log_level="info"
+        port=args.port,
+        reload=args.reload,
+        log_level="debug" if debug_mode else "info"
     )
