@@ -16,43 +16,56 @@ This document provides an in-depth analysis of how async usage of AWS Strands ha
 
 ## Executive Summary
 
-The `fix-async` branch represents a complete overhaul of the AWS Strands implementation, moving from a hybrid async/sync pattern to a pure async architecture. This change results in:
+The `fix-async` branch represents a significant architectural improvement of the AWS Strands implementation, moving from a hybrid async/sync pattern with dedicated ThreadPoolExecutor to a pure async architecture with minimal executor usage. This change results in:
 
-- **50% code reduction**: Eliminated ThreadPoolExecutor and async/sync bridge patterns
+- **Eliminated ThreadPoolExecutor anti-pattern**: Removed dedicated async/sync bridge executor
 - **Improved error handling**: Specific exception types for different failure modes
 - **Simplified architecture**: Native MCP client management without manual orchestration
-- **Better performance**: Pure async streaming without synchronous bottlenecks
-- **Enhanced maintainability**: Cleaner separation of concerns and error boundaries
+- **Better performance**: Pure async streaming with minimal synchronous bottlenecks
+- **Enhanced maintainability**: Cleaner separation of concerns and structured error boundaries
+- **Updated infrastructure**: Modern port configuration and latest model versions
 
 ## Key Architectural Changes
 
-### 1. Elimination of ThreadPoolExecutor
+### 1. Elimination of ThreadPoolExecutor for Async/Sync Bridging
 
-**Main Branch (Anti-Pattern):**
+**Main Branch (Anti-Pattern - Async/Sync Bridge):**
 ```python
-# For async/sync bridge
+# For async/sync bridge - creates dedicated executor
 self.executor = ThreadPoolExecutor(max_workers=1)
 
-# Later in query method:
+# Later in query method - uses custom executor for sync processing:
 loop = asyncio.get_event_loop()
 response, updated_messages = await loop.run_in_executor(
-    self.executor,
-    self._process_with_clients_sync,
+    self.executor,        # Custom ThreadPoolExecutor instance
+    self._process_with_clients_sync,  # Sync wrapper method
     message,
     clients,
     session_messages
 )
 ```
 
-**Fix-Async Branch (Best Practice):**
+**Fix-Async Branch (Best Practice - Minimal Executor Usage):**
 ```python
-# Pure async - no ThreadPoolExecutor needed
+# Pure async - no ThreadPoolExecutor instance needed for bridging
+# Only uses default thread pool for Strands' sync structured_output method:
+
 async def query(self, message: str, session_id: Optional[str] = None) -> str:
-    # Direct async processing without thread pooling
+    # Direct async processing without dedicated thread pooling
     async for event in agent.stream_async(message):
         if "data" in event:
             response_text += event["data"]
+
+# Minimal executor usage only for Strands' synchronous structured_output:
+response = await loop.run_in_executor(
+    None,                 # Uses default thread pool, not custom executor
+    agent.structured_output,  # Native Strands method
+    WeatherQueryResponse,
+    message
+)
 ```
+
+**Key Difference**: Main branch creates a dedicated ThreadPoolExecutor instance for general async/sync bridging, while fix-async eliminates this pattern and only uses the default thread pool for specific Strands API requirements.
 
 ### 2. Simplified MCP Client Management
 
@@ -412,7 +425,8 @@ except Exception as e:
 | Aspect | Main Branch | Fix-Async Branch | Improvement |
 |--------|-------------|------------------|-------------|
 | Import statements | 18 lines | 16 lines | 11% reduction |
-| ThreadPoolExecutor usage | Required | Eliminated | 100% removal |
+| ThreadPoolExecutor instance | Required (custom) | Eliminated | 100% removal |
+| Executor usage pattern | Dedicated executor | Default pool only | Simplified |
 | Synchronous bridge methods | 3 methods | 0 methods | 100% removal |
 | Error handling specificity | Generic | 5 specific types | 500% improvement |
 | MCP client creation complexity | Tuple-based | Direct list | Simplified |
@@ -423,16 +437,16 @@ except Exception as e:
 ### Lines of Code Analysis
 
 **Main Branch:**
-- mcp_agent.py: ~650 lines
+- mcp_agent.py: ~712 lines
 - No exceptions.py file
-- Complex sync/async bridge patterns
+- Complex sync/async bridge patterns with dedicated ThreadPoolExecutor
 
 **Fix-Async Branch:**
-- mcp_agent.py: ~500 lines (23% reduction)
+- mcp_agent.py: ~746 lines (+34 lines)
 - exceptions.py: 74 lines (new)
-- Pure async patterns throughout
+- Pure async patterns with minimal executor usage
 
-**Net Result: ~20% code reduction with significantly improved maintainability**
+**Net Result: +34 lines in main file but +74 lines of new structured error handling = +108 total lines. However, the architecture is significantly improved with better separation of concerns, specific error types, and elimination of async/sync bridge anti-patterns.**
 
 ### Eliminated Components
 
@@ -600,7 +614,7 @@ async def query(self, message: str, session_id: Optional[str] = None) -> str:
 
 Based on the evolution from `main` to `fix-async`, here are the key best practices for AWS Strands implementations:
 
-### 1. Pure Async Architecture
+### 1. Pure Async Architecture with Minimal Executor Usage
 
 **✅ DO:**
 ```python
@@ -609,15 +623,24 @@ async def process_request(self, message: str) -> str:
     async for event in agent.stream_async(message):
         if "data" in event:
             yield event["data"]
+
+# Use default executor only for framework sync requirements
+response = await loop.run_in_executor(
+    None,  # Default thread pool, not custom executor
+    agent.structured_output,  # Framework's sync method
+    ResponseModel,
+    message
+)
 ```
 
 **❌ DON'T:**
 ```python
-# Avoid async/sync bridges with ThreadPoolExecutor
+# Avoid dedicated ThreadPoolExecutor for async/sync bridging
+self.executor = ThreadPoolExecutor(max_workers=1)
 loop = asyncio.get_event_loop()
 response = await loop.run_in_executor(
-    self.executor,
-    self._sync_method,
+    self.executor,  # Custom executor for general bridging
+    self._sync_wrapper_method,
     message
 )
 ```
