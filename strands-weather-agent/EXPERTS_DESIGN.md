@@ -11,7 +11,7 @@ The experts server is implemented as an **optional component** that can be enabl
 ### MCP Server Details
 - **Service Name**: experts-server
 - **Docker Image**: spring-agriculture-experts:dev
-- **Port**: 8010
+- **Port**: 7781
 - **Protocol**: HTTP-based MCP (Model Context Protocol)
 - **Health Endpoint**: /health
 
@@ -36,15 +36,15 @@ experts-server:
   profiles:
     - experts
   ports:
-    - "8010:8010"
+    - "7781:7781"
   environment:
     - LOG_LEVEL=${LOG_LEVEL:-INFO}
-    - MCP_PORT=8010
+    - MCP_PORT=7781
   networks:
     - weather-network
   restart: unless-stopped
   healthcheck:
-    test: ["CMD", "curl", "-f", "http://localhost:8010/health"]
+    test: ["CMD", "curl", "-f", "http://localhost:7781/health"]
     interval: 30s
     timeout: 3s
     retries: 3
@@ -61,9 +61,9 @@ Modified `weather_agent/mcp_agent.py` to handle the optional experts server:
 
 ```python
 servers = {
-    "forecast": os.getenv("MCP_FORECAST_URL", "http://localhost:8081/mcp"),
-    "historical": os.getenv("MCP_HISTORICAL_URL", "http://localhost:8082/mcp"),
-    "agricultural": os.getenv("MCP_AGRICULTURAL_URL", "http://localhost:8083/mcp")
+    "forecast": os.getenv("MCP_FORECAST_URL", "http://localhost:7778/mcp"),
+    "historical": os.getenv("MCP_HISTORICAL_URL", "http://localhost:7779/mcp"),
+    "agricultural": os.getenv("MCP_AGRICULTURAL_URL", "http://localhost:7780/mcp")
 }
 
 # Only add experts server if URL is provided (optional)
@@ -77,7 +77,7 @@ The connectivity test dynamically determines server names based on configuration
 ### 3. Testing Infrastructure
 
 #### Docker Testing (`scripts/test_docker.sh`)
-- Added conditional health check for experts server on port 8010
+- Added conditional health check for experts server on port 7781
 - Only checks experts server if it's running (detects via docker ps)
 - Shows message if experts server is not running with instructions to enable it
 - Added experts server URL to the service URLs output only when running
@@ -106,7 +106,7 @@ Updated `infra/services.cfn` CloudFormation template:
 - **ExpertsService**: ECS service configuration with Fargate launch type
 
 #### Main Service Updates
-- Added `MCP_EXPERTS_URL` environment variable pointing to `http://experts.strands-weather.local:8010/mcp/`
+- Added `MCP_EXPERTS_URL` environment variable pointing to `http://experts.strands-weather.local:7781/mcp/`
 - Added `ExpertsService` to the MainService `DependsOn` list
 
 #### Outputs
@@ -135,13 +135,13 @@ The weather agent automatically discovers tools from the experts server through 
 
 ### Required for Weather Agent
 - `MCP_EXPERTS_URL`: URL of the experts MCP server
-  - Docker: `http://experts-server:8010/mcp/`
-  - ECS: `http://experts.strands-weather.local:8010/mcp/`
-  - Local: `http://localhost:8010/mcp`
+  - Docker: `http://experts-server:7781/mcp/`
+  - ECS: `http://experts.strands-weather.local:7781/mcp/`
+  - Local: `http://localhost:7781/mcp`
 
 ### Experts Server Configuration
 - `LOG_LEVEL`: Logging verbosity (default: INFO)
-- `MCP_PORT`: Port to listen on (default: 8010)
+- `MCP_PORT`: Port to listen on (default: 7781)
 - `MCP_HOST`: Host to bind to (default: 0.0.0.0 in ECS)
 
 ## Health Monitoring
@@ -178,10 +178,10 @@ MCP servers in ECS do NOT have traditional ECS health checks configured. This is
 ### Testing Connectivity
 ```bash
 # Test health endpoint
-curl http://localhost:8010/health
+curl http://localhost:7781/health
 
 # Test MCP endpoint (requires proper headers)
-curl -X POST http://localhost:8010/mcp/ \
+curl -X POST http://localhost:7781/mcp/ \
   -H "Content-Type: application/json" \
   -H "Accept: application/json, text/event-stream" \
   -d '{"jsonrpc": "2.0", "method": "tools/list", "id": 1}'
@@ -205,7 +205,7 @@ curl -X POST http://localhost:8010/mcp/ \
 ### Running Experts Server Standalone
 ```bash
 # Run the experts server independently
-docker run -p 8010:8010 spring-agriculture-experts:dev
+docker run -p 7781:7781 spring-agriculture-experts:dev
 ```
 
 ## Future Considerations
@@ -222,7 +222,7 @@ docker run -p 8010:8010 spring-agriculture-experts:dev
 1. **Connection Refused**: Ensure the experts server is running and healthy
 2. **Tool Discovery Fails**: Check MCP server logs for errors
 3. **ECS Deployment Issues**: Verify the Docker image is accessible to ECS
-4. **Network Issues**: Ensure security groups allow traffic on port 8010
+4. **Network Issues**: Ensure security groups allow traffic on port 7781
 
 ### Debug Commands
 
@@ -234,5 +234,5 @@ docker logs mcp-experts-server
 aws logs tail /ecs/strands-weather-agent-experts --follow
 
 # Test from within Docker network
-docker exec weather-agent-app curl http://experts-server:8010/health
+docker exec weather-agent-app curl http://experts-server:7781/health
 ```

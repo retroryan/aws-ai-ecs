@@ -23,12 +23,12 @@ class DockerIntegrationTest:
     """Test suite for Docker-deployed Weather Agent system."""
     
     def __init__(self):
-        self.base_url = "http://localhost:8090"
+        self.base_url = "http://localhost:7777"
         self.services = {
-            "Weather Agent": "http://localhost:8090/health",
-            "Forecast Server": "http://localhost:8081/health",
-            "Historical Server": "http://localhost:8082/health",
-            "Agricultural Server": "http://localhost:8083/health"
+            "Weather Agent": "http://localhost:7777/health",
+            "Forecast Server": "http://localhost:7778/health",
+            "Historical Server": "http://localhost:7779/health",
+            "Agricultural Server": "http://localhost:7780/health"
         }
         self.test_queries = [
             ("What's the weather forecast for Des Moines, Iowa?", "forecast"),

@@ -50,6 +50,6 @@ docker compose $COMPOSE_PROFILES up --build -d
 echo ""
 echo "Services started!"
 if [ "$1" = "add-experts" ]; then
-    echo "Experts server included on port 8010"
+    echo "Experts server included on port 7781"
 fi
 echo "Run ./scripts/test_docker.sh to test the services"

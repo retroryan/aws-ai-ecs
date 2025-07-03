@@ -108,7 +108,7 @@ The SDK's structured_output method is synchronous, requiring the executor patter
 ```
 ┌─────────────────────┐
 │   FastAPI Server    │
-│   (Port 8090)       │
+│   (Port 7777)       │
 └──────────┬──────────┘
            │
 ┌──────────▼──────────┐
@@ -123,7 +123,7 @@ The SDK's structured_output method is synchronous, requiring the executor patter
 ┌────▼────┐ ┌───▼────┐ ┌──────▼──────┐
 │Forecast │ │History │ │Agricultural │
 │ Server  │ │ Server │ │   Server    │
-│ (8081)  │ │ (8082) │ │   (8083)    │
+│ (7778)  │ │ (7779) │ │   (7780)    │
 └─────────┘ └────────┘ └─────────────┘
 ```
 

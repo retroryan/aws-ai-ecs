@@ -35,7 +35,7 @@ cd ..
 
 # Check if MCP servers are running
 echo -e "${YELLOW}Checking MCP servers...${NC}"
-if ! lsof -i:8081 > /dev/null 2>&1; then
+if ! lsof -i:7778 > /dev/null 2>&1; then
     echo -e "${RED}MCP servers not running. Starting them...${NC}"
     ./scripts/start_servers.sh
     sleep 5

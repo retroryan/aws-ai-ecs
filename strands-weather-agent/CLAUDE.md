@@ -28,7 +28,7 @@ async def health_check(request: Request) -> JSONResponse:
 Docker Compose uses these endpoints:
 ```yaml
 healthcheck:
-  test: ["CMD", "curl", "-f", "http://localhost:8081/health"]
+  test: ["CMD", "curl", "-f", "http://localhost:7778/health"]
 ```
 
 #### For ECS Deployment
@@ -69,9 +69,9 @@ healthcheck:
 ### System Components
 
 1. **MCP Servers** (Running on separate ports):
-   - **Forecast Server** (port 8081): Weather forecast data
-   - **Historical Server** (port 8082): Historical weather information
-   - **Agricultural Server** (port 8083): Agricultural conditions and recommendations
+   - **Forecast Server** (port 7778): Weather forecast data
+   - **Historical Server** (port 7779): Historical weather information
+   - **Agricultural Server** (port 7780): Agricultural conditions and recommendations
 
 2. **Weather Agent**: 
    - Built with AWS Strands' native Agent class
@@ -166,7 +166,7 @@ This command:
 python main.py
 ```
 
-3. Access the API at http://localhost:8090
+3. Access the API at http://localhost:7777
    - Health check: GET /health
    - Submit query: POST /query
 
@@ -191,10 +191,10 @@ python -m pytest tests/test_weather_agent.py -v
 ### Important Docker Patterns
 
 1. **Port Configuration**:
-   - Weather Agent API: Port 8090
-   - Forecast Server: Port 8081
-   - Historical Server: Port 8082
-   - Agricultural Server: Port 8083
+   - Weather Agent API: Port 7777
+   - Forecast Server: Port 7778
+   - Historical Server: Port 7779
+   - Agricultural Server: Port 7780
 
 2. **Environment Variables in docker-compose.yml**:
    ```yaml
@@ -241,7 +241,7 @@ FastMCP servers require special handling for health checks in Docker:
 4. **Testing MCP Endpoints**: To properly test MCP functionality, use:
    ```bash
    # Test with proper headers
-   curl -X POST http://localhost:8081/mcp/ \
+   curl -X POST http://localhost:7778/mcp/ \
      -H "Content-Type: application/json" \
      -H "Accept: application/json, text/event-stream" \
      -d '{"jsonrpc": "2.0", "method": "mcp/list_tools", "id": 1}'
@@ -354,9 +354,9 @@ To add new capabilities:
 ./scripts/start_servers.sh
 
 # Verify servers are running
-curl http://localhost:8081/health  # Forecast server
-curl http://localhost:8082/health  # Historical server  
-curl http://localhost:8083/health  # Agricultural server
+curl http://localhost:7778/health  # Forecast server
+curl http://localhost:7779/health  # Historical server  
+curl http://localhost:7780/health  # Agricultural server
 ```
 
 #### 2. Test Basic Agent Functionality
@@ -452,12 +452,12 @@ curl -X POST http://localhost:8081/mcp/ \
   -d '{"jsonrpc": "2.0", "method": "tools/list", "id": 1}'
 
 # Test historical server  
-curl -X POST http://localhost:8082/mcp/ \
+curl -X POST http://localhost:7779/mcp/ \
   -H "Content-Type: application/json" \
   -d '{"jsonrpc": "2.0", "method": "tools/list", "id": 1}'
 
 # Test agricultural server
-curl -X POST http://localhost:8083/mcp/ \
+curl -X POST http://localhost:7780/mcp/ \
   -H "Content-Type: application/json" \
   -d '{"jsonrpc": "2.0", "method": "tools/list", "id": 1}'
 ```
@@ -486,10 +486,10 @@ asyncio.run(test())
 1. **MCP Servers Won't Start**:
    ```bash
    # Check if ports are in use
-   lsof -i :8081,8082,8083
+   lsof -i :7778,7779,7780
    
    # Kill processes using the ports
-   lsof -ti:8081,8082,8083 | xargs kill -9
+   lsof -ti:7778,7779,7780 | xargs kill -9
    
    # Restart servers
    ./scripts/start_servers.sh

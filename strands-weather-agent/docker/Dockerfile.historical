@@ -21,7 +21,7 @@ RUN useradd -m -u 1000 appuser && chown -R appuser:appuser /app
 USER appuser
 
 # Expose MCP server port
-EXPOSE 8082
+EXPOSE 7779
 
 # Health check - Custom /health endpoint added via @server.custom_route
 # Health is checked by docker-compose using the /health endpoint

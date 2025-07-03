@@ -159,9 +159,9 @@ class MCPWeatherAgent:
         """
         # Get server URLs from environment with defaults
         servers = {
-            "forecast": os.getenv("MCP_FORECAST_URL", "http://localhost:8081/mcp"),
-            "historical": os.getenv("MCP_HISTORICAL_URL", "http://localhost:8082/mcp"),
-            "agricultural": os.getenv("MCP_AGRICULTURAL_URL", "http://localhost:8083/mcp")
+            "forecast": os.getenv("MCP_FORECAST_URL", "http://localhost:7778/mcp"),
+            "historical": os.getenv("MCP_HISTORICAL_URL", "http://localhost:7779/mcp"),
+            "agricultural": os.getenv("MCP_AGRICULTURAL_URL", "http://localhost:7780/mcp")
         }
         
         # Only add experts server if URL is provided (optional)
@@ -199,9 +199,9 @@ class MCPWeatherAgent:
         # Dynamically determine server names based on what was configured
         server_names = []
         servers_config = {
-            "forecast": os.getenv("MCP_FORECAST_URL", "http://localhost:8081/mcp"),
-            "historical": os.getenv("MCP_HISTORICAL_URL", "http://localhost:8082/mcp"),
-            "agricultural": os.getenv("MCP_AGRICULTURAL_URL", "http://localhost:8083/mcp")
+            "forecast": os.getenv("MCP_FORECAST_URL", "http://localhost:7778/mcp"),
+            "historical": os.getenv("MCP_HISTORICAL_URL", "http://localhost:7779/mcp"),
+            "agricultural": os.getenv("MCP_AGRICULTURAL_URL", "http://localhost:7780/mcp")
         }
         if os.getenv("MCP_EXPERTS_URL"):
             servers_config["experts"] = os.getenv("MCP_EXPERTS_URL")

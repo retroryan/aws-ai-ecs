@@ -44,7 +44,7 @@ sleep 5
 
 # Test server health
 echo -e "\n${YELLOW}Testing server health...${NC}"
-for port in 8081 8082 8083; do
+for port in 7778 7779 7780; do
     if curl -s -f "http://localhost:$port/health" > /dev/null; then
         echo -e "${GREEN}✅ Server on port $port is healthy${NC}"
     else

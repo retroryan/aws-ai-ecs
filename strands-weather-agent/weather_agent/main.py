@@ -329,7 +329,7 @@ async def clear_session(session_id: str):
 
 if __name__ == "__main__":
     # Run the server
-    port = int(os.getenv("API_PORT", "8090"))
+    port = int(os.getenv("API_PORT", "7777"))
     uvicorn.run(
         "weather_agent.main:app",
         host="0.0.0.0",
