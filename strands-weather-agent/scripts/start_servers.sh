@@ -59,8 +59,6 @@ start_server() {
 start_server "forecast" "mcp_servers/forecast_server.py" "7778"
 start_server "historical" "mcp_servers/historical_server.py" "7779" 
 start_server "agricultural" "mcp_servers/agricultural_server.py" "7780"
-# Note: The experts server is a Docker image, not a Python script, so it's not started here
-# To run it locally, use: docker run -p 7781:7781 spring-agriculture-experts:dev
 
 echo ""
 echo -e "${GREEN}All servers have been started.${NC}"
@@ -69,7 +67,6 @@ echo "Server endpoints:"
 echo "  - Forecast:     http://127.0.0.1:7778/mcp"
 echo "  - Historical:   http://127.0.0.1:7779/mcp"
 echo "  - Agricultural: http://127.0.0.1:7780/mcp"
-echo "  - Experts:      http://127.0.0.1:7781/mcp (run separately with Docker)"
 echo ""
 echo "Logs are available in the logs/ directory:"
 echo "  - logs/forecast.log"

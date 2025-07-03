@@ -28,11 +28,6 @@ Parameters:
     Default: latest
     Description: Docker image tag for the agricultural server
   
-  ExpertsImageTag:
-    Type: String
-    Default: dev
-    Description: Docker image tag for the experts server
-  
   BedrockModelId:
     Type: String
     Default: amazon.nova-lite-v1:0
@@ -90,12 +85,6 @@ Resources:
       LogGroupName: /ecs/strands-weather-agent-agricultural
       RetentionInDays: 7
 
-  ExpertsLogGroup:
-    Type: AWS::Logs::LogGroup
-    Properties:
-      LogGroupName: /ecs/strands-weather-agent-experts
-      RetentionInDays: 7
-
   # Service Discovery Services
   ForecastServiceDiscovery:
     Type: AWS::ServiceDiscovery::Service
@@ -127,19 +116,6 @@ Resources:
     Type: AWS::ServiceDiscovery::Service
     Properties:
       Name: agricultural
-      NamespaceId:
-        Fn::ImportValue: !Sub ${BaseStackName}-namespace-id
-      DnsConfig:
-        DnsRecords:
-          - Type: A
-            TTL: 60
-      HealthCheckCustomConfig:
-        FailureThreshold: 1
-
-  ExpertsServiceDiscovery:
-    Type: AWS::ServiceDiscovery::Service
-    Properties:
-      Name: experts
       NamespaceId:
         Fn::ImportValue: !Sub ${BaseStackName}-namespace-id
       DnsConfig:
@@ -249,39 +225,6 @@ Resources:
               awslogs-region: !Ref AWS::Region
               awslogs-stream-prefix: ecs
 
-  ExpertsTaskDefinition:
-    Type: AWS::ECS::TaskDefinition
-    Properties:
-      Family: strands-weather-agent-experts
-      Cpu: '256'
-      Memory: '512'
-      NetworkMode: awsvpc
-      RequiresCompatibilities:
-        - FARGATE
-      ExecutionRoleArn:
-        Fn::ImportValue: !Sub ${BaseStackName}-execution-role
-      TaskRoleArn:
-        Fn::ImportValue: !Sub ${BaseStackName}-task-role
-      ContainerDefinitions:
-        - Name: experts-server
-          Image: !Sub spring-agriculture-experts:${ExpertsImageTag}
-          PortMappings:
-            - ContainerPort: 7781
-              Protocol: tcp
-          Environment:
-            - Name: MCP_HOST
-              Value: 0.0.0.0
-            - Name: MCP_PORT
-              Value: 7781
-            - Name: LOG_LEVEL
-              Value: !Ref LogLevel
-          LogConfiguration:
-            LogDriver: awslogs
-            Options:
-              awslogs-group: !Ref ExpertsLogGroup
-              awslogs-region: !Ref AWS::Region
-              awslogs-stream-prefix: ecs
-
   MainTaskDefinition:
     Type: AWS::ECS::TaskDefinition
     Properties:
@@ -316,8 +259,6 @@ Resources:
               Value: http://historical.strands-weather.local:7779/mcp/
             - Name: MCP_AGRICULTURAL_URL
               Value: http://agricultural.strands-weather.local:7780/mcp/
-            - Name: MCP_EXPERTS_URL
-              Value: http://experts.strands-weather.local:7781/mcp/
           LogConfiguration:
             LogDriver: awslogs
             Options:
@@ -394,33 +335,12 @@ Resources:
       ServiceRegistries:
         - RegistryArn: !GetAtt AgriculturalServiceDiscovery.Arn
 
-  ExpertsService:
-    Type: AWS::ECS::Service
-    Properties:
-      ServiceName: strands-weather-agent-experts
-      Cluster:
-        Fn::ImportValue: !Sub ${BaseStackName}-cluster-name
-      TaskDefinition: !Ref ExpertsTaskDefinition
-      DesiredCount: 1
-      LaunchType: FARGATE
-      NetworkConfiguration:
-        AwsvpcConfiguration:
-          Subnets:
-            - Fn::ImportValue: !Sub ${BaseStackName}-private-subnet-1
-            - Fn::ImportValue: !Sub ${BaseStackName}-private-subnet-2
-          SecurityGroups:
-            - Fn::ImportValue: !Sub ${BaseStackName}-service-sg
-          AssignPublicIp: ENABLED
-      ServiceRegistries:
-        - RegistryArn: !GetAtt ExpertsServiceDiscovery.Arn
-
   MainService:
     Type: AWS::ECS::Service
     DependsOn:
       - ForecastService
       - HistoricalService
       - AgriculturalService
-      - ExpertsService
     Properties:
       ServiceName: strands-weather-agent-main
       Cluster:
@@ -495,12 +415,6 @@ Outputs:
     Value: !GetAtt AgriculturalService.Name
     Export:
       Name: !Sub ${AWS::StackName}-agricultural-service
-
-  ExpertsServiceName:
-    Description: Experts Service Name
-    Value: !GetAtt ExpertsService.Name
-    Export:
-      Name: !Sub ${AWS::StackName}-experts-service
 
   ApplicationURL:
     Description: Application URL

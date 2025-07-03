@@ -62,27 +62,6 @@ services:
       retries: 3
       start_period: 5s
 
-  # Spring Agriculture Experts MCP Server (Optional - activated with profile)
-  experts-server:
-    image: spring-agriculture-experts:dev
-    container_name: mcp-experts-server
-    profiles:
-      - experts
-    ports:
-      - "7781:7781"
-    environment:
-      - LOG_LEVEL=${LOG_LEVEL:-INFO}
-      - MCP_PORT=7781
-    networks:
-      - weather-network
-    restart: unless-stopped
-    healthcheck:
-      test: ["CMD", "curl", "-f", "http://localhost:7781/health"]
-      interval: 30s
-      timeout: 3s
-      retries: 3
-      start_period: 5s
-
   # Weather Agent Application
   weather-agent:
     build:
@@ -105,7 +84,6 @@ services:
       - MCP_FORECAST_URL=http://forecast-server:7778/mcp/
       - MCP_HISTORICAL_URL=http://historical-server:7779/mcp/
       - MCP_AGRICULTURAL_URL=http://agricultural-server:7780/mcp/
-      - MCP_EXPERTS_URL=http://experts-server:7781/mcp/
       # API Configuration
       - API_PORT=7777
       # Logging
