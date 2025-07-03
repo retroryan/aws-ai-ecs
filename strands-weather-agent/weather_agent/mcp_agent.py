@@ -164,11 +164,6 @@ class MCPWeatherAgent:
             "agricultural": os.getenv("MCP_AGRICULTURAL_URL", "http://localhost:7780/mcp")
         }
         
-        # Only add experts server if URL is provided (optional)
-        experts_url = os.getenv("MCP_EXPERTS_URL")
-        if experts_url:
-            servers["experts"] = experts_url
-        
         clients = []
         for name, url in servers.items():
             try:
@@ -203,8 +198,6 @@ class MCPWeatherAgent:
             "historical": os.getenv("MCP_HISTORICAL_URL", "http://localhost:7779/mcp"),
             "agricultural": os.getenv("MCP_AGRICULTURAL_URL", "http://localhost:7780/mcp")
         }
-        if os.getenv("MCP_EXPERTS_URL"):
-            servers_config["experts"] = os.getenv("MCP_EXPERTS_URL")
         server_names = list(servers_config.keys())
         
         for i, client in enumerate(self.mcp_clients):
