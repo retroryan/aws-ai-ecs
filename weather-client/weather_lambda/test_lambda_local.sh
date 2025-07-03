@@ -42,9 +42,20 @@ docker run -d \
     -p $PORT:8080 \
     $IMAGE_NAME
 
-# Wait for container to be ready
+# Wait for container to be ready with polling
 echo -e "${YELLOW}⏳ Waiting for Lambda to be ready...${NC}"
-sleep 3
+for i in {1..30}; do
+    if curl -s -o /dev/null -w "%{http_code}" http://localhost:$PORT/2015-03-31/functions/function/invocations | grep -q "200"; then
+        echo -e "${GREEN}✅ Lambda is ready!${NC}"
+        break
+    fi
+    echo -e "${YELLOW}⏳ Still waiting...${NC}"
+    sleep 1
+done
+if [ $i -eq 30 ]; then
+    echo -e "${RED}❌ Lambda did not become ready in time.${NC}"
+    exit 1
+fi
 
 # Function to test endpoint
 test_endpoint() {
