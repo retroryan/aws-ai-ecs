@@ -12,7 +12,7 @@ This demonstrates how MCP servers work with AWS Strands:
 import asyncio
 import sys
 import logging
-from typing import Optional
+from typing import Optional, List
 from datetime import datetime
 from pathlib import Path
 
@@ -90,16 +90,33 @@ def configure_debug_logging(enable_debug: bool = False):
 class SimpleWeatherChatbot:
     """A simple chatbot that uses MCP servers for weather data via Strands."""
     
-    def __init__(self, debug_logging: bool = False):
+    def __init__(self, 
+                 debug_logging: bool = False,
+                 enable_telemetry: bool = True,
+                 telemetry_user_id: Optional[str] = None,
+                 telemetry_session_id: Optional[str] = None,
+                 telemetry_tags: Optional[List[str]] = None):
         self.agent: Optional[MCPWeatherAgent] = None
         self.debug_logging = debug_logging
+        self.enable_telemetry = enable_telemetry
+        self.telemetry_user_id = telemetry_user_id
+        self.telemetry_session_id = telemetry_session_id
+        self.telemetry_tags = telemetry_tags or ["chatbot"]
         self.initialized = False
     
     async def initialize(self):
         """Initialize the Strands agent with MCP connections."""
         if not self.initialized:
             print("🔌 Initializing AWS Strands agent with MCP connections...")
-            self.agent = await create_weather_agent(debug_logging=self.debug_logging)
+            if self.enable_telemetry:
+                print("📊 Langfuse telemetry enabled")
+            self.agent = await create_weather_agent(
+                debug_logging=self.debug_logging,
+                enable_telemetry=self.enable_telemetry,
+                telemetry_user_id=self.telemetry_user_id,
+                telemetry_session_id=self.telemetry_session_id,
+                telemetry_tags=self.telemetry_tags
+            )
             self.initialized = True
             print("✅ Ready to answer weather questions!\n")
     
@@ -138,7 +155,10 @@ async def interactive_mode():
     print("\nType 'quit' to exit, 'help' for more info")
     print("Type 'debug' to toggle detailed logging\n")
     
-    chatbot = SimpleWeatherChatbot()
+    chatbot = SimpleWeatherChatbot(
+        telemetry_user_id="interactive-user",
+        telemetry_tags=["chatbot", "interactive"]
+    )
     debug_enabled = False
     
     try:
@@ -165,7 +185,11 @@ async def interactive_mode():
                 if query.lower() == 'debug':
                     debug_enabled = not debug_enabled
                     # Recreate chatbot with new setting
-                    chatbot = SimpleWeatherChatbot(debug_logging=debug_enabled)
+                    chatbot = SimpleWeatherChatbot(
+                        debug_logging=debug_enabled,
+                        telemetry_user_id="interactive-user",
+                        telemetry_tags=["chatbot", "interactive"]
+                    )
                     await chatbot.initialize()
                     print(f"\n🔧 Debug logging: {'ON' if debug_enabled else 'OFF'}")
                     continue
@@ -187,7 +211,13 @@ async def interactive_mode():
 
 async def demo_mode(show_debug: bool = False):
     """Run a demo showing Strands and MCP in action."""
-    chatbot = SimpleWeatherChatbot(debug_logging=show_debug)
+    demo_session_id = f"demo-{datetime.now().strftime('%Y%m%d-%H%M%S')}"
+    chatbot = SimpleWeatherChatbot(
+        debug_logging=show_debug,
+        telemetry_user_id="demo-user",
+        telemetry_session_id=demo_session_id,
+        telemetry_tags=["chatbot", "demo", "weather-agent"]
+    )
     
     if show_debug:
         print("🌤️  AWS Strands Weather Demo with Debug Logging")

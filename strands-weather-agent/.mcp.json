@@ -8,15 +8,6 @@
       "command": "uvx",
       "args": ["awslabs.aws-documentation-mcp-server"]
     },
-    "aws-cloudformation": {
-      "command": "uvx",
-      "args": ["awslabs.cloudformation-mcp-server"],
-      "env": {
-        "FASTMCP_LOG_LEVEL": "ERROR"
-      },
-      "disabled": false,
-      "autoApprove": []
-    },
     "aws-iam": {
       "command": "uvx",
       "args": ["awslabs.iam-mcp-server"],
@@ -29,24 +20,6 @@
     "aws-cdk": {
       "command": "uvx",
       "args": ["awslabs.cdk-mcp-server"],
-      "env": {
-        "FASTMCP_LOG_LEVEL": "ERROR"
-      },
-      "disabled": false,
-      "autoApprove": []
-    },
-    "code-documentation": {
-      "command": "uvx",
-      "args": ["awslabs.code-documentation-generation-mcp-server"],
-      "env": {
-        "FASTMCP_LOG_LEVEL": "ERROR"
-      },
-      "disabled": false,
-      "autoApprove": []
-    },
-    "aws-diagram": {
-      "command": "uvx",
-      "args": ["awslabs.diagram-mcp-server"],
       "env": {
         "FASTMCP_LOG_LEVEL": "ERROR"
       },

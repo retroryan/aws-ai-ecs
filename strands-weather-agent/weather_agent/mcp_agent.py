@@ -38,6 +38,7 @@ try:
         WeatherAgentError, MCPConnectionError, 
         StructuredOutputError, ModelInvocationError
     )
+    from .langfuse_telemetry import LangfuseTelemetry, configure_langfuse_from_env
 except ImportError:
     from models.structured_responses import (
         WeatherQueryResponse, ExtractedLocation, WeatherDataSummary,
@@ -48,6 +49,7 @@ except ImportError:
         WeatherAgentError, MCPConnectionError, 
         StructuredOutputError, ModelInvocationError
     )
+    from langfuse_telemetry import LangfuseTelemetry, configure_langfuse_from_env
 
 # Type variable for structured output
 T = TypeVar('T')
@@ -79,7 +81,11 @@ class MCPWeatherAgent:
     def __init__(self, 
                  debug_logging: bool = False, 
                  prompt_type: Optional[str] = None, 
-                 session_storage_dir: Optional[str] = None):
+                 session_storage_dir: Optional[str] = None,
+                 enable_telemetry: bool = True,
+                 telemetry_user_id: Optional[str] = None,
+                 telemetry_session_id: Optional[str] = None,
+                 telemetry_tags: Optional[List[str]] = None):
         """
         Initialize the weather agent.
         
@@ -87,9 +93,25 @@ class MCPWeatherAgent:
             debug_logging: Enable detailed debug logging for tool calls
             prompt_type: System prompt type (default, agriculture, simple)
             session_storage_dir: Directory for file-based session storage
+            enable_telemetry: Enable Langfuse telemetry
+            telemetry_user_id: User ID for telemetry tracking
+            telemetry_session_id: Session ID for telemetry grouping
+            telemetry_tags: Tags for telemetry filtering
         """
         # Validate environment variables first
         self._validate_environment()
+        
+        # Initialize telemetry BEFORE creating the model
+        self.telemetry_enabled = enable_telemetry
+        self.telemetry = None
+        if enable_telemetry:
+            self.telemetry = configure_langfuse_from_env(
+                service_name="weather-agent",
+                environment=os.getenv("ENVIRONMENT", "production")
+            )
+            if not self.telemetry.is_enabled():
+                logger.warning("Langfuse telemetry requested but not configured properly")
+                self.telemetry_enabled = False
         
         # Model configuration
         self.model_id = os.getenv("BEDROCK_MODEL_ID", 
@@ -131,8 +153,14 @@ class MCPWeatherAgent:
         self._connectivity_cache = {}
         self._last_connectivity_check = None
         
+        # Store telemetry configuration for agent creation
+        self.telemetry_user_id = telemetry_user_id
+        self.telemetry_session_id = telemetry_session_id or str(uuid.uuid4())
+        self.telemetry_tags = telemetry_tags or ["weather-agent", "mcp"]
+        
         logger.info(f"Initialized MCPWeatherAgent with model: {self.model_id}")
         logger.info(f"MCP servers configured: {len(self.mcp_clients)}")
+        logger.info(f"Telemetry enabled: {self.telemetry_enabled}")
     
     def _validate_environment(self):
         """
@@ -251,13 +279,29 @@ class MCPWeatherAgent:
             raise MCPConnectionError("No MCP servers available", 
                                    Exception("All MCP servers failed to provide tools"))
         
-        # Create agent with native configuration
+        # Create trace attributes for Langfuse if enabled
+        trace_attributes = {}
+        if self.telemetry_enabled and self.telemetry:
+            trace_attributes = self.telemetry.create_trace_attributes(
+                session_id=self.telemetry_session_id,
+                user_id=self.telemetry_user_id,
+                tags=self.telemetry_tags,
+                metadata={
+                    "prompt_type": self.prompt_type,
+                    "model_id": self.model_id,
+                    "mcp_servers_count": len(all_tools),
+                    "environment": os.getenv("ENVIRONMENT", "production")
+                }
+            )
+        
+        # Create agent with native configuration and trace attributes
         agent = Agent(
             model=self.bedrock_model,
             system_prompt=self.prompt_manager.get_prompt(self.prompt_type),
             tools=all_tools,
             messages=session_messages or [],
-            conversation_manager=self.conversation_manager
+            conversation_manager=self.conversation_manager,
+            trace_attributes=trace_attributes if trace_attributes else None
         )
         
         return agent
@@ -313,6 +357,14 @@ class MCPWeatherAgent:
                 # Update session with new messages
                 if session_id:
                     self._save_session_messages(session_id, agent.messages)
+                
+                # Force flush telemetry if enabled (important for demos/testing)
+                if self.telemetry_enabled:
+                    try:
+                        from .langfuse_telemetry import force_flush_telemetry
+                        force_flush_telemetry()
+                    except Exception as e:
+                        logger.debug(f"Failed to flush telemetry: {e}")
                 
                 return response_text
             
@@ -715,7 +767,11 @@ class MCPWeatherAgent:
 
 async def create_weather_agent(
     debug_logging: bool = False, 
-    prompt_type: Optional[str] = None
+    prompt_type: Optional[str] = None,
+    enable_telemetry: bool = True,
+    telemetry_user_id: Optional[str] = None,
+    telemetry_session_id: Optional[str] = None,
+    telemetry_tags: Optional[List[str]] = None
 ) -> MCPWeatherAgent:
     """
     Create and initialize a weather agent.
@@ -726,6 +782,10 @@ async def create_weather_agent(
     Args:
         debug_logging: Enable debug logging
         prompt_type: System prompt type
+        enable_telemetry: Enable Langfuse telemetry
+        telemetry_user_id: User ID for telemetry tracking
+        telemetry_session_id: Session ID for telemetry grouping
+        telemetry_tags: Tags for telemetry filtering
         
     Returns:
         Initialized MCPWeatherAgent
@@ -735,7 +795,11 @@ async def create_weather_agent(
     """
     agent = MCPWeatherAgent(
         debug_logging=debug_logging, 
-        prompt_type=prompt_type
+        prompt_type=prompt_type,
+        enable_telemetry=enable_telemetry,
+        telemetry_user_id=telemetry_user_id,
+        telemetry_session_id=telemetry_session_id,
+        telemetry_tags=telemetry_tags
     )
     
     # Test connectivity as best practice
