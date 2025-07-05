@@ -73,13 +73,13 @@ services:
     environment:
       # AWS Bedrock Configuration
       - BEDROCK_MODEL_ID=${BEDROCK_MODEL_ID}
-      - BEDROCK_REGION=${BEDROCK_REGION:-us-west-2}
+      - BEDROCK_REGION=${BEDROCK_REGION:-us-east-1}
       - BEDROCK_TEMPERATURE=${BEDROCK_TEMPERATURE:-0}
       # AWS Credentials (if not using IAM role)
       - AWS_ACCESS_KEY_ID=${AWS_ACCESS_KEY_ID}
       - AWS_SECRET_ACCESS_KEY=${AWS_SECRET_ACCESS_KEY}
       - AWS_SESSION_TOKEN=${AWS_SESSION_TOKEN}
-      - AWS_DEFAULT_REGION=${AWS_DEFAULT_REGION:-us-west-2}
+      - AWS_DEFAULT_REGION=${AWS_DEFAULT_REGION:-us-east-1}
       # MCP Server URLs (internal Docker network)
       - MCP_FORECAST_URL=http://forecast-server:7778/mcp/
       - MCP_HISTORICAL_URL=http://historical-server:7779/mcp/
@@ -90,6 +90,15 @@ services:
       - LOG_LEVEL=${LOG_LEVEL:-INFO}
       # Debug Mode
       - WEATHER_AGENT_DEBUG=${WEATHER_AGENT_DEBUG:-false}
+      # Langfuse Telemetry Configuration
+      - LANGFUSE_PUBLIC_KEY=${LANGFUSE_PUBLIC_KEY}
+      - LANGFUSE_SECRET_KEY=${LANGFUSE_SECRET_KEY}
+      - LANGFUSE_HOST=${LANGFUSE_HOST_DOCKER:-http://langfuse-web:3000}
+      - ENABLE_TELEMETRY=${ENABLE_TELEMETRY:-false}
+      - TELEMETRY_USER_ID=${TELEMETRY_USER_ID:-docker-user}
+      - TELEMETRY_SESSION_ID=${TELEMETRY_SESSION_ID}
+      - TELEMETRY_TAGS=${TELEMETRY_TAGS:-weather-agent,docker}
+      - ENVIRONMENT=${ENVIRONMENT:-production}
     depends_on:
       forecast-server:
         condition: service_healthy

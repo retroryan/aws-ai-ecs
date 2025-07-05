@@ -51,6 +51,18 @@ If metrics aren't showing up:
 
 ## Documentation
 
+### Langfuse Integration Guide
+For comprehensive setup instructions, including Docker deployment, see [LANGFUSE_INTEGRATION.md](./LANGFUSE_INTEGRATION.md).
+
+### Docker-Specific Setup
+When running with Docker, additional configuration is required:
+- Network configuration to connect to Langfuse
+- Environment variable mapping for container communication
+- Special host configuration for Docker networking
+
+See the [Docker Deployment Setup](./LANGFUSE_INTEGRATION.md#docker-deployment-setup) section in the integration guide.
+
+### Additional Resources
 For detailed implementation guides and troubleshooting, see the parent [strands-metrics-guide](../../strands-metrics-guide/) directory:
 - Complete Langfuse integration documentation
 - Debug logging strategies

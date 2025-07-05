@@ -108,8 +108,17 @@ async def lifespan(app: FastAPI):
     
     for attempt in range(max_retries):
         try:
-            # Initialize agent with debug mode if enabled
-            agent = await create_weather_agent(debug_logging=debug_mode)
+            # Initialize agent with debug mode and telemetry if enabled
+            enable_telemetry = os.getenv("ENABLE_TELEMETRY", "false").lower() == "true"
+            telemetry_user_id = os.getenv("TELEMETRY_USER_ID", "api-user")
+            telemetry_tags = os.getenv("TELEMETRY_TAGS", "weather-agent,api").split(",")
+            
+            agent = await create_weather_agent(
+                debug_logging=debug_mode,
+                enable_telemetry=enable_telemetry,
+                telemetry_user_id=telemetry_user_id,
+                telemetry_tags=telemetry_tags
+            )
             
             # Initialize session manager
             default_ttl = int(os.getenv("SESSION_DEFAULT_TTL_MINUTES", "60"))

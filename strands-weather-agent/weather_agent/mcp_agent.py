@@ -116,7 +116,7 @@ class MCPWeatherAgent:
         # Model configuration
         self.model_id = os.getenv("BEDROCK_MODEL_ID", 
                                   "anthropic.claude-3-5-sonnet-20241022-v2:0")
-        self.region = os.getenv("BEDROCK_REGION", "us-west-2")
+        self.region = os.getenv("BEDROCK_REGION", "us-east-1")
         self.temperature = float(os.getenv("BEDROCK_TEMPERATURE", "0"))
         
         # Create Bedrock model with proper configuration

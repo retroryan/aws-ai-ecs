@@ -88,7 +88,7 @@ if [ -z "$BEDROCK_MODEL_ID" ]; then
 fi
 
 if [ -z "$BEDROCK_REGION" ]; then
-    export BEDROCK_REGION="us-west-2"
+    export BEDROCK_REGION="us-east-1"
     echo -e "${YELLOW}Using default BEDROCK_REGION: $BEDROCK_REGION${NC}"
 fi
 
