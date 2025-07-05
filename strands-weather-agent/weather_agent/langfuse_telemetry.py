@@ -33,6 +33,9 @@ from strands.telemetry import StrandsTelemetry
 # Configure logging
 logger = logging.getLogger(__name__)
 
+# Global flag to track if telemetry has been initialized
+_TELEMETRY_INITIALIZED = False
+
 
 class LangfuseTelemetry:
     """
@@ -85,6 +88,14 @@ class LangfuseTelemetry:
         3. Explicitly initialize StrandsTelemetry
         4. Use proper authentication headers
         """
+        global _TELEMETRY_INITIALIZED
+        
+        # Skip if already initialized globally
+        if _TELEMETRY_INITIALIZED:
+            logger.info("Langfuse telemetry already initialized, skipping")
+            self.telemetry_initialized = True
+            return
+            
         try:
             # Create auth token for OTEL authentication
             auth_token = base64.b64encode(
@@ -110,6 +121,7 @@ class LangfuseTelemetry:
             telemetry.setup_otlp_exporter()
             
             self.telemetry_initialized = True
+            _TELEMETRY_INITIALIZED = True  # Set global flag
             logger.info(f"Langfuse telemetry initialized successfully")
             logger.info(f"  Host: {self.host}")
             logger.info(f"  Service: {self.service_name}")

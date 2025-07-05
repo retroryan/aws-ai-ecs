@@ -366,11 +366,16 @@ Key environment variables (configured in `.env`):
 - MCP server ports are configured in the server files (7778, 7779, 7780)
 
 ### Supported Bedrock Models
-- `anthropic.claude-3-5-sonnet-20241022-v2:0` (Latest, recommended)
-- `anthropic.claude-3-5-sonnet-20240620-v1:0` (Stable)
-- `anthropic.claude-3-haiku-20240307-v1:0` (Fast & cost-effective)
-- `meta.llama3-70b-instruct-v1:0`
-- `cohere.command-r-plus-v1:0`
+
+**IMPORTANT**: AWS Bedrock now requires inference profiles for most models. Use the `us.` prefix for cross-region redundancy:
+
+- `us.anthropic.claude-3-5-sonnet-20241022-v2:0` (Latest, recommended - uses inference profile)
+- `us.anthropic.claude-3-5-sonnet-20240620-v1:0` (Stable - uses inference profile)
+- `us.anthropic.claude-3-5-haiku-20241022-v1:0` (Fast & cost-effective - uses inference profile)
+- `us.meta.llama3-1-70b-instruct-v1:0` (Open source - uses inference profile)
+- `cohere.command-r-plus-v1:0` (RAG optimized - may not require profile)
+
+Note: The `us.` prefix indicates an inference profile that provides cross-region failover between us-east-1 and us-west-2. The `scripts/aws-setup.sh` script will automatically detect and use inference profiles when available.
 
 ## Recent Improvements and Updates
 

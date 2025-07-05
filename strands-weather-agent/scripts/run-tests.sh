@@ -83,7 +83,7 @@ pip install -q -r requirements.txt
 
 # Set required environment variables if not already set
 if [ -z "$BEDROCK_MODEL_ID" ]; then
-    export BEDROCK_MODEL_ID="us.anthropic.claude-3-7-sonnet-20250219-v1:0"
+    export BEDROCK_MODEL_ID="us.anthropic.claude-3-5-sonnet-20241022-v2:0"
     echo -e "${YELLOW}Using default BEDROCK_MODEL_ID: $BEDROCK_MODEL_ID${NC}"
 fi
 

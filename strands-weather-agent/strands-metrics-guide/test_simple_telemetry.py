@@ -63,7 +63,7 @@ async def test_simple_query():
         traceback.print_exc()
 
 if __name__ == "__main__":
-    # Export AWS credentials if needed
-    os.system("export $(aws configure export-credentials --format env-no-export 2>/dev/null)")
+    # Note: Ensure AWS credentials are configured before running
+    # You can use: export $(aws configure export-credentials --format env-no-export)
     
     asyncio.run(test_simple_query())

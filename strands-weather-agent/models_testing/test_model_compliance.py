@@ -83,34 +83,28 @@ class ModelComplianceTester:
     MODELS_TO_TEST = [
         # Anthropic Claude Models
         {
-            "id": "anthropic.claude-sonnet-4-20250514-v1:0",
-            "name": "Claude Sonnet 4",
-            "provider": "Anthropic",
-            "description": "Newest Claude 4 model, cutting-edge capabilities"
-        },
-        {
-            "id": "anthropic.claude-3-7-sonnet-20250219-v1:0",
-            "name": "Claude 3.7 Sonnet",
-            "provider": "Anthropic",
-            "description": "Latest Claude 3.x model, excellent structured output compliance"
-        },
-        {
-            "id": "anthropic.claude-3-5-sonnet-20241022-v2:0",
+            "id": "us.anthropic.claude-3-5-sonnet-20241022-v2:0",
             "name": "Claude 3.5 Sonnet v2",
             "provider": "Anthropic",
-            "description": "Strong structured output support, cost-effective"
+            "description": "Latest Claude model with inference profile, excellent structured output"
         },
         {
-            "id": "anthropic.claude-3-5-sonnet-20240620-v1:0",
-            "name": "Claude 3.5 Sonnet v1",
-            "provider": "Anthropic",
-            "description": "Proven reliable, tested extensively"
-        },
-        {
-            "id": "anthropic.claude-3-5-haiku-20241022-v1:0",
+            "id": "us.anthropic.claude-3-5-haiku-20241022-v1:0",
             "name": "Claude 3.5 Haiku",
             "provider": "Anthropic",
-            "description": "Fast and cost-effective, may struggle with complex output"
+            "description": "Fast and cost-effective with inference profile"
+        },
+        {
+            "id": "us.anthropic.claude-3-5-sonnet-20240620-v1:0",
+            "name": "Claude 3.5 Sonnet v1",
+            "provider": "Anthropic",
+            "description": "Proven reliable with inference profile"
+        },
+        {
+            "id": "anthropic.claude-3-haiku-20240307-v1:0",
+            "name": "Claude 3 Haiku",
+            "provider": "Anthropic",
+            "description": "Older Haiku model without inference profile"
         },
         {
             "id": "anthropic.claude-3-opus-20240229-v1:0",
@@ -165,10 +159,10 @@ class ModelComplianceTester:
             "description": "Largest Llama model, best reasoning capabilities"
         },
         {
-            "id": "meta.llama3-1-70b-instruct-v1:0",
+            "id": "us.meta.llama3-1-70b-instruct-v1:0",
             "name": "Llama 3.1 70B",
             "provider": "Meta",
-            "description": "Good balance of capability and speed"
+            "description": "Good balance with inference profile support"
         },
         
         # Cohere Models
@@ -602,10 +596,10 @@ async def main():
     # Quick test mode - only test a few key models
     if args.quick:
         quick_models = [
-            "anthropic.claude-sonnet-4-20250514-v1:0",
-            "anthropic.claude-3-7-sonnet-20250219-v1:0",
+            "us.anthropic.claude-3-5-sonnet-20241022-v2:0",
+            "us.anthropic.claude-3-5-haiku-20241022-v1:0",
             "amazon.nova-premier-v1:0",
-            "meta.llama3-3-70b-instruct-v1:0",
+            "us.meta.llama3-1-70b-instruct-v1:0",
             "cohere.command-r-plus-v1:0"
         ]
         await tester.run_all_tests(models_to_test=quick_models)
