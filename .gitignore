@@ -289,3 +289,8 @@ samconfig.toml
 # Project specific
 .image-tags
 bedrock.env
+HELP.md
+.kotlin
+infra/.image-tags
+infra/build-*.log
+infra/push-*.log

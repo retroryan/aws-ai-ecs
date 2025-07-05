@@ -58,7 +58,7 @@ class MCPWeatherAgent:
     def __init__(self):
         # Get configuration from environment
         model_id = os.getenv("BEDROCK_MODEL_ID")
-        region = os.getenv("BEDROCK_REGION", "us-west-2")
+        region = os.getenv("BEDROCK_REGION", "us-east-1")
         temperature = float(os.getenv("BEDROCK_TEMPERATURE", "0"))
         
         # Require BEDROCK_MODEL_ID to be set

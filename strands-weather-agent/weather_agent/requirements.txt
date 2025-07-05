@@ -27,3 +27,6 @@ fastmcp>=0.1.7
 # Basic utilities
 colorama>=0.4.6  # For colored console output
 pyyaml>=6.0.1    # For configuration files if needed
+
+# Observability and monitoring
+langfuse>=3.1.2  # LLM observability platform with OTEL support

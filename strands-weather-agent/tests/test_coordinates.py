@@ -312,7 +312,7 @@ class TestDirectMCPServer:
         try:
             # Check if server is running
             async with httpx.AsyncClient() as client:
-                response = await client.get("http://localhost:8081/health")
+                response = await client.get("http://localhost:7778/health")
                 if response.status_code != 200:
                     pytest.skip("Forecast server not running")
         except:

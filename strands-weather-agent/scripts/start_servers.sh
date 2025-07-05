@@ -56,17 +56,17 @@ start_server() {
 }
 
 # Start all servers
-start_server "forecast" "mcp_servers/forecast_server.py" "8081"
-start_server "historical" "mcp_servers/historical_server.py" "8082" 
-start_server "agricultural" "mcp_servers/agricultural_server.py" "8083"
+start_server "forecast" "mcp_servers/forecast_server.py" "7778"
+start_server "historical" "mcp_servers/historical_server.py" "7779" 
+start_server "agricultural" "mcp_servers/agricultural_server.py" "7780"
 
 echo ""
 echo -e "${GREEN}All servers have been started.${NC}"
 echo ""
 echo "Server endpoints:"
-echo "  - Forecast:     http://127.0.0.1:8081/mcp"
-echo "  - Historical:   http://127.0.0.1:8082/mcp"
-echo "  - Agricultural: http://127.0.0.1:8083/mcp"
+echo "  - Forecast:     http://127.0.0.1:7778/mcp"
+echo "  - Historical:   http://127.0.0.1:7779/mcp"
+echo "  - Agricultural: http://127.0.0.1:7780/mcp"
 echo ""
 echo "Logs are available in the logs/ directory:"
 echo "  - logs/forecast.log"
