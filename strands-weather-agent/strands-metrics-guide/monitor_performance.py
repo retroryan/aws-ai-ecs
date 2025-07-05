@@ -48,8 +48,7 @@ async def main():
     print("🔍 Telemetry Performance Impact Analysis")
     print("=" * 50)
     
-    # Export AWS credentials if needed
-    os.system("export $(aws configure export-credentials --format env-no-export 2>/dev/null)")
+    # Note: Ensure AWS credentials are configured before running
     
     # Benchmark without telemetry
     print("\n⏱️  Without telemetry...")

@@ -55,7 +55,7 @@ def get_auth_header():
 
 def check_langfuse_health():
     """Check if Langfuse is accessible"""
-    host = os.getenv('LANGFUSE_HOST', 'https://cloud.langfuse.com')
+    host = os.getenv('LANGFUSE_HOST', 'https://us.cloud.langfuse.com')
     headers = get_auth_header()
     if not headers:
         print("❌ Langfuse credentials not configured")
@@ -85,7 +85,7 @@ def check_aws_credentials():
         sts.get_caller_identity()
         
         # Also verify Bedrock is available in the region
-        bedrock_region = os.getenv('BEDROCK_REGION', 'us-east-1')
+        bedrock_region = os.getenv('BEDROCK_REGION', 'us-west-2')
         bedrock = boto3.client('bedrock', region_name=bedrock_region)
         try:
             bedrock.list_foundation_models()
@@ -123,7 +123,7 @@ async def check_mcp_servers():
 
 def get_recent_traces(from_time, run_id=None):
     """Fetch traces created after the specified time"""
-    host = os.getenv('LANGFUSE_HOST', 'https://cloud.langfuse.com')
+    host = os.getenv('LANGFUSE_HOST', 'https://us.cloud.langfuse.com')
     url = f"{host}/api/public/traces"
     headers = get_auth_header()
     
@@ -378,7 +378,7 @@ def validate_traces(start_time, run_id, verbose=False):
     else:
         print("\n⚠️  Some attributes are missing. Check your configuration.")
     
-    print(f"\n🔗 View all traces at: {os.getenv('LANGFUSE_HOST', 'https://cloud.langfuse.com')}")
+    print(f"\n🔗 View all traces at: {os.getenv('LANGFUSE_HOST', 'https://us.cloud.langfuse.com')}")
     if run_id:
         print(f"   Filter by session ID containing: {run_id}")
         print(f"   Filter by tag: run-{run_id}")

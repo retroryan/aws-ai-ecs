@@ -100,9 +100,13 @@ echo ""
 # Get raw model data
 MODELS_JSON=$(aws bedrock list-foundation-models --region $CURRENT_REGION --output json 2>/dev/null || echo '{"modelSummaries":[]}')
 
+# Get inference profiles (required for most models now)
+PROFILES_JSON=$(aws bedrock list-inference-profiles --region $CURRENT_REGION --output json 2>/dev/null || echo '{"inferenceProfileSummaries":[]}')
+
 # Get total count for reference
 TOTAL_API_MODELS=$(echo "$MODELS_JSON" | jq -r '.modelSummaries | length')
-info "Found $TOTAL_API_MODELS models in Bedrock API response"
+TOTAL_PROFILES=$(echo "$PROFILES_JSON" | jq -r '.inferenceProfileSummaries | length')
+info "Found $TOTAL_API_MODELS models and $TOTAL_PROFILES inference profiles"
 echo ""
 
 # Create bedrock.env file
@@ -115,6 +119,9 @@ cat > bedrock.env << EOF
 
 # This file contains recommended models for the weather agent demo.
 # To use a different model, uncomment its line and comment the current one.
+#
+# NOTE: Models with "us." prefix use inference profiles for cross-region redundancy.
+# These profiles automatically route requests between us-east-1 and us-west-2.
 
 # AWS Region for Bedrock
 BEDROCK_REGION=$CURRENT_REGION
@@ -147,8 +154,9 @@ check_model_tools() {
 
 # Define model categories and their preferred models (in order of preference)
 # Using simple variables instead of associative array for compatibility
+# Note: We'll check for inference profiles and use those when available
 MODELS_BEST_PERFORMANCE="anthropic.claude-3-5-sonnet-20241022-v2:0|anthropic.claude-3-5-sonnet-20240620-v1:0"
-MODELS_FAST_CHEAP="anthropic.claude-3-haiku-20240307-v1:0"
+MODELS_FAST_CHEAP="anthropic.claude-3-haiku-20240307-v1:0|anthropic.claude-3-5-haiku-20241022-v1:0"
 MODELS_OPEN_SOURCE="meta.llama3-1-70b-instruct-v1:0|meta.llama3-70b-instruct-v1:0|meta.llama3-8b-instruct-v1:0"
 MODELS_RAG_OPTIMIZED="cohere.command-r-plus-v1:0|cohere.command-r-v1:0"
 
@@ -164,11 +172,32 @@ done < <(echo "$MODELS_JSON" | jq -r '.modelSummaries[] | .modelId' | sort -u)
 SELECTED_MODELS=()
 MODEL_COUNT=0
 
+# Parse inference profiles
+FOUND_PROFILES=()
+while IFS= read -r profile_id; do
+    if [ -n "$profile_id" ]; then
+        FOUND_PROFILES+=("$profile_id")
+    fi
+done < <(echo "$PROFILES_JSON" | jq -r '.inferenceProfileSummaries[] | .inferenceProfileId' | sort -u)
+
 # Function to check if model is in our found list
 model_exists() {
     local model=$1
     for found in "${FOUND_MODELS[@]}"; do
         if [[ "$found" == "$model" ]]; then
+            return 0
+        fi
+    done
+    return 1
+}
+
+# Function to check if inference profile exists for a model
+profile_exists() {
+    local model=$1
+    # Convert model ID to potential profile ID (add us. prefix)
+    local profile_id="us.$model"
+    for found in "${FOUND_PROFILES[@]}"; do
+        if [[ "$found" == "$profile_id" ]]; then
             return 0
         fi
     done
@@ -181,14 +210,21 @@ add_model_to_env() {
     local description=$2
     local is_default=$3
     
+    # Check if an inference profile exists for this model
+    local actual_model_id="$model_id"
+    if profile_exists "$model_id"; then
+        actual_model_id="us.$model_id"
+        description="$description (uses inference profile)"
+    fi
+    
     if [ "$is_default" = "true" ]; then
-        echo "BEDROCK_MODEL_ID=$model_id" >> bedrock.env
+        echo "BEDROCK_MODEL_ID=$actual_model_id" >> bedrock.env
         echo "" >> bedrock.env
-        echo "✓ $model_id"
+        echo "✓ $actual_model_id"
         echo "  └─ $description (set as default)"
     else
-        echo "# BEDROCK_MODEL_ID=$model_id" >> bedrock.env
-        echo "✓ $model_id"
+        echo "# BEDROCK_MODEL_ID=$actual_model_id" >> bedrock.env
+        echo "✓ $actual_model_id"
         echo "  └─ $description"
     fi
     echo ""

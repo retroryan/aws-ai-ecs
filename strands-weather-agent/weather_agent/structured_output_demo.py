@@ -12,7 +12,7 @@ from typing import Optional
 from pydantic import BaseModel, Field
 
 # Set up environment
-os.environ.setdefault("BEDROCK_MODEL_ID", "anthropic.claude-3-5-sonnet-20241022-v2:0")
+os.environ.setdefault("BEDROCK_MODEL_ID", "us.anthropic.claude-3-5-sonnet-20241022-v2:0")
 os.environ.setdefault("BEDROCK_REGION", "us-east-1")
 
 
@@ -33,7 +33,7 @@ async def test_strands_structured_output():
     
     # Create a simple agent
     model = BedrockModel(
-        model_id="anthropic.claude-3-5-sonnet-20241022-v2:0",
+        model_id="us.anthropic.claude-3-5-sonnet-20241022-v2:0",
         region_name="us-east-1"
     )
     
@@ -77,7 +77,7 @@ async def test_async_wrapper():
     
     # Create agent
     model = BedrockModel(
-        model_id="anthropic.claude-3-5-sonnet-20241022-v2:0",
+        model_id="us.anthropic.claude-3-5-sonnet-20241022-v2:0",
         region_name="us-east-1"
     )
     
