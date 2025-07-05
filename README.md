@@ -4,7 +4,7 @@ This repository demonstrates the future of software development: AI-powered appl
 
 ## Overview
 
-The repository contains three example projects that showcase the evolution of AI application development on AWS infrastructure. Each project demonstrates running AI Services on ECS + Bedrock, highlighting different levels of sophistication in the new era of model-driven development:
+The repository contains five demonstration projects that showcase the evolution of AI application development on AWS infrastructure. Each project demonstrates running AI Services on ECS + Bedrock, highlighting different levels of sophistication in the new era of model-driven development:
 
 ### 1. [Python Strands Weather Agent](./strands-weather-agent) ⭐ (Most Important Demo)
 **The pinnacle demonstration of model-driven development** - this project showcases the true power of the new era of software development. Built with AWS Strands, it represents a paradigm shift where agents orchestrate complex workflows with minimal code:
@@ -30,6 +30,20 @@ A practical implementation of an AI-powered weather and agricultural data agent 
 - Real-world use case for agricultural data analysis
 - Weather data processing and insights
 - Production-ready deployment patterns
+
+### 4. [Spring AI Agent ECS](./spring-ai-agent-ecs)
+A Java-based implementation demonstrating Spring AI framework integration with AWS Bedrock:
+- **Spring AI with AWS Bedrock** using Java and Spring Boot
+- MCP (Model Context Protocol) server integration in Java ecosystem  
+- Enterprise-ready patterns for Java-based AI applications
+- Spring Boot containerization and ECS deployment
+- Alternative implementation showcasing Java AI development
+
+### 5. [Strands Metrics Guide](./strands-metrics-guide)
+Documentation and guidance for monitoring and observability:
+- AWS Strands metrics and monitoring best practices
+- Observability patterns for AI agent systems
+- Performance monitoring and debugging guidance
 
 ## Why This Repository?
 
@@ -93,6 +107,20 @@ response = agent.structured_output(WeatherAnalysis, "Analyze weather for Chicago
 - 🏃 **Local Development**: Run and test AI agents locally before deploying to AWS
 - ☁️ **AWS Deployment**: Production-ready deployment scripts with infrastructure automation
 - 🛡️ **Best Practices**: Security, logging, and monitoring built into every template
+
+## Project Selection Guide
+
+Choose the right project for your needs:
+
+| **If you want to...** | **Choose this project** | **Technology** | **Complexity** |
+|------------------------|--------------------------|----------------|----------------|
+| Learn AI agent basics | [Agent ECS Template](./agent-ecs-template) | Python + boto3 | ⭐ Beginner |
+| Build advanced AI agents with minimal code | [Strands Weather Agent](./strands-weather-agent) | Python + AWS Strands | ⭐⭐⭐ Advanced |
+| See LangGraph workflow orchestration | [Agriculture Agent ECS](./agriculture-agent-ecs) | Python + LangGraph | ⭐⭐ Intermediate |
+| Use Java/Spring for AI development | [Spring AI Agent ECS](./spring-ai-agent-ecs) | Java + Spring AI | ⭐⭐ Intermediate |
+| Learn about monitoring and metrics | [Strands Metrics Guide](./strands-metrics-guide) | Documentation | ⭐ Reference |
+
+**Recommendation**: Start with **Agent ECS Template** for basics, then explore **Strands Weather Agent** for the most powerful approach.
 
 ## Getting Started
 
