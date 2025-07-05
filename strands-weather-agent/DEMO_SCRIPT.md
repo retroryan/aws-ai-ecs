@@ -95,14 +95,33 @@ curl -X POST http://localhost:7777/query \
 2. **Smart Responses**: Natural language answers with real data
 3. **Multiple Tools**: Different servers handle forecast, historical, and agricultural data
 4. **Fast Performance**: Responses in 2-4 seconds
+5. **Debug Insights**: With `--debug`, see detailed agent reasoning
+6. **Metrics Tracking**: With telemetry enabled, track token usage and costs
 
 ## 🎯 Key Features to Highlight
 
 - **No Code Changes for Observability**: Telemetry works automatically
 - **Model Flexibility**: Switch between Claude, Llama, or other Bedrock models
 - **Production Ready**: Same code runs locally and on AWS ECS
+- **Comprehensive Logging**: Debug mode provides deep insights
+- **Cost Tracking**: Monitor token usage and estimated costs
 
-## 🛠️ Quick Troubleshooting
+## 🛠️ Utilities
+
+### Metrics and Debugging Scripts
+
+```bash
+# Main demo showcase (combines all features)
+python strands-metrics-guide/demo_showcase.py
+
+# Validate telemetry is working
+python strands-metrics-guide/run_and_validate_metrics.py
+
+# Clean up old logs and temp files
+python strands-metrics-guide/cleanup_project.py
+```
+
+### Quick Troubleshooting
 
 **Servers not starting?**
 ```bash
@@ -112,14 +131,15 @@ curl -X POST http://localhost:7777/query \
 
 **Want to see debug logs?**
 ```bash
+# For demo showcase
+python strands-metrics-guide/demo_showcase.py --debug
+
+# For chatbot
 python weather_agent/chatbot.py --debug
 ```
 
 **Test individual components?**
 ```bash
-# Test telemetry
-python strands-metrics-guide/test_simple_telemetry.py
-
 # Test structured output
 python weather_agent/structured_output_demo.py
 ```
@@ -130,8 +150,11 @@ python weather_agent/structured_output_demo.py
 # Stop the servers
 ./scripts/stop_servers.sh
 
+# Clean up project files (logs, temp files)
+python strands-metrics-guide/cleanup_project.py
+
 # Or stop Docker
 ./scripts/stop_docker.sh
 ```
 
-That's it! The demo shows a complete AI agent system with distributed tools and observability in just a few commands.
+That's it! The demo showcases a complete AI agent system with distributed tools, debug logging, and observability in just a few commands.

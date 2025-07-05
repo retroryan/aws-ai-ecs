@@ -1,93 +1,163 @@
-# Strands Weather Agent - Metrics Quick Start
+# Weather Agent Demo and Metrics Tools
 
-This directory contains debugging, validation, and demo scripts for the Strands Weather Agent's metrics and telemetry integration with Langfuse.
+This directory contains the consolidated tools for demonstrating and validating the Weather Agent system with AWS Strands and Langfuse observability.
 
-## Prerequisites
+## 🛠️ Available Scripts
 
-- Strands Weather Agent project is set up and configured
-- `.env` file in the parent directory with Langfuse credentials
-- Python environment with required dependencies installed
-- MCP servers running (use `../scripts/start_servers.sh`)
+### 1. `demo_showcase.py` - Professional Demo Showcase
+The main demonstration script that showcases all Weather Agent capabilities with optional debug logging and metrics validation.
 
-## Available Scripts
+**Features:**
+- Multi-category weather queries (current, forecast, historical, agricultural)
+- Debug logging to file with `--debug` flag
+- Metrics validation with `--verbose` flag
+- Quick demo mode with `--quick` flag
+- Telemetry tracking with Langfuse (when enabled)
 
-### Core Validation Scripts
-
-#### 1. Check Configuration
+**Usage:**
 ```bash
-python debug_telemetry.py
+# Quick demo (2-3 minutes)
+python demo_showcase.py --quick
+
+# Full demo with debug logging
+python demo_showcase.py --debug
+
+# Demo with metrics validation
+python demo_showcase.py --verbose
+
+# All options combined
+python demo_showcase.py --debug --verbose
 ```
-Verifies your Langfuse configuration and environment setup.
 
-#### 2. Test Basic Telemetry
-```bash
-python test_simple_telemetry.py
-```
-Runs a simple weather query to test telemetry is working.
+### 2. `run_and_validate_metrics.py` - Telemetry Validator
+Validates that Langfuse telemetry integration is working correctly.
 
-#### 3. Full Validation
+**Features:**
+- Checks service connectivity (Langfuse, AWS, MCP servers)
+- Runs minimal test query with telemetry
+- Validates traces were created in Langfuse
+- Provides detailed diagnostics
+
+**Usage:**
 ```bash
+# Basic validation
 python run_and_validate_metrics.py
+
+# Detailed trace analysis
+python run_and_validate_metrics.py --verbose
+
+# Skip prerequisite checks
+python run_and_validate_metrics.py --skip-checks
 ```
-Comprehensive test that runs queries and validates metrics are captured in Langfuse.
 
-#### 4. Inspect Traces
+### 3. `cleanup_project.py` - Project Maintenance
+Helps maintain the project by cleaning up old files and checking for issues.
+
+**Features:**
+- Removes old log files (customizable age threshold)
+- Cleans up temporary files and caches
+- Checks for code issues (hardcoded values, old model IDs)
+- Validates environment configuration
+
+**Usage:**
 ```bash
-python inspect_traces.py --hours 24
-```
-Reviews traces from the last 24 hours to debug issues.
-
-#### 5. Monitor Performance
-```bash
-python monitor_performance.py
-```
-Measures telemetry overhead and performance impact.
-
-### Demo and Maintenance Scripts
-
-#### 6. Professional Demo Showcase
-```bash
-python demo_showcase.py
-# Options:
-#   --no-telemetry    Disable Langfuse telemetry
-#   --verbose         Show detailed information
-#   --quick           Run a quick demo with fewer queries
-```
-Professional demonstration of all Weather Agent capabilities with telemetry tracking.
-
-#### 7. Project Cleanup Utility
-```bash
+# Dry run (see what would be cleaned)
 python cleanup_project.py
-# Options:
-#   --execute         Actually delete files (default is dry run)
-#   --days N          Delete logs older than N days (default: 7)
-```
-Maintains project cleanliness by removing old logs, test results, and checking for common issues.
 
-## Quick Debugging
+# Actually clean files
+python cleanup_project.py --execute
+
+# Clean logs older than 3 days
+python cleanup_project.py --days 3 --execute
+```
+
+## 📋 Prerequisites
+
+1. **Environment Setup:**
+   ```bash
+   # Copy and configure .env
+   cp ../.env.example ../.env
+   # Edit ../.env and set:
+   # - BEDROCK_MODEL_ID (required)
+   # - ENABLE_TELEMETRY=true (for metrics)
+   # - LANGFUSE_* credentials (for observability)
+   ```
+
+2. **Start MCP Servers:**
+   ```bash
+   ../scripts/start_servers.sh
+   ```
+
+3. **AWS Credentials:**
+   Ensure AWS credentials are configured with Bedrock access.
+
+## 🚀 Quick Start
+
+```bash
+# 1. Start the MCP servers
+../scripts/start_servers.sh
+
+# 2. Run the demo showcase
+python demo_showcase.py --quick
+
+# 3. Validate metrics (if using Langfuse)
+python run_and_validate_metrics.py
+
+# 4. Clean up when done
+../scripts/stop_servers.sh
+python cleanup_project.py --execute
+```
+
+## 🔍 Debug Mode
+
+When running with `--debug`, detailed logs are saved to:
+```
+../logs/demo_showcase_debug_YYYYMMDD_HHMMSS.log
+```
+
+These logs include:
+- Strands framework debug output
+- MCP tool discovery and execution
+- Full agent reasoning traces
+- Performance metrics
+
+## 📊 Metrics and Observability
+
+When telemetry is enabled (`ENABLE_TELEMETRY=true`), the system tracks:
+- Token usage per query
+- Response latencies
+- Tool calls to MCP servers
+- Session and user tracking
+- Cost estimates
+
+View metrics in your Langfuse dashboard or use the `--verbose` flag with `demo_showcase.py` to see inline metrics summaries.
+
+## 🎯 Quick Debugging
 
 If metrics aren't showing up:
 
-1. Check configuration: `python strands-metrics-guide/debug_telemetry.py`
-2. Run a test query: `python strands-metrics-guide/test_simple_telemetry.py`
-3. Check Langfuse UI at the URL in your `LANGFUSE_HOST` setting
-4. Review traces: `python strands-metrics-guide/inspect_traces.py --hours 1`
+1. **Check configuration:**
+   ```bash
+   python run_and_validate_metrics.py
+   ```
 
-## Documentation
+2. **Enable telemetry in .env:**
+   ```
+   ENABLE_TELEMETRY=true
+   LANGFUSE_PUBLIC_KEY=your_key
+   LANGFUSE_SECRET_KEY=your_secret
+   ```
 
-### Langfuse Integration Guide
-For comprehensive setup instructions, including Docker deployment, see [LANGFUSE_INTEGRATION.md](./LANGFUSE_INTEGRATION.md).
+3. **Run with verbose output:**
+   ```bash
+   python demo_showcase.py --verbose
+   ```
 
-### Docker-Specific Setup
-When running with Docker, additional configuration is required:
-- Network configuration to connect to Langfuse
-- Environment variable mapping for container communication
-- Special host configuration for Docker networking
+4. **Check Langfuse dashboard:**
+   Visit the URL in your `LANGFUSE_HOST` setting (default: https://us.cloud.langfuse.com)
 
-See the [Docker Deployment Setup](./LANGFUSE_INTEGRATION.md#docker-deployment-setup) section in the integration guide.
+## 📚 Additional Resources
 
-### Additional Resources
-For detailed implementation guides and troubleshooting, see the parent [strands-metrics-guide](../../strands-metrics-guide/) directory:
-- Complete Langfuse integration documentation
-- Debug logging strategies
-- Best practices and patterns
+- Parent project documentation: [../CLAUDE.md](../CLAUDE.md)
+- Demo guide: [../DEMO_SCRIPT.md](../DEMO_SCRIPT.md)
+- Main README: [../README.md](../README.md)
