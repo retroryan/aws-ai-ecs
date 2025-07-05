@@ -53,18 +53,28 @@ healthcheck:
   - Automatic tool discovery and execution
   - Multi-turn conversation support
   - Model-agnostic design with 50% less code
+  - Pure async implementation for better performance
+  - Integrated telemetry and observability support
 
 - **FastMCP**: Implements Model Context Protocol servers with:
-  - HTTP-based tool serving
+  - HTTP-based tool serving with streamable clients
   - Async request handling
   - JSON-RPC communication
   - Easy tool discovery and registration
+  - Custom health endpoints for Docker deployments
 
 - **AWS Bedrock**: Provides access to foundation models with:
   - Unified API through Converse interface
   - Multiple model options (Claude, Llama, Cohere, etc.)
   - Consistent tool calling across models
   - Cost-effective scalability
+
+- **Langfuse**: Provides comprehensive observability with:
+  - OpenTelemetry-based distributed tracing
+  - Token usage and cost tracking
+  - Latency and performance metrics
+  - Session and user analytics
+  - Custom tags and metadata support
 
 ### System Components
 
@@ -75,25 +85,36 @@ healthcheck:
 
 2. **Weather Agent**: 
    - Built with AWS Strands' native Agent class
-   - Discovers and calls MCP server tools
+   - Pure async implementation with `stream_async()`
+   - Discovers and calls MCP server tools via HTTP
    - Handles responses with built-in streaming
    - Maintains conversation state automatically
+   - Integrated Langfuse telemetry for observability
+   - Debug logging with separate console/file handlers
 
 3. **Support Components**:
    - Query classifier for intent detection
    - Structured data models for type safety
-   - Logging and monitoring utilities
+   - Comprehensive logging and monitoring utilities
+   - Langfuse telemetry integration for metrics
+   - Validation and monitoring scripts
 
 ## Key Files
 
-- `main.py`: Application entry point with FastAPI interface
-- `weather_agent/mcp_agent.py`: AWS Strands agent implementation
+- `main.py`: Application entry point with FastAPI interface and debug logging
+- `weather_agent/mcp_agent.py`: AWS Strands agent implementation with pure async
+- `weather_agent/langfuse_telemetry.py`: Langfuse observability integration
 - `mcp_servers/`: FastMCP server implementations
   - `forecast_server.py`: Weather forecast tools
   - `historical_server.py`: Historical weather tools
   - `agricultural_server.py`: Agricultural data tools
 - `models/`: Pydantic models for structured responses
-- `start_servers.sh` / `stop_servers.sh`: Server lifecycle management
+- `strands-metrics-guide/`: Validation and monitoring scripts
+  - `run_and_validate_metrics.py`: End-to-end metrics validation
+  - `debug_telemetry.py`: Telemetry configuration debugging
+  - `inspect_traces.py`: Trace inspection utility
+  - `monitor_performance.py`: Performance impact analysis
+- `scripts/start_servers.sh` / `stop_servers.sh`: Server lifecycle management
 
 ## Development Setup
 
@@ -163,12 +184,21 @@ This command:
 
 2. Run the main application:
 ```bash
+# Run with default settings
+python main.py
+
+# Run with debug logging enabled
+python main.py --debug
+
+# Or set environment variable
+export WEATHER_AGENT_DEBUG=true
 python main.py
 ```
 
 3. Access the API at http://localhost:7777
    - Health check: GET /health
    - Submit query: POST /query
+   - Debug logs are saved to `logs/weather_agent_debug_YYYYMMDD_HHMMSS.log`
 
 4. Stop servers when done:
 ```bash
@@ -235,7 +265,7 @@ FastMCP servers require special handling for health checks in Docker:
 3. **Docker Health Checks**: The docker-compose.yml uses these endpoints:
    ```yaml
    healthcheck:
-     test: ["CMD", "curl", "-f", "http://localhost:8081/health"]
+     test: ["CMD", "curl", "-f", "http://localhost:7778/health"]
    ```
 
 4. **Testing MCP Endpoints**: To properly test MCP functionality, use:
@@ -287,25 +317,87 @@ FastMCP servers require special handling for health checks in Docker:
 
 ## Logging and Monitoring
 
+### Debug Logging
+- **Comprehensive Debug Mode**: Enable with `--debug` flag or `WEATHER_AGENT_DEBUG=true`
+- **Dual Logging**: Console shows INFO level, file shows DEBUG level
+- **Timestamped Log Files**: Saved to `logs/weather_agent_debug_YYYYMMDD_HHMMSS.log`
+- **Module-Specific Debugging**: Enables debug for Strands modules:
+  - `strands`, `strands.tools`, `strands.models`
+  - `strands.tools.mcp`, `strands_agent.tools`
+- **Structured Format**: Includes timestamps, logger name, level, function, and line numbers
+
+### Server Logs
 - Server logs are written to `logs/` directory
 - Each MCP server maintains its own log file
 - PID files enable process management
 - Structured logging for debugging and monitoring
 
+### Observability with Langfuse
+- **Automatic Tracing**: All agent interactions are traced
+- **Token Usage Tracking**: Monitor LLM token consumption and costs
+- **Latency Metrics**: Track response times and performance
+- **Session Management**: Group related queries together
+- **Custom Tags**: Add metadata for filtering and analysis
+- **OpenTelemetry Integration**: Standard OTEL protocol support
+
 ## Environment Variables
 
 Key environment variables (configured in `.env`):
+
+### AWS Bedrock Configuration
 - `BEDROCK_MODEL_ID`: AWS Bedrock model to use (required)
 - `BEDROCK_REGION`: AWS region for Bedrock (default: us-west-2)
 - `BEDROCK_TEMPERATURE`: Model temperature setting (default: 0)
+
+### Logging Configuration
 - `LOG_LEVEL`: Logging verbosity (default: INFO)
-- MCP server ports are configured in the server files
+- `WEATHER_AGENT_DEBUG`: Enable debug logging (true/false)
+
+### Langfuse Telemetry Configuration
+- `LANGFUSE_PUBLIC_KEY`: Public key for Langfuse API
+- `LANGFUSE_SECRET_KEY`: Secret key for Langfuse API
+- `LANGFUSE_HOST`: Langfuse API host (default: https://us.cloud.langfuse.com)
+- `ENABLE_TELEMETRY`: Enable/disable telemetry (true/false, default: false)
+- `TELEMETRY_USER_ID`: Default user ID for telemetry
+- `TELEMETRY_SESSION_ID`: Default session ID for telemetry
+- `TELEMETRY_TAGS`: Comma-separated tags for filtering
+
+### MCP Server Configuration
+- MCP server ports are configured in the server files (7778, 7779, 7780)
 
 ### Supported Bedrock Models
-- `anthropic.claude-3-5-sonnet-20240620-v1:0` (Recommended)
+- `anthropic.claude-3-5-sonnet-20241022-v2:0` (Latest, recommended)
+- `anthropic.claude-3-5-sonnet-20240620-v1:0` (Stable)
 - `anthropic.claude-3-haiku-20240307-v1:0` (Fast & cost-effective)
 - `meta.llama3-70b-instruct-v1:0`
 - `cohere.command-r-plus-v1:0`
+
+## Recent Improvements and Updates
+
+### Pure Async Implementation
+- **Eliminated ThreadPoolExecutor**: The agent now uses pure async patterns throughout
+- **Streamable HTTP Clients**: MCP clients use `streamablehttp_client` for better async communication
+- **Async Streaming**: Uses `stream_async()` for processing queries with better performance
+- **Context Management**: Proper use of `ExitStack` to keep MCP clients open during execution
+
+### Enhanced Debug Logging
+- **Dual-Level Logging**: Console (INFO) and file (DEBUG) with separate handlers
+- **Timestamped Log Files**: Automatic file creation with timestamps
+- **Module-Specific Debug**: Targeted debugging for Strands components
+- **CLI Integration**: Simple `--debug` flag or environment variable control
+
+### Comprehensive Metrics with Langfuse
+- **Full OpenTelemetry Support**: Standard OTEL protocol integration
+- **Automatic Instrumentation**: Zero-code changes needed for basic metrics
+- **Rich Metadata**: Session tracking, user identification, and custom tags
+- **Performance Monitoring**: Token usage, latency, and cost tracking
+- **Validation Tools**: Complete suite of scripts for testing and monitoring
+
+### Code Simplification
+- **50% Less Code**: Major cleanup removed over 10,000 lines
+- **Consolidated Structure**: Streamlined project organization
+- **Native Strands Integration**: Eliminated custom wrapper code
+- **Better Error Handling**: Specific exception types for different failures
 
 ## Extending the System
 
@@ -447,7 +539,7 @@ python -m weather_agent.structured_output_demo
 #### Test Individual MCP Servers
 ```bash
 # Test forecast server
-curl -X POST http://localhost:8081/mcp/ \
+curl -X POST http://localhost:7778/mcp/ \
   -H "Content-Type: application/json" \
   -d '{"jsonrpc": "2.0", "method": "tools/list", "id": 1}'
 
@@ -552,6 +644,52 @@ async def benchmark():
 
 asyncio.run(benchmark())
 "
+```
+
+### Testing with Telemetry
+
+#### Enable Telemetry for a Session
+```bash
+# Set up Langfuse credentials
+export LANGFUSE_PUBLIC_KEY=your_public_key
+export LANGFUSE_SECRET_KEY=your_secret_key
+export LANGFUSE_HOST=https://us.cloud.langfuse.com
+
+# Run with telemetry enabled
+python -c "
+import asyncio
+from weather_agent.mcp_agent import MCPWeatherAgent
+
+async def test_with_telemetry():
+    agent = MCPWeatherAgent(
+        enable_telemetry=True,
+        telemetry_user_id='test-user-123',
+        telemetry_session_id='test-session-456',
+        telemetry_tags=['test', 'development']
+    )
+    
+    response = await agent.query('What is the weather in Chicago?')
+    print('Response received')
+    print('Check Langfuse dashboard for traces')
+
+asyncio.run(test_with_telemetry())
+"
+```
+
+#### Validate Metrics Collection
+```bash
+# Run comprehensive validation
+cd strands-metrics-guide
+python run_and_validate_metrics.py
+
+# Debug telemetry configuration
+python debug_telemetry.py
+
+# Inspect collected traces
+python inspect_traces.py
+
+# Monitor performance impact
+python monitor_performance.py
 ```
 
 ## Important Reminders

@@ -119,7 +119,7 @@ Resources:
                 Action:
                   - bedrock:InvokeModel
                 Resource:
-                  - arn:aws:bedrock:us-east-1::foundation-model/amazon.nova-pro-v1:0
+                  - !Sub 'arn:aws:bedrock:${AWS::Region}::foundation-model/amazon.nova-pro-v1:0'
 
   ServiceConnectNamespace:
     Type: AWS::ServiceDiscovery::HttpNamespace

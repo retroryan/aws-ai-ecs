@@ -85,7 +85,7 @@ def check_aws_credentials():
         sts.get_caller_identity()
         
         # Also verify Bedrock is available in the region
-        bedrock_region = os.getenv('BEDROCK_REGION', 'us-west-2')
+        bedrock_region = os.getenv('BEDROCK_REGION', 'us-east-1')
         bedrock = boto3.client('bedrock', region_name=bedrock_region)
         try:
             bedrock.list_foundation_models()
