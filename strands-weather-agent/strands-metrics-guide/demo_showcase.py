@@ -1,9 +1,12 @@
 #!/usr/bin/env python3
 """
-Professional demo showcase for AWS Strands Weather Agent with Langfuse metrics.
+Professional demo showcase for AWS Strands Weather Agent with Langfuse metrics and debug logging.
 
-This script provides a polished demonstration of the Weather Agent's capabilities
-including multi-server coordination, structured output, and telemetry tracking.
+This script provides a comprehensive demonstration of the Weather Agent's capabilities:
+- Multi-server coordination across forecast, historical, and agricultural data
+- Structured output with type-safe responses
+- Telemetry tracking with Langfuse
+- Debug logging for development insights
 """
 
 import asyncio
@@ -14,6 +17,9 @@ from datetime import datetime
 import argparse
 from typing import List, Dict, Any
 import json
+import logging
+from base64 import b64encode
+import requests
 
 # Add parent directory to path for imports
 parent_dir = Path(__file__).parent.parent
@@ -32,9 +38,11 @@ from weather_agent.langfuse_telemetry import force_flush_telemetry
 class WeatherAgentDemoShowcase:
     """Professional demo showcase for the Weather Agent system."""
     
-    def __init__(self, enable_telemetry: bool = True, verbose: bool = False):
+    def __init__(self, enable_telemetry: bool = True, verbose: bool = False, debug: bool = False):
         self.enable_telemetry = enable_telemetry
         self.verbose = verbose
+        self.debug = debug
+        self.logger = self._setup_logging()
         self.demo_queries = [
             {
                 "category": "Current Weather",
@@ -73,6 +81,44 @@ class WeatherAgentDemoShowcase:
             }
         ]
     
+    def _setup_logging(self) -> logging.Logger:
+        """Setup logging configuration."""
+        logger = logging.getLogger("demo_showcase")
+        logger.setLevel(logging.DEBUG if self.debug else logging.INFO)
+        
+        # Remove existing handlers
+        logger.handlers.clear()
+        
+        # Console handler
+        console_handler = logging.StreamHandler()
+        console_handler.setLevel(logging.INFO)
+        console_format = logging.Formatter('%(message)s')
+        console_handler.setFormatter(console_format)
+        logger.addHandler(console_handler)
+        
+        # File handler for debug logs
+        if self.debug:
+            timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")
+            log_dir = Path("logs")
+            log_dir.mkdir(exist_ok=True)
+            log_file = log_dir / f"demo_showcase_debug_{timestamp}.log"
+            
+            file_handler = logging.FileHandler(log_file)
+            file_handler.setLevel(logging.DEBUG)
+            file_format = logging.Formatter(
+                '%(asctime)s - %(name)s - %(levelname)s - %(funcName)s:%(lineno)d - %(message)s'
+            )
+            file_handler.setFormatter(file_format)
+            logger.addHandler(file_handler)
+            
+            # Enable debug for Strands modules
+            for module in ['strands', 'strands.tools', 'strands.models', 'strands.tools.mcp']:
+                logging.getLogger(module).setLevel(logging.DEBUG)
+            
+            print(f"📝 Debug logs will be saved to: {log_file}")
+        
+        return logger
+    
     def print_header(self):
         """Print a professional header for the demo."""
         print("\n" + "="*80)
@@ -85,6 +131,8 @@ class WeatherAgentDemoShowcase:
             print(f"📊 Telemetry: Enabled (Langfuse)")
         else:
             print(f"📊 Telemetry: Disabled")
+        if self.debug:
+            print(f"🐛 Debug Mode: Enabled")
         print("="*80)
     
     def print_category_header(self, category: str, description: str = ""):
@@ -145,6 +193,7 @@ class WeatherAgentDemoShowcase:
     async def run_query_demo(self, agent, query: str, show_details: bool = False) -> Dict[str, Any]:
         """Run a single query and return results."""
         print(f"\n💬 Query: \"{query}\"")
+        self.logger.debug(f"Running query: {query}")
         
         start_time = datetime.now()
         
@@ -159,8 +208,12 @@ class WeatherAgentDemoShowcase:
             print(f"🤖 Response: {display_response}")
             print(f"⏱️  Time: {elapsed:.2f}s")
             
+            self.logger.debug(f"Query completed in {elapsed:.2f}s")
+            self.logger.debug(f"Full response: {response}")
+            
             if show_details and hasattr(agent, 'last_tool_calls'):
                 print(f"🔧 Tools used: {len(agent.last_tool_calls)}")
+                self.logger.debug(f"Tool calls: {agent.last_tool_calls}")
             
             return {
                 "query": query,
@@ -171,6 +224,7 @@ class WeatherAgentDemoShowcase:
             
         except Exception as e:
             print(f"❌ Error: {e}")
+            self.logger.error(f"Query failed: {e}", exc_info=True)
             return {
                 "query": query,
                 "error": str(e),
@@ -224,13 +278,14 @@ class WeatherAgentDemoShowcase:
         
         try:
             agent = await create_weather_agent(
-                debug_logging=self.verbose,
+                debug_logging=self.debug,
                 enable_telemetry=self.enable_telemetry,
                 telemetry_user_id="demo-showcase",
                 telemetry_session_id=session_id,
                 telemetry_tags=["showcase", "demo", "weather-agent"]
             )
             print("✅ Agent initialized successfully")
+            self.logger.debug(f"Agent created with session ID: {session_id}")
             
             # Test connectivity
             print("\n🔗 Testing MCP server connectivity...")
@@ -269,6 +324,10 @@ class WeatherAgentDemoShowcase:
                 print(f"✅ Telemetry data sent to Langfuse")
                 print(f"🔗 View traces at: {os.getenv('LANGFUSE_HOST', 'https://us.cloud.langfuse.com')}")
                 print(f"   Session ID: {session_id}")
+                
+                # Validate metrics if requested
+                if self.verbose:
+                    await self.validate_metrics(session_id)
             
         except Exception as e:
             print(f"\n❌ Demo failed: {e}")
@@ -296,6 +355,99 @@ class WeatherAgentDemoShowcase:
         
         print("\n✨ Demo showcase complete!")
         print("="*80)
+    
+    def get_auth_header(self):
+        """Create Basic Auth header for Langfuse API"""
+        public_key = os.getenv('LANGFUSE_PUBLIC_KEY')
+        secret_key = os.getenv('LANGFUSE_SECRET_KEY')
+        if not public_key or not secret_key:
+            return None
+        credentials = f"{public_key}:{secret_key}"
+        encoded_credentials = b64encode(credentials.encode()).decode('ascii')
+        return {"Authorization": f"Basic {encoded_credentials}"}
+    
+    async def validate_metrics(self, session_id: str):
+        """Validate that metrics were properly recorded in Langfuse."""
+        print("\n🔍 Validating metrics in Langfuse...")
+        
+        # Wait for traces to be processed
+        await asyncio.sleep(5)
+        
+        host = os.getenv('LANGFUSE_HOST', 'https://us.cloud.langfuse.com')
+        headers = self.get_auth_header()
+        
+        if not headers:
+            print("⚠️  Cannot validate metrics - Langfuse credentials not configured")
+            return
+        
+        try:
+            # Query for recent traces
+            url = f"{host}/api/public/traces"
+            params = {
+                "limit": 50,
+                "orderBy": "timestamp.desc"
+            }
+            
+            response = requests.get(url, headers=headers, params=params)
+            response.raise_for_status()
+            
+            data = response.json()
+            traces = data.get('data', [])
+            
+            # Find traces from this session
+            session_traces = []
+            for trace in traces:
+                metadata = trace.get('metadata', {})
+                attributes = metadata.get('attributes', {})
+                trace_session = attributes.get('session.id', '')
+                
+                if session_id in trace_session:
+                    session_traces.append(trace)
+            
+            if session_traces:
+                print(f"✅ Found {len(session_traces)} traces from this session")
+                
+                # Analyze metrics
+                total_tokens = 0
+                total_latency = 0
+                tools_used = set()
+                
+                for trace in session_traces:
+                    # Token usage
+                    usage = trace.get('usage', {})
+                    if usage:
+                        total_tokens += usage.get('total', 0)
+                    
+                    # Latency
+                    latency = trace.get('latency', 0)
+                    total_latency += latency
+                    
+                    # Tool usage
+                    attributes = trace.get('metadata', {}).get('attributes', {})
+                    for key, value in attributes.items():
+                        if 'tool' in key.lower():
+                            tools_used.add(value)
+                
+                print(f"📊 Metrics Summary:")
+                print(f"   Total tokens used: {total_tokens:,}")
+                print(f"   Average latency: {total_latency/len(session_traces):.0f}ms")
+                print(f"   Unique tools called: {len(tools_used)}")
+                
+                # Cost estimation (rough)
+                if total_tokens > 0:
+                    model_id = os.getenv('BEDROCK_MODEL_ID', '')
+                    if 'claude' in model_id.lower():
+                        # Rough Claude pricing
+                        input_cost = 0.003  # per 1K tokens
+                        output_cost = 0.015  # per 1K tokens
+                        estimated_cost = (total_tokens / 1000) * ((input_cost + output_cost) / 2)
+                        print(f"   Estimated cost: ${estimated_cost:.4f}")
+            else:
+                print("⚠️  No traces found for this session yet")
+                
+        except Exception as e:
+            print(f"⚠️  Could not validate metrics: {e}")
+            self.logger.debug(f"Metrics validation error: {e}", exc_info=True)
 
 
 async def main():
@@ -304,7 +456,9 @@ async def main():
     parser.add_argument("--no-telemetry", action="store_true", 
                         help="Disable Langfuse telemetry")
     parser.add_argument("--verbose", "-v", action="store_true",
-                        help="Show detailed information")
+                        help="Show detailed information and validate metrics")
+    parser.add_argument("--debug", "-d", action="store_true",
+                        help="Enable debug logging to file")
     parser.add_argument("--quick", action="store_true",
                         help="Run a quick demo with fewer queries")
     
@@ -312,7 +466,8 @@ async def main():
     
     showcase = WeatherAgentDemoShowcase(
         enable_telemetry=not args.no_telemetry,
-        verbose=args.verbose
+        verbose=args.verbose,
+        debug=args.debug
     )
     
     if args.quick:

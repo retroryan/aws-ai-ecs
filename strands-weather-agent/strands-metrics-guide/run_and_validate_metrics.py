@@ -1,17 +1,18 @@
 #!/usr/bin/env python3
 """
-Run the Weather Agent demo and validate that Langfuse traces were created.
+Validate that Langfuse telemetry is working correctly for the Weather Agent.
 
-This script:
-1. Checks that required services are accessible (Langfuse, AWS, MCP servers)
-2. Runs the weather agent demo with Langfuse telemetry
-3. Queries Langfuse API to verify traces were created
-4. Displays detailed trace information
-5. Validates that MCP tool calls are being tracked
+This script validates the Langfuse integration by:
+1. Checking service connectivity (Langfuse, AWS, MCP servers)
+2. Running a minimal test query with telemetry enabled
+3. Querying Langfuse API to verify traces were created
+4. Analyzing trace attributes and metadata
+5. Providing detailed diagnostics for troubleshooting
 
 Usage:
-    python run_and_validate_metrics.py           # Runs default demo
-    python run_and_validate_metrics.py --verbose # Shows detailed output
+    python run_and_validate_metrics.py           # Run validation test
+    python run_and_validate_metrics.py --verbose # Show detailed trace analysis
+    python run_and_validate_metrics.py --skip-checks # Skip prerequisite checks
 """
 
 import subprocess
@@ -173,15 +174,15 @@ def get_recent_traces(from_time, run_id=None):
         return []
 
 
-async def run_demo(verbose=False):
-    """Run the weather agent demo"""
-    print("\n🚀 Running Weather Agent Demo with Langfuse...")
+async def run_validation_test(verbose=False):
+    """Run a minimal validation test for telemetry"""
+    print("\n🧪 Running Telemetry Validation Test...")
     print("=" * 80)
     
     # Generate unique run ID for this execution
     run_id = str(uuid.uuid4())[:8]
     timestamp = datetime.now().strftime("%Y%m%d-%H%M%S")
-    print(f"🎨 Run ID: {run_id}")
+    print(f"🎨 Validation ID: {run_id}")
     print(f"⏰ Timestamp: {timestamp}")
     
     # Record start time for trace filtering
@@ -193,31 +194,18 @@ async def run_demo(verbose=False):
         agent = await create_weather_agent(
             debug_logging=verbose,
             enable_telemetry=True,
-            telemetry_user_id="demo-user",
-            telemetry_session_id=f"demo-{run_id}",
-            telemetry_tags=["weather-agent", "demo", f"run-{run_id}"]
+            telemetry_user_id="validation-user",
+            telemetry_session_id=f"validation-{run_id}",
+            telemetry_tags=["weather-agent", "validation", f"run-{run_id}"]
         )
         
-        # Test queries that use different MCP servers
-        queries = [
-            ("What's the weather forecast for Chicago?", "forecast"),
-            ("What was the temperature in New York last week?", "historical"),
-            ("Are conditions good for planting corn in Iowa?", "agricultural"),
-            ("Compare weather in Seattle and Miami", "multiple")
-        ]
+        # Run a single test query
+        test_query = "What's the weather in Seattle?"
+        print(f"\n🔄 Running validation query: '{test_query}'")
         
-        print("\n🔄 Running test queries...")
-        for i, (query, server_type) in enumerate(queries, 1):
-            print(f"\n{'='*50}")
-            print(f"Query {i} ({server_type} server): {query}")
-            print(f"{'='*50}")
-            
-            response = await agent.query(query)
-            print(f"\n🤖 Response: {response[:200]}..." if len(response) > 200 else f"\n🤖 Response: {response}")
-            
-            # Small delay between queries
-            if i < len(queries):
-                await asyncio.sleep(1)
+        response = await agent.query(test_query)
+        print(f"✅ Query executed successfully")
+        print(f"📝 Response preview: {response[:100]}...")
         
         # Force flush telemetry
         print("\n🔄 Flushing telemetry...")
@@ -226,7 +214,7 @@ async def run_demo(verbose=False):
         return start_time, run_id
         
     except Exception as e:
-        print(f"\n❌ Error running demo: {e}")
+        print(f"\n❌ Validation test failed: {e}")
         import traceback
         traceback.print_exc()
         return None, None
@@ -310,18 +298,20 @@ def validate_traces(start_time, run_id, verbose=False):
         # Check for tool usage (MCP server calls)
         if verbose and 'observations' in trace:
             for obs in trace.get('observations', []):
-                if obs.get('type') == 'GENERATION' and 'tool' in obs.get('name', '').lower():
-                    tool_name = obs.get('name')
-                    tools_found.add(tool_name)
-                    print(f"  🔧 Tool used: {tool_name}")
-                    
-                    # Try to identify which MCP server
-                    if 'forecast' in tool_name.lower():
-                        mcp_servers_found.add('forecast')
-                    elif 'historical' in tool_name.lower():
-                        mcp_servers_found.add('historical')
-                    elif 'agricultural' in tool_name.lower():
-                        mcp_servers_found.add('agricultural')
+                # Check if obs is a dictionary before accessing attributes
+                if isinstance(obs, dict):
+                    if obs.get('type') == 'GENERATION' and 'tool' in obs.get('name', '').lower():
+                        tool_name = obs.get('name')
+                        tools_found.add(tool_name)
+                        print(f"  🔧 Tool used: {tool_name}")
+                        
+                        # Try to identify which MCP server
+                        if 'forecast' in tool_name.lower():
+                            mcp_servers_found.add('forecast')
+                        elif 'historical' in tool_name.lower():
+                            mcp_servers_found.add('historical')
+                        elif 'agricultural' in tool_name.lower():
+                            mcp_servers_found.add('agricultural')
         
         # Display usage stats if available
         usage = trace.get('usage', {})
@@ -388,13 +378,20 @@ def validate_traces(start_time, run_id, verbose=False):
 
 async def main():
     """Main validation flow"""
-    parser = argparse.ArgumentParser(description="Run and validate Weather Agent with Langfuse metrics")
-    parser.add_argument('--verbose', '-v', action='store_true', help='Show detailed output')
-    parser.add_argument('--skip-checks', action='store_true', help='Skip preliminary checks')
+    parser = argparse.ArgumentParser(description="Validate Weather Agent Langfuse telemetry integration")
+    parser.add_argument('--verbose', '-v', action='store_true', help='Show detailed trace analysis')
+    parser.add_argument('--skip-checks', action='store_true', help='Skip prerequisite checks')
     args = parser.parse_args()
     
-    print("🧪 Weather Agent + Langfuse Integration Validator")
+    print("🧪 Langfuse Telemetry Validator for Weather Agent")
     print("=" * 80)
+    
+    # Check if telemetry is enabled
+    if os.getenv('ENABLE_TELEMETRY', 'false').lower() != 'true':
+        print("\n⚠️  ENABLE_TELEMETRY is not set to 'true'")
+        print("   Telemetry must be enabled for validation to work")
+        print("   Set ENABLE_TELEMETRY=true in your .env file")
+        return 1
     
     if not args.skip_checks:
         # Step 1: Check prerequisites
@@ -424,9 +421,9 @@ async def main():
         if len(available_servers) < 3:
             print(f"   ⚠️  Only {len(available_servers)}/3 servers running. Some queries may fail.")
     
-    # Step 2: Run demo
-    print("\n2️⃣ Running Weather Agent demo with Langfuse telemetry...")
-    result = await run_demo(verbose=args.verbose)
+    # Step 2: Run validation test
+    print("\n2️⃣ Running validation test...")
+    result = await run_validation_test(verbose=args.verbose)
     if not result[0]:
         return 1
     
@@ -434,15 +431,25 @@ async def main():
     
     # Step 3: Validate traces
     print("\n3️⃣ Validating traces in Langfuse...")
-    if not validate_traces(start_time, run_id, verbose=args.verbose):
-        # Still return 0 if traces were found but some attributes missing
-        # This helps distinguish between "no traces at all" vs "traces with missing attributes"
-        if get_recent_traces(start_time, run_id):
-            print("\n⚠️  Traces found but some attributes missing. Check configuration.")
-            return 0
-        return 1
+    validation_result = validate_traces(start_time, run_id, verbose=args.verbose)
     
-    return 0
+    if validation_result:
+        print("\n✅ VALIDATION PASSED")
+        print("   Langfuse telemetry is working correctly!")
+        print("   You can now use demo_showcase.py to run full demonstrations")
+        return 0
+    else:
+        # Check if any traces exist
+        if get_recent_traces(start_time, run_id):
+            print("\n⚠️  VALIDATION PARTIALLY PASSED")
+            print("   Traces were created but some attributes may be missing")
+            print("   Check your Langfuse configuration")
+            return 0
+        else:
+            print("\n❌ VALIDATION FAILED")
+            print("   No traces were found in Langfuse")
+            print("   Check your Langfuse credentials and connectivity")
+            return 1
 
 
 if __name__ == "__main__":
