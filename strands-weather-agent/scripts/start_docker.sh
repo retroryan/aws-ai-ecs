@@ -115,9 +115,37 @@ if [ -z "${BEDROCK_MODEL_ID}" ]; then
   exit 1
 fi
 
-# Start services, forcing a rebuild
-docker compose up --build -d
+# Start services based on telemetry mode
+if [ "$TELEMETRY_MODE" = "true" ]; then
+    # Check if Langfuse is running
+    if ! docker network ls | grep -q "langfuse_default"; then
+        echo "❌ Error: Langfuse network not found. Is Langfuse running?"
+        echo "   Please start Langfuse first: https://github.com/langfuse/langfuse"
+        echo "   Or run without --telemetry flag"
+        exit 1
+    fi
+    
+    # Check required Langfuse credentials
+    if [ -z "${LANGFUSE_PUBLIC_KEY}" ] || [ -z "${LANGFUSE_SECRET_KEY}" ]; then
+        echo "❌ Error: Langfuse credentials not found"
+        echo "   Please set LANGFUSE_PUBLIC_KEY and LANGFUSE_SECRET_KEY in .env"
+        exit 1
+    fi
+    
+    # Use Langfuse-integrated compose configuration
+    echo "✓ Using Langfuse integration (connecting to langfuse_default network)"
+    docker compose -f docker-compose.yml -f docker-compose.langfuse.yml up --build -d
+else
+    # Use standard compose configuration
+    docker compose up --build -d
+fi
 
 echo ""
 echo "Services started!"
+if [ "$TELEMETRY_MODE" = "true" ]; then
+    echo "✓ Weather Agent API: http://localhost:7777"
+    echo "✓ Langfuse UI: http://localhost:3000"
+    echo ""
+    echo "View traces at: http://localhost:3000 after running queries"
+fi
 echo "Run ./scripts/test_docker.sh to test the services"

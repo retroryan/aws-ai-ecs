@@ -101,6 +101,9 @@ cp .env.example .env
 
 # 2. Start all services with AWS credentials
 ./scripts/start_docker.sh
+# Optional flags:
+#   --debug     Enable debug logging
+#   --telemetry Enable Langfuse observability (requires Langfuse running)
 
 # 3. Test the services
 ./scripts/test_docker.sh
@@ -108,6 +111,8 @@ cp .env.example .env
 # 4. Stop services when done
 ./scripts/stop_docker.sh
 ```
+
+For observability with Langfuse, see the [Metrics Guide](strands-metrics-guide/README.md).
 
 ### Local Development: Direct Python Execution (Interactive Chatbot)
 
