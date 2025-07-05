@@ -56,6 +56,8 @@ This demonstration showcases:
 - **Distributed Architecture**: Multiple MCP servers for different data domains
 - **Real Weather Data**: Integration with Open-Meteo API for live weather information (no API key required)
 - **50% Less Code**: Compared to traditional orchestration frameworks like LangGraph
+- **Deep Observability**: AWS Strands debug logging for insights into agent orchestration internals
+- **Production Metrics**: Langfuse integration for token usage, latency tracking, and cost monitoring
 
 ## Why AWS Strands? The Next Evolution
 
