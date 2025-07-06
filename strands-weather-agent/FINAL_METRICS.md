@@ -37,13 +37,26 @@ Every query displays actual performance metrics:
 ```
 
 ### 4. Session Metrics Aggregation
-Multi-turn conversations show accumulated metrics:
+Multi-turn conversations and demos automatically show accumulated metrics:
 ```
 📈 Session Summary:
    ├─ Total Queries: 5
    ├─ Total Tokens: 85255 (82940 in, 2315 out)
    ├─ Average Tokens/Query: 17051
    └─ Session Duration: 75 seconds
+```
+
+The API server also displays final usage statistics on shutdown:
+```
+🧹 Shutting down...
+
+📊 Final Usage Statistics:
+
+📈 Session Summary:
+   ├─ Total Queries: 23
+   ├─ Total Tokens: 392,165 (382,940 in, 9,225 out)
+   ├─ Average Tokens/Query: 17,051
+   └─ Session Duration: 1,245 seconds
 ```
 
 ## Implementation Details
@@ -91,10 +104,11 @@ if hasattr(agent, 'event_loop_metrics'):
 
 ### Metrics Display (`metrics_display.py`)
 
-Clean, formatted output showing real performance data:
+Clean, formatted output with both per-query and session aggregation:
 
 ```python
 def format_metrics(metrics: EventLoopMetrics) -> str:
+    """Format individual query metrics."""
     total_tokens = metrics.accumulated_usage.get('totalTokens', 0)
     latency_ms = metrics.accumulated_metrics.get('latencyMs', 0)
     throughput = total_tokens / (latency_ms / 1000.0)
@@ -105,6 +119,25 @@ def format_metrics(metrics: EventLoopMetrics) -> str:
    ├─ Latency: {latency_sec:.2f} seconds
    ├─ Throughput: {throughput:.0f} tokens/second
    └─ Cycles: {metrics.cycle_count}
+"""
+
+class SessionMetrics:
+    """Aggregate metrics across multiple queries."""
+    
+    def add_query(self, metrics: EventLoopMetrics):
+        """Add metrics from a query to session totals."""
+        self.total_queries += 1
+        self.total_tokens += metrics.accumulated_usage.get('totalTokens', 0)
+        # ... accumulate other metrics
+    
+    def get_summary(self) -> str:
+        """Get formatted session summary."""
+        return f"""
+📈 Session Summary:
+   ├─ Total Queries: {self.total_queries}
+   ├─ Total Tokens: {self.total_tokens:,} ({self.total_input_tokens:,} in, {self.total_output_tokens:,} out)
+   ├─ Average Tokens/Query: {avg_tokens:,.0f}
+   └─ Session Duration: {duration:.0f} seconds
 """
 ```
 
@@ -122,14 +155,20 @@ response = await agent.query("What's the weather in Seattle?")
 python chatbot.py --multi-turn-demo
 ```
 
-Shows metrics after each turn and session summary at the end.
+Shows metrics after each turn and session summary at the end:
+- Per-query metrics displayed in real-time
+- Accumulated session statistics at completion
+- Clean, demo-friendly output format
 
 ### 3. API Server with Metrics
 ```bash
 python main.py
 ```
 
-Logs show metrics for every API request.
+Features:
+- Logs show metrics for every API request
+- Final usage statistics displayed on shutdown
+- Global metrics tracking across all sessions
 
 ### 4. Docker with Auto-Detection
 ```bash
@@ -137,6 +176,16 @@ Logs show metrics for every API request.
 ```
 
 Automatically detects if Langfuse network is available.
+
+### 5. Demo Mode with Session Summary
+```bash
+python chatbot.py --demo
+```
+
+Runs preset queries and shows:
+- Individual query metrics
+- Final session summary
+- Total token usage and performance
 
 ## Environment Variables
 
@@ -258,21 +307,32 @@ Checking Langfuse availability...
    ```bash
    python chatbot.py
    ```
+   - Real-time metrics after each query
+   - Toggle debug mode with 'debug' command
 
-2. **Demo Mode**:
+2. **Demo Mode** (with Session Summary):
    ```bash
    python chatbot.py --demo
    ```
+   - Runs 3 preset queries
+   - Shows individual query metrics
+   - Displays final session summary
 
-3. **Multi-Turn Demo**:
+3. **Multi-Turn Demo** (with Aggregated Metrics):
    ```bash
    python chatbot.py --multi-turn-demo
    ```
+   - 5-turn conversation maintaining context
+   - Per-query performance metrics
+   - Session statistics summary
 
-4. **API Server**:
+4. **API Server** (with Global Metrics):
    ```bash
    python main.py
    ```
+   - Per-request metrics in logs
+   - Final usage statistics on shutdown
+   - Session-based conversation support
 
 5. **Docker Deployment**:
    ```bash
@@ -280,6 +340,8 @@ Checking Langfuse availability...
    ./scripts/test_docker.sh
    ./scripts/stop_docker.sh
    ```
+   - Auto-detects Langfuse if available
+   - All metrics features included
 
 ## Summary
 
@@ -288,7 +350,17 @@ This implementation provides a **production-ready** metrics and observability so
 - ✅ **Zero Configuration**: Auto-detection handles everything
 - ✅ **Always Works**: Graceful degradation when services unavailable
 - ✅ **Real Metrics**: Actual performance data from AWS Strands
+- ✅ **Session Aggregation**: Track usage across multiple queries
 - ✅ **Clean Code**: Simple, understandable implementation
+- ✅ **Modular Design**: Reusable SessionMetrics class for all components
 - ✅ **Professional**: Production patterns in a demo-friendly package
 
 The system showcases the best of both worlds: the power of AWS Strands agents with AWS Bedrock, enhanced by Langfuse observability via OpenTelemetry, all wrapped in a clean, simple interface that "just works."
+
+### Key Achievements
+
+1. **Unified Metrics Module**: Single `SessionMetrics` class used everywhere
+2. **Automatic Aggregation**: All demos and API show accumulated statistics
+3. **Clean Output Format**: Consistent, readable metrics display
+4. **Zero-Touch Operation**: Metrics work without any configuration
+5. **Demo Excellence**: Perfect balance of simplicity and functionality

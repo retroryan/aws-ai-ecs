@@ -105,7 +105,7 @@ def configure_debug_logging(enable_debug: bool = False):
 @asynccontextmanager
 async def lifespan(app: FastAPI):
     """Initialize the agent and session manager on startup and cleanup on shutdown."""
-    global agent, session_manager, debug_mode
+    global agent, session_manager, debug_mode, global_metrics
     
     # Check debug mode from environment variable
     debug_mode = os.getenv("WEATHER_AGENT_DEBUG", "false").lower() == "true"
@@ -114,6 +114,14 @@ async def lifespan(app: FastAPI):
     configure_debug_logging(debug_mode)
     
     print("🚀 Starting AWS Strands Weather Agent API...")
+    
+    # Import and initialize global metrics tracker
+    try:
+        from .metrics_display import SessionMetrics
+    except ImportError:
+        from metrics_display import SessionMetrics
+    
+    global_metrics = SessionMetrics()
     
     # Add retry logic for MCP server connectivity
     max_retries = 5
@@ -150,8 +158,13 @@ async def lifespan(app: FastAPI):
             logger.error(f"Failed to initialize: {e}")
             raise
     
-    # Cleanup (Strands handles this automatically)
-    print("🧹 Shutting down...")
+    # Cleanup and show final metrics
+    print("\n🧹 Shutting down...")
+    
+    # Show final session metrics if any queries were processed
+    if global_metrics and global_metrics.total_queries > 0:
+        print("\n📊 Final Usage Statistics:")
+        print(global_metrics.get_summary())
 
 # Create FastAPI app
 app = FastAPI(
@@ -257,6 +270,10 @@ async def process_query(request: QueryRequest):
             except ImportError:
                 from metrics_display import format_metrics
             logger.info(format_metrics(agent.last_metrics))
+            
+            # Add to global metrics
+            if global_metrics:
+                global_metrics.add_query(agent.last_metrics)
         
         # Log query completion
         if debug_mode:
@@ -354,6 +371,10 @@ async def process_query_structured(request: QueryRequest):
             except ImportError:
                 from metrics_display import format_metrics
             logger.info(format_metrics(agent.last_metrics))
+            
+            # Add to global metrics
+            if global_metrics:
+                global_metrics.add_query(agent.last_metrics)
         
         # Log query completion
         if debug_mode:
