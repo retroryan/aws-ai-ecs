@@ -133,8 +133,20 @@ class SimpleWeatherChatbot:
         if not self.initialized:
             await self.initialize()
         
+        # Show query processing start
+        print("\n" + "="*60)
+        print("🔄 PROCESSING YOUR QUERY")
+        print("="*60)
+        print(f"📝 Query: {query}\n")
+        
         # Process with Strands agent
         response = await self.agent.query(query)
+        
+        # Show completion
+        print("\n" + "="*60)
+        print("✅ RESPONSE COMPLETE")
+        print("="*60)
+        
         return response
     
     async def cleanup(self):
@@ -226,7 +238,12 @@ async def demo_mode(show_debug: bool = False):
         print("1. Native MCP tool integration")
         print("2. Automatic tool discovery and execution")
         print("3. Clean, simple API design")
-        print("4. 50% less code than traditional frameworks\n")
+        print("4. 50% less code than traditional frameworks")
+        print("\n🔍 DEBUG MODE ENABLED:")
+        print("   - Model's natural language will appear as it streams")
+        print("   - 🔧 [AGENT DEBUG - Tool Call] = Our agent's tool usage logging")
+        print("   - 📥 [AGENT DEBUG - Tool Input] = Tool parameters being sent")
+        print("   - Strands internal debug logs = Framework's internal processing\n")
     else:
         print("🌤️  AWS Strands Weather Demo")
         print("=" * 50)
@@ -246,15 +263,16 @@ async def demo_mode(show_debug: bool = False):
         ]
         
         for i, query in enumerate(queries[:3], 1):  # Show first 3 queries
-            print(f"\n{'='*50}")
-            print(f"Demo Query {i}: {query}")
-            print(f"{'='*50}")
+            print(f"\n{'#'*70}")
+            print(f"# DEMO QUERY {i} OF 3")
+            print(f"{'#'*70}")
             
             response = await chatbot.chat(query)
             print(f"\n🤖 Assistant: {response}")
             
             # Brief pause between queries
             if i < 3:
+                print("\n⏸️  Pausing before next query...")
                 await asyncio.sleep(2)
         
         print("\n✨ Demo complete! The full system supports many more queries.")

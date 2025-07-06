@@ -38,7 +38,10 @@ try:
         WeatherAgentError, MCPConnectionError, 
         StructuredOutputError, ModelInvocationError
     )
-    from .langfuse_telemetry import LangfuseTelemetry, configure_langfuse_from_env
+    from .langfuse_telemetry import (
+        LangfuseTelemetry, configure_langfuse_from_env, 
+        get_langfuse_client, create_deterministic_trace_id
+    )
 except ImportError:
     from models.structured_responses import (
         WeatherQueryResponse, ExtractedLocation, WeatherDataSummary,
@@ -49,7 +52,10 @@ except ImportError:
         WeatherAgentError, MCPConnectionError, 
         StructuredOutputError, ModelInvocationError
     )
-    from langfuse_telemetry import LangfuseTelemetry, configure_langfuse_from_env
+    from langfuse_telemetry import (
+        LangfuseTelemetry, configure_langfuse_from_env,
+        get_langfuse_client, create_deterministic_trace_id
+    )
 
 # Type variable for structured output
 T = TypeVar('T')
@@ -158,6 +164,9 @@ class MCPWeatherAgent:
         self.telemetry_session_id = telemetry_session_id or str(uuid.uuid4())
         self.telemetry_tags = telemetry_tags or ["weather-agent", "mcp"]
         
+        # Langfuse v3 client for direct operations (scoring, etc.)
+        self._langfuse_client = None
+        
         logger.info(f"Initialized MCPWeatherAgent with model: {self.model_id}")
         logger.info(f"MCP servers configured: {len(self.mcp_clients)}")
         logger.info(f"Telemetry enabled: {self.telemetry_enabled}")
@@ -172,6 +181,25 @@ class MCPWeatherAgent:
         # No required environment variables anymore - all have defaults
         # This method is kept for future use if needed
         pass
+    
+    @property
+    def langfuse_client(self) -> Optional['Langfuse']:
+        """
+        Get or create a Langfuse v3 client for direct operations.
+        
+        This is useful for operations like scoring that require
+        the Langfuse API directly.
+        
+        Returns:
+            Langfuse client or None if not available
+        """
+        if not self.telemetry_enabled:
+            return None
+        
+        if self._langfuse_client is None:
+            self._langfuse_client = get_langfuse_client()
+        
+        return self._langfuse_client
     
     def _create_mcp_clients(self) -> List[MCPClient]:
         """
@@ -352,7 +380,9 @@ class MCPWeatherAgent:
                             print(event["data"], end="", flush=True)
                     elif "current_tool_use" in event and self.debug_logging:
                         tool_info = event["current_tool_use"]
-                        print(f"\n[Using tool: {tool_info.get('name', 'unknown')}]")
+                        print(f"\n🔧 [AGENT DEBUG - Tool Call]: {tool_info.get('name', 'unknown')}")
+                        if 'input' in tool_info:
+                            print(f"   📥 [AGENT DEBUG - Tool Input]: {tool_info['input']}")
                 
                 # Update session with new messages
                 if session_id:
@@ -747,6 +777,12 @@ class MCPWeatherAgent:
             "temperature": self.temperature,
             "mcp_servers": len(self.mcp_clients),
             "debug_logging": self.debug_logging,
+            "telemetry": {
+                "enabled": self.telemetry_enabled,
+                "langfuse_v3": self.langfuse_client is not None,
+                "session_id": self.telemetry_session_id,
+                "user_id": self.telemetry_user_id
+            },
             "session_management": {
                 "active_sessions": len(self.sessions),
                 "storage_type": "file" if self.session_storage_dir else "memory",
@@ -758,9 +794,50 @@ class MCPWeatherAgent:
                 "Pure async patterns",
                 "Proper error boundaries", 
                 "50% less boilerplate code",
-                "Fixed model ID configuration"
+                "Fixed model ID configuration",
+                "Langfuse v3 integration"
             ]
         }
+    
+    async def score_trace(self, 
+                         trace_id: str,
+                         name: str,
+                         value: float,
+                         comment: Optional[str] = None,
+                         data_type: str = "NUMERIC") -> bool:
+        """
+        Score a trace using Langfuse v3 API.
+        
+        This is useful for adding evaluation scores to traces,
+        which can be used for monitoring and improvement.
+        
+        Args:
+            trace_id: The trace ID to score
+            name: Name of the score (e.g., "accuracy", "relevance")
+            value: Numeric score value
+            comment: Optional comment about the score
+            data_type: Type of score (NUMERIC, CATEGORICAL, BOOLEAN)
+            
+        Returns:
+            True if scoring succeeded, False otherwise
+        """
+        if not self.langfuse_client:
+            logger.warning("Cannot score trace: Langfuse client not available")
+            return False
+        
+        try:
+            self.langfuse_client.create_score(
+                trace_id=trace_id,
+                name=name,
+                value=value,
+                data_type=data_type,
+                comment=comment
+            )
+            logger.info(f"Successfully scored trace {trace_id} with {name}={value}")
+            return True
+        except Exception as e:
+            logger.error(f"Failed to score trace {trace_id}: {e}")
+            return False
 
 
 # === Convenience Functions ===

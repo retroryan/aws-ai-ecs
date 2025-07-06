@@ -39,7 +39,9 @@ if env_path.exists():
     load_dotenv(env_path, override=True)
     print(f"📋 Loaded environment from {env_path}")
 
-from weather_agent.langfuse_telemetry import force_flush_telemetry
+from weather_agent.langfuse_telemetry import (
+    force_flush_telemetry, get_langfuse_client, create_deterministic_trace_id
+)
 from weather_agent.mcp_agent import create_weather_agent
 
 
@@ -210,6 +212,19 @@ async def run_validation_test(verbose=False):
         # Force flush telemetry
         print("\n🔄 Flushing telemetry...")
         force_flush_telemetry()
+        
+        # Demonstrate v3 features
+        print("\n🔬 Testing Langfuse v3 features...")
+        
+        # Test deterministic trace ID generation
+        trace_id = create_deterministic_trace_id(f"validation-{run_id}")
+        if trace_id:
+            print(f"✅ Created deterministic trace ID: {trace_id}")
+        
+        # Test Langfuse client availability
+        langfuse_client = get_langfuse_client()
+        if langfuse_client:
+            print("✅ Langfuse v3 client available for scoring operations")
         
         return start_time, run_id
         

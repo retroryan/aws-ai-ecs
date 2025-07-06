@@ -33,6 +33,13 @@ async def run_mcp_multi_turn_demo(structured: bool = False):
     print("session-based conversation management.")
     print("=" * 50)
     
+    if structured:
+        print("\n🔍 DEBUG MODE ENABLED:")
+        print("   - Model's natural language will appear as it streams")
+        print("   - 🔧 [AGENT DEBUG - Tool Call] = Our agent's tool usage logging")
+        print("   - 📥 [AGENT DEBUG - Tool Input] = Tool parameters being sent")
+        print("   - Strands internal debug logs = Framework's internal processing")
+    
     # Initialize the agent
     print("\n🔌 Initializing AWS Strands agent with MCP connections...")
     agent = await create_weather_agent(structured)
@@ -73,17 +80,27 @@ async def run_mcp_multi_turn_demo(structured: bool = False):
     
     try:
         for turn in conversation_turns:
-            print(f"\n{'='*50}")
-            print(f"Turn {turn['turn']}: {turn['description']}")
-            print(f"{'='*50}")
+            print(f"\n{'#'*70}")
+            print(f"# CONVERSATION TURN {turn['turn']}: {turn['description']}")
+            print(f"{'#'*70}")
             print(f"👤 User: {turn['query']}")
             
-            # Process the query with session context
-            print(f"🤖 Assistant: ", end="", flush=True)
+            # Show query processing start
+            print("\n" + "="*60)
+            print("🔄 PROCESSING YOUR QUERY")
+            print("="*60)
+            print(f"📝 Query: {turn['query']}\n")
             
+            # Process the query with session context
             response = await agent.query(turn['query'], session_id=session_id)
             
-            # Print the response content
+            # Show completion
+            print("\n" + "="*60)
+            print("✅ RESPONSE COMPLETE")
+            print("="*60)
+            
+            # Print the response
+            print(f"\n🤖 Assistant: ", end="")
             if hasattr(response, 'content'):
                 print(response.content)
             else:

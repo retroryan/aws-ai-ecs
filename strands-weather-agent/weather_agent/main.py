@@ -94,12 +94,24 @@ def configure_debug_logging(enable_debug: bool = False):
     logging.getLogger("uvicorn.access").setLevel(logging.DEBUG)
     
     print(f"\n🔍 Debug logging enabled. Logs will be written to: {log_file}")
-    print("📊 Console will show INFO level, file will contain DEBUG details.\n")
+    print("📊 Console will show INFO level, file will contain DEBUG details.")
+    print("\n🔍 DEBUG MODE ENABLED:")
+    print("   - Model's natural language will appear as it streams")
+    print("   - 🔧 [AGENT DEBUG - Tool Call] = Our agent's tool usage logging")
+    print("   - 📥 [AGENT DEBUG - Tool Input] = Tool parameters being sent")
+    print("   - Strands internal debug logs = Framework's internal processing\n")
 
 @asynccontextmanager
 async def lifespan(app: FastAPI):
     """Initialize the agent and session manager on startup and cleanup on shutdown."""
-    global agent, session_manager
+    global agent, session_manager, debug_mode
+    
+    # Check debug mode from environment variable
+    debug_mode = os.getenv("WEATHER_AGENT_DEBUG", "false").lower() == "true"
+    
+    # Configure debug logging if enabled
+    configure_debug_logging(debug_mode)
+    
     print("🚀 Starting AWS Strands Weather Agent API...")
     
     # Add retry logic for MCP server connectivity
@@ -198,6 +210,12 @@ async def process_query(request: QueryRequest):
         raise HTTPException(status_code=503, detail="Service not initialized")
     
     try:
+        # Log query processing start
+        if debug_mode:
+            logger.info("="*60)
+            logger.info("🔄 PROCESSING YOUR QUERY")
+            logger.info("="*60)
+            logger.info(f"📝 Query: {request.query}")
         # Handle session creation/retrieval
         session_new = False
         session_id = request.session_id
@@ -232,6 +250,12 @@ async def process_query(request: QueryRequest):
         await session_manager.update_activity(session_id)
         session = await session_manager.get_session(session_id)
         
+        # Log query completion
+        if debug_mode:
+            logger.info("="*60)
+            logger.info("✅ RESPONSE COMPLETE")
+            logger.info("="*60)
+        
         return QueryResponse(
             response=response,
             session_id=session_id,
@@ -265,6 +289,12 @@ async def process_query_structured(request: QueryRequest):
         raise HTTPException(status_code=503, detail="Service not initialized")
     
     try:
+        # Log query processing start
+        if debug_mode:
+            logger.info("="*60)
+            logger.info("🔄 PROCESSING YOUR QUERY (Structured)")
+            logger.info("="*60)
+            logger.info(f"📝 Query: {request.query}")
         # Handle session creation/retrieval (same logic as /query)
         session_new = False
         session_id = request.session_id
@@ -308,6 +338,12 @@ async def process_query_structured(request: QueryRequest):
         validation = agent.validate_response(response)
         if not validation.valid:
             logger.warning(f"Response validation issues: {validation.errors}")
+        
+        # Log query completion
+        if debug_mode:
+            logger.info("="*60)
+            logger.info("✅ RESPONSE COMPLETE (Structured)")
+            logger.info("="*60)
         
         return response
         

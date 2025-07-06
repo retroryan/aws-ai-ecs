@@ -69,12 +69,15 @@ healthcheck:
   - Consistent tool calling across models
   - Cost-effective scalability
 
-- **Langfuse**: Provides comprehensive observability with:
-  - OpenTelemetry-based distributed tracing
+- **Langfuse v3**: Provides comprehensive observability with:
+  - OpenTelemetry-based distributed tracing (native OTEL support)
   - Token usage and cost tracking
   - Latency and performance metrics
   - Session and user analytics
   - Custom tags and metadata support
+  - Deterministic trace ID generation for reliable scoring
+  - Direct scoring API for evaluation workflows
+  - Enhanced v3 client with `tracing_enabled` parameter
 
 ### System Components
 
@@ -102,15 +105,16 @@ healthcheck:
 ## Key Files
 
 - `main.py`: Application entry point with FastAPI interface and debug logging
-- `weather_agent/mcp_agent.py`: AWS Strands agent implementation with pure async
-- `weather_agent/langfuse_telemetry.py`: Langfuse observability integration
+- `weather_agent/mcp_agent.py`: AWS Strands agent implementation with pure async and Langfuse v3 integration
+- `weather_agent/langfuse_telemetry.py`: Langfuse v3 observability integration with deterministic trace IDs
 - `mcp_servers/`: FastMCP server implementations
   - `forecast_server.py`: Weather forecast tools
   - `historical_server.py`: Historical weather tools
   - `agricultural_server.py`: Agricultural data tools
 - `models/`: Pydantic models for structured responses
 - `strands-metrics-guide/`: Validation and monitoring scripts
-  - `run_and_validate_metrics.py`: End-to-end metrics validation
+  - `run_and_validate_metrics.py`: End-to-end metrics validation with v3 features
+  - `demo_langfuse_v3.py`: Showcase of Langfuse v3 features (scoring, deterministic IDs)
   - `debug_telemetry.py`: Telemetry configuration debugging
   - `inspect_traces.py`: Trace inspection utility
   - `monitor_performance.py`: Performance impact analysis
@@ -140,9 +144,12 @@ The key to running AWS applications in Docker is proper credential handling. Our
 
 #### The Magic: AWS Credentials in Docker
 
+**⚠️ CRITICAL: DO NOT CHANGE THIS PATTERN - IT KEEPS GETTING BROKEN! ⚠️**
+
 ```bash
-# The start_docker.sh script handles this automatically:
-export $(aws configure export-credentials --format env-no-export 2>/dev/null)
+# The start_docker.sh and test_docker.sh scripts handle this automatically:
+eval $(aws configure export-credentials --format env 2>/dev/null)
+export AWS_SESSION_TOKEN=${AWS_SESSION_TOKEN:-}
 ```
 
 This command:
@@ -154,6 +161,12 @@ This command:
   - Temporary credentials
   - IAM roles
   - MFA-enabled accounts
+
+**IMPORTANT NOTES:**
+1. **ALWAYS use `eval` with `export-credentials`** - The command outputs shell export statements
+2. **ALWAYS export AWS_SESSION_TOKEN** - Even if empty, Docker Compose needs it defined
+3. **NEVER use `--format env-no-export`** - This doesn't actually export the variables
+4. **BOTH start_docker.sh AND test_docker.sh need this** - Test script needs AWS creds too
 
 #### Docker Commands
 
@@ -207,6 +220,7 @@ python main.py
 
 ## Testing
 
+### Unit Tests
 ```bash
 # Run all tests
 python tests/run_all_tests.py
@@ -215,6 +229,26 @@ python tests/run_all_tests.py
 python -m pytest tests/test_mcp_servers.py -v
 python -m pytest tests/test_weather_agent.py -v
 ```
+
+### Docker Integration Tests
+
+**⚠️ IMPORTANT: The test_docker.sh script has been fixed to show full responses ⚠️**
+
+The test script:
+1. **Tests Docker containers** via HTTP endpoints (no AWS credentials needed in test script)
+2. **Shows full responses** without truncation to see complete agent replies  
+3. **Provides detailed error messages** when AWS/Bedrock errors occur in containers
+4. **Tracks session information** for multi-turn conversation testing
+
+```bash
+# After starting services with ./scripts/start_docker.sh
+./scripts/test_docker.sh
+```
+
+Key points:
+- The test script doesn't need AWS credentials - it's just making HTTP calls to containers
+- AWS credentials are passed to containers via docker-compose environment variables
+- The main fix was removing response truncation to show full agent responses
 
 ## Docker Configuration
 
@@ -326,19 +360,29 @@ FastMCP servers require special handling for health checks in Docker:
   - `strands.tools.mcp`, `strands_agent.tools`
 - **Structured Format**: Includes timestamps, logger name, level, function, and line numbers
 
+### Docker Debug Logs
+- **Volume Mapping**: The `docker-compose.yml` includes `./logs:/app/logs` volume mapping
+- **Automatic Creation**: Logs directory is created automatically when debug mode is enabled
+- **Access Logs**: Debug logs from Docker containers are accessible in the host `logs/` directory
+- **Enable Debug in Docker**: Use `./scripts/start_docker.sh --debug` or set `WEATHER_AGENT_DEBUG=true`
+
 ### Server Logs
 - Server logs are written to `logs/` directory
 - Each MCP server maintains its own log file
 - PID files enable process management
 - Structured logging for debugging and monitoring
 
-### Observability with Langfuse
-- **Automatic Tracing**: All agent interactions are traced
+### Observability with Langfuse v3
+- **Automatic Tracing**: All agent interactions are traced via OTEL
 - **Token Usage Tracking**: Monitor LLM token consumption and costs
 - **Latency Metrics**: Track response times and performance
 - **Session Management**: Group related queries together
 - **Custom Tags**: Add metadata for filtering and analysis
-- **OpenTelemetry Integration**: Standard OTEL protocol support
+- **OpenTelemetry Integration**: Native OTEL protocol support
+- **Deterministic Trace IDs**: Generate predictable trace IDs for reliable scoring
+- **Direct Scoring API**: Add evaluation scores to traces with `create_score()`
+- **Enhanced Client**: Uses v3's `tracing_enabled` parameter
+- **Hybrid Integration**: Combines OTEL telemetry with direct Langfuse API operations
 
 ## Environment Variables
 
@@ -379,6 +423,14 @@ Note: The `us.` prefix indicates an inference profile that provides cross-region
 
 ## Recent Improvements and Updates
 
+### Langfuse v3 Integration
+- **Native v3 Support**: Already using Langfuse v3.1.2 with full feature support
+- **Deterministic Trace IDs**: Use `Langfuse.create_trace_id(seed)` for predictable traces
+- **Direct Scoring API**: Score traces with `agent.score_trace()` method
+- **Enhanced Client**: Langfuse client with `tracing_enabled=True` parameter
+- **Hybrid Approach**: Combines OTEL telemetry with direct Langfuse API operations
+- **v3 Demo Script**: `demo_langfuse_v3.py` showcases all new features
+
 ### Pure Async Implementation
 - **Eliminated ThreadPoolExecutor**: The agent now uses pure async patterns throughout
 - **Streamable HTTP Clients**: MCP clients use `streamablehttp_client` for better async communication
@@ -391,12 +443,13 @@ Note: The `us.` prefix indicates an inference profile that provides cross-region
 - **Module-Specific Debug**: Targeted debugging for Strands components
 - **CLI Integration**: Simple `--debug` flag or environment variable control
 
-### Comprehensive Metrics with Langfuse
-- **Full OpenTelemetry Support**: Standard OTEL protocol integration
+### Comprehensive Metrics with Langfuse v3
+- **Full OpenTelemetry Support**: Native OTEL protocol integration
 - **Automatic Instrumentation**: Zero-code changes needed for basic metrics
 - **Rich Metadata**: Session tracking, user identification, and custom tags
 - **Performance Monitoring**: Token usage, latency, and cost tracking
 - **Validation Tools**: Complete suite of scripts for testing and monitoring
+- **Scoring Capabilities**: Add evaluation scores to traces for quality tracking
 
 ### Code Simplification
 - **50% Less Code**: Major cleanup removed over 10,000 lines
@@ -705,11 +758,50 @@ python monitor_performance.py
 3. **Test with test_docker.sh** - Verifies both health and functionality
 4. **Check AWS identity** - The start script shows which AWS account is being used
 
+### Critical Docker Configuration - DO NOT CHANGE
+
+**⚠️ IMPORTANT: The current Docker setup has been carefully designed to handle the complexities of AWS credentials and Langfuse network integration. DO NOT attempt to "simplify" it further. ⚠️**
+
+#### AWS Credential Handling
+The `start_docker.sh` script uses a specific pattern that works with:
+- AWS CLI v1 and v2
+- SSO authentication
+- Temporary credentials
+- Environment variables
+- Standard IAM credentials
+
+The script MUST maintain its current credential export logic:
+```bash
+# For AWS CLI v2, use export-credentials if available
+if aws configure export-credentials --help &> /dev/null 2>&1; then
+    eval $(aws configure export-credentials --format env)
+    export AWS_SESSION_TOKEN=${AWS_SESSION_TOKEN:-}
+else
+    # For AWS CLI v1, extract from config files
+    export AWS_ACCESS_KEY_ID=$(aws configure get aws_access_key_id)
+    export AWS_SECRET_ACCESS_KEY=$(aws configure get aws_secret_access_key)
+    export AWS_SESSION_TOKEN=$(aws configure get aws_session_token 2>/dev/null || echo "")
+fi
+```
+
+This handles the AWS CLI version differences and ensures credentials are properly exported for Docker containers.
+
+#### Langfuse Network Integration
+The `docker-compose.langfuse.yml` file is REQUIRED for telemetry integration. It:
+- Connects to the external `langfuse_default` network
+- Sets the correct internal Docker hostname (`langfuse-web:3000`)
+- Enables optional telemetry without affecting the base setup
+
+This separation allows:
+- Running WITHOUT telemetry: `docker compose up`
+- Running WITH telemetry: `docker compose -f docker-compose.yml -f docker-compose.langfuse.yml up`
+
 ### Common Pitfalls to Avoid
 1. **Don't use AWS profiles in Docker** - Containers can't access ~/.aws/config
 2. **Don't forget AWS_SESSION_TOKEN** - Required for SSO and temporary credentials
 3. **Don't hardcode ports** - Use environment variables for flexibility
 4. **Don't skip health checks** - They ensure services start in the correct order
+5. **Don't "simplify" the credential handling** - It handles many edge cases that are necessary
 
 ### Best Practices
 1. **Use Docker for consistency** - Same environment locally and in production

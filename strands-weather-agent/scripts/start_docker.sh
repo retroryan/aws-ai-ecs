@@ -57,38 +57,48 @@ if [ -f .env ]; then
     echo "✓ Environment variables loaded from .env"
 fi
 
-# Export AWS credentials if available
-if command -v aws &> /dev/null && aws sts get-caller-identity &> /dev/null 2>&1; then
-    # Export credentials - this works with profiles, SSO, and temporary credentials
-    eval $(aws configure export-credentials --format env 2>/dev/null)
-    echo "✓ AWS credentials exported"
-    # Show which AWS account we're using (without exposing sensitive info)
-    ACCOUNT_ID=$(aws sts get-caller-identity --query Account --output text 2>/dev/null || echo "unknown")
-    echo "✓ Using AWS Account: $ACCOUNT_ID"
-    
-    # Debug: Check if credentials are actually exported
-    if [ -z "$AWS_ACCESS_KEY_ID" ]; then
-        echo "⚠️  Warning: AWS_ACCESS_KEY_ID not exported. Trying alternative method..."
-        # Alternative method that works with profiles
-        export AWS_ACCESS_KEY_ID=$(aws configure get aws_access_key_id --profile ${AWS_PROFILE:-default})
-        export AWS_SECRET_ACCESS_KEY=$(aws configure get aws_secret_access_key --profile ${AWS_PROFILE:-default})
-        export AWS_SESSION_TOKEN=$(aws configure get aws_session_token --profile ${AWS_PROFILE:-default} 2>/dev/null || echo "")
+# Export AWS credentials for Docker Compose
+echo "Configuring AWS credentials..."
+
+# Check if credentials are already in environment
+if [ -n "$AWS_ACCESS_KEY_ID" ] && [ -n "$AWS_SECRET_ACCESS_KEY" ]; then
+    echo "✓ Using existing AWS credentials from environment"
+    export AWS_SESSION_TOKEN=${AWS_SESSION_TOKEN:-}
+else
+    # Try to get credentials from AWS CLI config
+    if command -v aws &> /dev/null && aws sts get-caller-identity &> /dev/null; then
+        # For AWS CLI v2, use export-credentials if available
+        if aws configure export-credentials --help &> /dev/null 2>&1; then
+            eval $(aws configure export-credentials --format env)
+            export AWS_SESSION_TOKEN=${AWS_SESSION_TOKEN:-}
+        else
+            # For AWS CLI v1, extract from config files
+            export AWS_ACCESS_KEY_ID=$(aws configure get aws_access_key_id)
+            export AWS_SECRET_ACCESS_KEY=$(aws configure get aws_secret_access_key)
+            export AWS_SESSION_TOKEN=$(aws configure get aws_session_token 2>/dev/null || echo "")
+        fi
         
         if [ -n "$AWS_ACCESS_KEY_ID" ]; then
-            echo "✓ AWS credentials exported using profile method"
+            echo "✓ AWS credentials exported successfully"
+            # Show which AWS account we're using
+            ACCOUNT_ID=$(aws sts get-caller-identity --query Account --output text 2>/dev/null || echo "unknown")
+            echo "✓ Using AWS Account: $ACCOUNT_ID"
         else
             echo "❌ Failed to export AWS credentials"
-            echo "   Please ensure your AWS CLI is properly configured"
             exit 1
         fi
+    else
+        echo "❌ AWS CLI not found or credentials not configured"
+        echo ""
+        echo "Please ensure you have valid AWS credentials configured:"
+        echo "  - Run 'aws configure' to set up credentials"
+        echo "  - Or run 'aws sso login' if using SSO"
+        echo "  - Or set AWS_ACCESS_KEY_ID and AWS_SECRET_ACCESS_KEY in .env file"
+        echo ""
+        echo "Test your credentials with: aws sts get-caller-identity"
+        exit 1
     fi
-else
-    echo "⚠️  Warning: AWS CLI not configured or credentials not accessible"
-    echo "   Docker containers will rely on credentials from .env file"
 fi
-
-# Set AWS_SESSION_TOKEN to empty if not set (to avoid docker-compose warning)
-export AWS_SESSION_TOKEN=${AWS_SESSION_TOKEN:-}
 
 # Export debug mode if enabled
 if [ "$DEBUG_MODE" = "true" ]; then
@@ -142,10 +152,22 @@ fi
 
 echo ""
 echo "Services started!"
+echo "✓ Weather Agent API: http://localhost:7777"
+
 if [ "$TELEMETRY_MODE" = "true" ]; then
-    echo "✓ Weather Agent API: http://localhost:7777"
-    echo "✓ Langfuse UI: http://localhost:3000"
+    echo "✓ Connected to local Langfuse instance"
     echo ""
-    echo "View traces at: http://localhost:3000 after running queries"
+    echo "View metrics and traces at: http://localhost:3000"
 fi
+
+if [ "$DEBUG_MODE" = "true" ]; then
+    echo ""
+    echo "Debug logs will be saved to:"
+    echo "  logs/weather_agent_debug_*.log"
+    echo ""
+    echo "To view logs in real-time:"
+    echo "  docker compose logs -f weather-agent"
+fi
+
+echo ""
 echo "Run ./scripts/test_docker.sh to test the services"

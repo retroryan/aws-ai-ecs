@@ -1,23 +1,27 @@
 """
 Langfuse Telemetry Integration for AWS Strands Weather Agent
 
-This module provides Langfuse observability integration for the weather agent,
+This module provides Langfuse v3 observability integration for the weather agent,
 following AWS Strands best practices for OpenTelemetry integration.
 
 Key Features:
-- Automatic OTEL configuration for Langfuse
-- Session and user tracking
+- Automatic OTEL configuration for Langfuse v3
+- Session and user tracking with v3 patterns
 - Tagging and metadata support
-- Proper telemetry initialization
-- Support for evaluation and scoring
+- Proper telemetry initialization with v3 tracing_enabled parameter
+- Support for evaluation and scoring with v3 API
+- Deterministic trace ID generation for reliable scoring
 """
 
 import os
 import base64
 import logging
-from typing import Optional, Dict, Any
+from typing import Optional, Dict, Any, TYPE_CHECKING
 from datetime import datetime
 from pathlib import Path
+
+if TYPE_CHECKING:
+    from langfuse import Langfuse
 
 # Load .env file if available
 try:
@@ -29,6 +33,15 @@ except ImportError:
     pass
 
 from strands.telemetry import StrandsTelemetry
+
+# Import Langfuse v3 for direct client operations
+try:
+    from langfuse import Langfuse
+    LANGFUSE_V3_AVAILABLE = True
+except ImportError:
+    LANGFUSE_V3_AVAILABLE = False
+    logger = logging.getLogger(__name__)
+    logger.warning("Langfuse v3 not available. Some features will be disabled.")
 
 # Configure logging
 logger = logging.getLogger(__name__)
@@ -225,3 +238,66 @@ def force_flush_telemetry():
             logger.debug("Telemetry flushed successfully")
     except Exception as e:
         logger.warning(f"Failed to flush telemetry: {e}")
+
+
+def get_langfuse_client() -> Optional['Langfuse']:
+    """
+    Get a Langfuse v3 client for direct operations like scoring.
+    
+    This client is separate from the OTEL telemetry and is used for
+    operations that require the Langfuse API directly.
+    
+    Returns:
+        Langfuse client or None if not available/configured
+    """
+    if not LANGFUSE_V3_AVAILABLE:
+        logger.warning("Langfuse v3 not available")
+        return None
+    
+    public_key = os.getenv("LANGFUSE_PUBLIC_KEY")
+    secret_key = os.getenv("LANGFUSE_SECRET_KEY")
+    host = os.getenv("LANGFUSE_HOST", "https://cloud.langfuse.com")
+    
+    if not public_key or not secret_key:
+        logger.warning("Langfuse credentials not configured")
+        return None
+    
+    try:
+        # Create Langfuse v3 client with tracing_enabled parameter
+        client = Langfuse(
+            public_key=public_key,
+            secret_key=secret_key,
+            host=host,
+            tracing_enabled=True  # v3 parameter
+        )
+        return client
+    except Exception as e:
+        logger.error(f"Failed to create Langfuse client: {e}")
+        return None
+
+
+def create_deterministic_trace_id(seed: str) -> Optional[str]:
+    """
+    Create a deterministic trace ID using Langfuse v3.
+    
+    This is useful for:
+    - Correlating traces with external systems
+    - Reliable scoring in test scenarios
+    - Maintaining trace consistency across retries
+    
+    Args:
+        seed: Unique seed string for generating the trace ID
+        
+    Returns:
+        W3C-compliant trace ID or None if v3 not available
+    """
+    if not LANGFUSE_V3_AVAILABLE:
+        return None
+    
+    try:
+        # Use Langfuse v3's deterministic trace ID generation
+        trace_id = Langfuse.create_trace_id(seed=seed)
+        return trace_id
+    except Exception as e:
+        logger.error(f"Failed to create deterministic trace ID: {e}")
+        return None

@@ -109,6 +109,8 @@ services:
     networks:
       - weather-network
     restart: unless-stopped
+    volumes:
+      - ./logs:/app/logs
     healthcheck:
       test: ["CMD", "curl", "-f", "http://localhost:7777/health"]
       interval: 30s

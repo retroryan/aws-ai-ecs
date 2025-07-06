@@ -1,12 +1,13 @@
 #!/usr/bin/env python3
 """
-Professional demo showcase for AWS Strands Weather Agent with Langfuse metrics and debug logging.
+Professional demo showcase for AWS Strands Weather Agent with Langfuse v3 metrics and debug logging.
 
 This script provides a comprehensive demonstration of the Weather Agent's capabilities:
 - Multi-server coordination across forecast, historical, and agricultural data
 - Structured output with type-safe responses
-- Telemetry tracking with Langfuse
+- Telemetry tracking with Langfuse v3 (OTEL-based with scoring support)
 - Debug logging for development insights
+- Deterministic trace IDs and evaluation scoring
 """
 
 import asyncio

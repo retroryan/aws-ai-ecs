@@ -139,6 +139,10 @@ python chatbot.py                    # Interactive mode
 python chatbot.py --demo             # Demo mode with example queries
 python chatbot.py --multi-turn-demo  # Multi-turn conversation demo
 
+# Add --debug to any mode to see internal processing:
+python chatbot.py --demo --debug     # Shows tool calls and streaming
+python chatbot.py --multi-turn-demo --debug  # Shows context retention
+
 # 6. Stop servers when done (from project root)
 cd .. && ./scripts/stop_servers.sh
 ```
@@ -329,6 +333,30 @@ The structured output preserves all geographic intelligence and weather data:
 ```
 
 ## Demo and Testing
+
+### Debug Mode - Understanding the Output
+
+When running demos with `--debug`, you'll see the internal workings of AWS Strands:
+
+```
+🔍 DEBUG MODE ENABLED:
+   - Model's natural language will appear as it streams
+   - 🔧 [AGENT DEBUG - Tool Call] = Our agent's tool usage logging
+   - 📥 [AGENT DEBUG - Tool Input] = Tool parameters being sent
+   - Strands internal debug logs = Framework's internal processing
+```
+
+Example output breakdown:
+- **"Tool #1: get_weather_forecast"** - The LLM's natural language describing what it's doing
+- **"🔧 [AGENT DEBUG - Tool Call]: get_weather_forecast"** - Our agent tracking tool execution
+- **"📥 [AGENT DEBUG - Tool Input]: {'location': 'Seattle'}"** - Parameters sent to the tool
+- **Strands logs** - Framework's internal processing (event loops, streaming, etc.)
+
+This helps you understand:
+1. How the LLM thinks about tool usage
+2. Which tools are actually being called
+3. What parameters are being passed
+4. How Strands orchestrates the entire flow
 
 ### Running Interactive Demos
 

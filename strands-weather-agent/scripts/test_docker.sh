@@ -134,6 +134,8 @@ echo ""
 # Function to test a query
 test_query() {
     local query=$1
+    local show_full=${2:-false}  # Optional parameter to show full response
+    
     echo "Query: \"$query\""
     
     response=$(curl -s -X POST http://localhost:7777/query \
@@ -147,23 +149,27 @@ test_query() {
     conversation_turn=$(echo "$response" | jq -r '.conversation_turn' 2>/dev/null || echo "")
     
     if [[ "$response_text" == "Error"* ]] || [[ "$response_text" == "An error occurred"* ]]; then
-        if [[ "$response_text" == *"credentials"* ]]; then
-            echo -e "Response: ${YELLOW}⚠${NC} AWS credentials not configured (expected in Docker)"
+        if [[ "$response_text" == *"credentials"* ]] || [[ "$response_text" == *"AWS"* ]] || [[ "$response_text" == *"Bedrock"* ]]; then
+            echo -e "Response: ${RED}✗ AWS Bedrock Error${NC}"
+            echo -e "Details: $response_text"
+            echo ""
+            echo "Troubleshooting:"
+            echo "1. Ensure AWS credentials are properly configured:"
+            echo "   aws sts get-caller-identity"
+            echo "2. Check if Bedrock model is accessible:"
+            echo "   aws bedrock list-foundation-models --region ${BEDROCK_REGION:-us-east-1}"
+            echo "3. Verify BEDROCK_MODEL_ID is set in .env file"
         else
             echo -e "Response: ${RED}✗ $response_text${NC}"
         fi
     else
-        # Truncate long responses for display
-        if [ ${#response_text} -gt 150 ]; then
-            display_text="${response_text:0:147}..."
-        else
-            display_text="$response_text"
-        fi
-        echo -e "Response: ${GREEN}✓${NC} $display_text"
+        # Show full response without truncation
+        echo -e "Response: ${GREEN}✓${NC}"
+        echo "$response_text"
         
         # Display session info if available
         if [[ -n "$session_id" ]] && [[ "$session_id" != "null" ]]; then
-            echo -e "Session: ${GREEN}✓${NC} ID: ${session_id:0:8}... | New: $session_new | Turn: $conversation_turn"
+            echo -e "\nSession: ${GREEN}✓${NC} ID: ${session_id:0:8}... | New: $session_new | Turn: $conversation_turn"
         fi
     fi
     echo ""
