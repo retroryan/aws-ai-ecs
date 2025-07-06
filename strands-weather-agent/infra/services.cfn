@@ -33,13 +33,23 @@ Parameters:
     Default: amazon.nova-lite-v1:0
     Description: AWS Bedrock model ID to use
     AllowedValues:
+      # Amazon Nova models
       - amazon.nova-lite-v1:0
       - amazon.nova-pro-v1:0
+      # Anthropic Claude models (with inference profiles)
+      - us.anthropic.claude-3-5-sonnet-20241022-v2:0
+      - us.anthropic.claude-3-5-sonnet-20240620-v1:0
+      - us.anthropic.claude-3-5-haiku-20241022-v1:0
+      # Anthropic Claude models (direct)
       - anthropic.claude-3-5-sonnet-20240620-v1:0
       - anthropic.claude-3-haiku-20240307-v1:0
       - anthropic.claude-3-opus-20240229-v1:0
+      # Meta Llama models (with inference profiles)
+      - us.meta.llama3-1-70b-instruct-v1:0
+      # Meta Llama models (direct)
       - meta.llama3-70b-instruct-v1:0
       - meta.llama3-1-70b-instruct-v1:0
+      # Cohere models
       - cohere.command-r-plus-v1:0
       - cohere.command-r-v1:0
   
@@ -58,6 +68,38 @@ Parameters:
     Default: INFO
     Description: Logging level
     AllowedValues: [DEBUG, INFO, WARNING, ERROR]
+  
+  # Langfuse Telemetry Parameters
+  EnableTelemetry:
+    Type: String
+    Default: "false"
+    Description: Enable Langfuse telemetry
+    AllowedValues: ["true", "false"]
+  
+  LangfuseHost:
+    Type: String
+    Default: ""
+    Description: Langfuse Cloud endpoint URL
+  
+  LangfusePublicKey:
+    Type: String
+    Default: ""
+    Description: Langfuse public key (stored in Parameter Store)
+    NoEcho: true
+  
+  LangfuseSecretKey:
+    Type: String
+    Default: ""
+    Description: Langfuse secret key (stored in Parameter Store)
+    NoEcho: true
+  
+  TelemetryTags:
+    Type: String
+    Default: "production,aws-strands,weather-agent"
+    Description: Comma-separated tags for telemetry
+
+Conditions:
+  TelemetryEnabled: !Equals [!Ref EnableTelemetry, "true"]
 
 Resources:
   # Log Groups
@@ -259,6 +301,39 @@ Resources:
               Value: http://historical.strands-weather.local:7779/mcp/
             - Name: MCP_AGRICULTURAL_URL
               Value: http://agricultural.strands-weather.local:7780/mcp/
+            - Name: ENABLE_TELEMETRY
+              Value: !Ref EnableTelemetry
+            - !If
+              - TelemetryEnabled
+              - Name: LANGFUSE_HOST
+                Value: !Ref LangfuseHost
+              - !Ref AWS::NoValue
+            - !If
+              - TelemetryEnabled
+              - Name: TELEMETRY_TAGS
+                Value: !Ref TelemetryTags
+              - !Ref AWS::NoValue
+            - !If
+              - TelemetryEnabled
+              - Name: TELEMETRY_USER_ID
+                Value: !Sub "ecs-${AWS::AccountId}"
+              - !Ref AWS::NoValue
+            - !If
+              - TelemetryEnabled
+              - Name: TELEMETRY_SESSION_ID
+                Value: !Sub "${AWS::StackName}-${AWS::Region}"
+              - !Ref AWS::NoValue
+          Secrets:
+            - !If
+              - TelemetryEnabled
+              - Name: LANGFUSE_PUBLIC_KEY
+                ValueFrom: !Sub "arn:aws:ssm:${AWS::Region}:${AWS::AccountId}:parameter/strands-weather-agent/langfuse/public-key"
+              - !Ref AWS::NoValue
+            - !If
+              - TelemetryEnabled
+              - Name: LANGFUSE_SECRET_KEY
+                ValueFrom: !Sub "arn:aws:ssm:${AWS::Region}:${AWS::AccountId}:parameter/strands-weather-agent/langfuse/secret-key"
+              - !Ref AWS::NoValue
           LogConfiguration:
             LogDriver: awslogs
             Options:

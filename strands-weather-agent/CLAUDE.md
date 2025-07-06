@@ -1,5 +1,9 @@
 # AWS Strands + FastMCP Weather Agent Demo (Model-Agnostic with AWS Bedrock)
 
+## Project Goal
+
+**This is a high-quality, simple demonstration of AWS Strands with comprehensive monitoring and metrics to understand how AWS Strands works and integrates with Langfuse. The focus is on minimizing complexity as this is not a full production application - the goal is to create a clean and simple demo that clearly illustrates the key concepts and capabilities.**
+
 This project demonstrates how to build a model-agnostic AI agent system using AWS Strands for orchestration and FastMCP for distributed tool servers. It showcases a weather and agricultural data agent that can answer questions about weather conditions, forecasts, and agricultural recommendations using any AWS Bedrock foundation model.
 
 ## Critical Configuration: MCP Server Health Checks

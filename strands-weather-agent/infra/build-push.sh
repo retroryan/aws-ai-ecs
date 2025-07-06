@@ -89,22 +89,18 @@ if [ ${#MISSING_REPOS[@]} -gt 0 ]; then
     exit 1
 fi
 
-# Verify Docker authentication
+# Authenticate Docker with ECR
 echo ""
-echo "🔐 Verifying Docker ECR authentication..."
+echo "🔐 Authenticating Docker with ECR..."
 echo "----------------------------------------"
 
-echo -n "Testing ECR login... "
-if docker pull "${ECR_REGISTRY}/hello-world" &>/dev/null 2>&1 || [ $? -eq 1 ]; then
-    echo -e "${GREEN}✅ Authenticated${NC}"
+# Always authenticate to ensure fresh token
+if authenticate_docker_ecr "${CURRENT_REGION}"; then
+    echo -e "${GREEN}✅ Docker authenticated with ECR${NC}"
 else
-    echo -e "${YELLOW}⚠️  May need authentication${NC}"
-    echo "Attempting to authenticate..."
-    
-    if ! authenticate_docker_ecr "${CURRENT_REGION}"; then
-        log_warn "Run ./infra/deploy.sh setup-ecr to authenticate"
-        exit 1
-    fi
+    log_error "Failed to authenticate Docker with ECR"
+    log_warn "Check your AWS credentials and permissions"
+    exit 1
 fi
 
 # Build and push images

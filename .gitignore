@@ -278,6 +278,7 @@ credentials/
 *.key
 *.cert
 *.crt
+cloud.env
 
 # AWS
 .aws-sam/
