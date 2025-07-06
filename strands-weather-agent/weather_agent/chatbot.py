@@ -11,6 +11,7 @@ This demonstrates how MCP servers work with AWS Strands:
 
 import asyncio
 import sys
+import os
 import logging
 from typing import Optional, List
 from datetime import datetime
@@ -92,13 +93,11 @@ class SimpleWeatherChatbot:
     
     def __init__(self, 
                  debug_logging: bool = False,
-                 enable_telemetry: bool = True,
                  telemetry_user_id: Optional[str] = None,
                  telemetry_session_id: Optional[str] = None,
                  telemetry_tags: Optional[List[str]] = None):
         self.agent: Optional[MCPWeatherAgent] = None
         self.debug_logging = debug_logging
-        self.enable_telemetry = enable_telemetry
         self.telemetry_user_id = telemetry_user_id
         self.telemetry_session_id = telemetry_session_id
         self.telemetry_tags = telemetry_tags or ["chatbot"]
@@ -107,18 +106,18 @@ class SimpleWeatherChatbot:
     async def initialize(self):
         """Initialize the Strands agent with MCP connections."""
         if not self.initialized:
-            print("🔌 Initializing AWS Strands agent with MCP connections...")
-            if self.enable_telemetry:
-                print("📊 Langfuse telemetry enabled")
+            print("🔧 Initializing Weather Agent...")
+            
             self.agent = await create_weather_agent(
                 debug_logging=self.debug_logging,
-                enable_telemetry=self.enable_telemetry,
+                enable_telemetry=None,  # Auto-detect
                 telemetry_user_id=self.telemetry_user_id,
                 telemetry_session_id=self.telemetry_session_id,
                 telemetry_tags=self.telemetry_tags
             )
+            
             self.initialized = True
-            print("✅ Ready to answer weather questions!\n")
+            print("✅ Weather Agent ready!")
     
     async def chat(self, query: str) -> str:
         """
@@ -141,6 +140,14 @@ class SimpleWeatherChatbot:
         
         # Process with Strands agent
         response = await self.agent.query(query)
+        
+        # Display metrics if available
+        if hasattr(self.agent, 'last_metrics') and self.agent.last_metrics:
+            try:
+                from .metrics_display import format_metrics
+            except ImportError:
+                from metrics_display import format_metrics
+            print(format_metrics(self.agent.last_metrics))
         
         # Show completion
         print("\n" + "="*60)
@@ -250,6 +257,14 @@ async def demo_mode(show_debug: bool = False):
         print("This demo shows AWS Strands with MCP servers.")
         print("Experience the simplicity of modern AI agents.\n")
     
+    # Initialize session metrics
+    try:
+        from .metrics_display import SessionMetrics
+    except ImportError:
+        from metrics_display import SessionMetrics
+    
+    session_metrics = SessionMetrics()
+    
     try:
         await chatbot.initialize()
         
@@ -270,12 +285,19 @@ async def demo_mode(show_debug: bool = False):
             response = await chatbot.chat(query)
             print(f"\n🤖 Assistant: {response}")
             
+            # Add metrics to session if available
+            if hasattr(chatbot.agent, 'last_metrics') and chatbot.agent.last_metrics:
+                session_metrics.add_query(chatbot.agent.last_metrics)
+            
             # Brief pause between queries
             if i < 3:
                 print("\n⏸️  Pausing before next query...")
                 await asyncio.sleep(2)
         
         print("\n✨ Demo complete! The full system supports many more queries.")
+        
+        # Show session summary
+        print(session_metrics.get_summary())
         
     finally:
         await chatbot.cleanup()

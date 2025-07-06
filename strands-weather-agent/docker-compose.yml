@@ -90,11 +90,10 @@ services:
       - LOG_LEVEL=${LOG_LEVEL:-INFO}
       # Debug Mode
       - WEATHER_AGENT_DEBUG=${WEATHER_AGENT_DEBUG:-false}
-      # Langfuse Telemetry Configuration
+      # Langfuse Telemetry Configuration (auto-detected if credentials exist)
       - LANGFUSE_PUBLIC_KEY=${LANGFUSE_PUBLIC_KEY}
       - LANGFUSE_SECRET_KEY=${LANGFUSE_SECRET_KEY}
       - LANGFUSE_HOST=${LANGFUSE_HOST_DOCKER:-http://langfuse-web:3000}
-      - ENABLE_TELEMETRY=${ENABLE_TELEMETRY:-false}
       - TELEMETRY_USER_ID=${TELEMETRY_USER_ID:-docker-user}
       - TELEMETRY_SESSION_ID=${TELEMETRY_SESSION_ID}
       - TELEMETRY_TAGS=${TELEMETRY_TAGS:-weather-agent,docker}

@@ -33,6 +33,7 @@ logger = logging.getLogger(__name__)
 agent: Optional[MCPWeatherAgent] = None
 session_manager: Optional[SessionManager] = None
 debug_mode: bool = False
+global_metrics: Optional['SessionMetrics'] = None
 
 
 def configure_debug_logging(enable_debug: bool = False):
@@ -120,14 +121,13 @@ async def lifespan(app: FastAPI):
     
     for attempt in range(max_retries):
         try:
-            # Initialize agent with debug mode and telemetry if enabled
-            enable_telemetry = os.getenv("ENABLE_TELEMETRY", "false").lower() == "true"
+            # Initialize agent with debug mode and auto-detected telemetry
             telemetry_user_id = os.getenv("TELEMETRY_USER_ID", "api-user")
             telemetry_tags = os.getenv("TELEMETRY_TAGS", "weather-agent,api").split(",")
             
             agent = await create_weather_agent(
                 debug_logging=debug_mode,
-                enable_telemetry=enable_telemetry,
+                enable_telemetry=None,  # Auto-detect
                 telemetry_user_id=telemetry_user_id,
                 telemetry_tags=telemetry_tags
             )
@@ -250,6 +250,14 @@ async def process_query(request: QueryRequest):
         await session_manager.update_activity(session_id)
         session = await session_manager.get_session(session_id)
         
+        # Log metrics if available (always show for demo)
+        if hasattr(agent, 'last_metrics') and agent.last_metrics:
+            try:
+                from .metrics_display import format_metrics
+            except ImportError:
+                from metrics_display import format_metrics
+            logger.info(format_metrics(agent.last_metrics))
+        
         # Log query completion
         if debug_mode:
             logger.info("="*60)
@@ -338,6 +346,14 @@ async def process_query_structured(request: QueryRequest):
         validation = agent.validate_response(response)
         if not validation.valid:
             logger.warning(f"Response validation issues: {validation.errors}")
+        
+        # Log metrics if available (always show for demo)
+        if hasattr(agent, 'last_metrics') and agent.last_metrics:
+            try:
+                from .metrics_display import format_metrics
+            except ImportError:
+                from metrics_display import format_metrics
+            logger.info(format_metrics(agent.last_metrics))
         
         # Log query completion
         if debug_mode:

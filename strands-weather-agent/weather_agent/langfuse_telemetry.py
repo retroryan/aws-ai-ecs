@@ -16,6 +16,7 @@ Key Features:
 import os
 import base64
 import logging
+import requests
 from typing import Optional, Dict, Any, TYPE_CHECKING
 from datetime import datetime
 from pathlib import Path
@@ -49,6 +50,10 @@ logger = logging.getLogger(__name__)
 # Global flag to track if telemetry has been initialized
 _TELEMETRY_INITIALIZED = False
 
+# Global cache for availability check
+_LANGFUSE_AVAILABLE_CACHE = None
+_LAST_AVAILABILITY_CHECK = None
+
 
 class LangfuseTelemetry:
     """
@@ -63,7 +68,8 @@ class LangfuseTelemetry:
                  secret_key: Optional[str] = None,
                  host: Optional[str] = None,
                  service_name: str = "weather-agent",
-                 environment: str = "production"):
+                 environment: str = "production",
+                 auto_initialize: bool = True):
         """
         Initialize Langfuse telemetry configuration.
         
@@ -73,6 +79,7 @@ class LangfuseTelemetry:
             host: Langfuse host URL (or from env)
             service_name: Service name for OTEL
             environment: Deployment environment
+            auto_initialize: Whether to auto-initialize if Langfuse is available
         """
         # Get credentials from environment if not provided
         self.public_key = public_key or os.getenv("LANGFUSE_PUBLIC_KEY")
@@ -83,13 +90,73 @@ class LangfuseTelemetry:
         self.environment = environment
         self.telemetry_initialized = False
         
-        # Validate configuration
-        if not self.public_key or not self.secret_key:
-            logger.warning("Langfuse credentials not configured. Telemetry will be disabled.")
-            return
+        # Check if we should auto-initialize
+        if auto_initialize and self.check_langfuse_available():
+            self._setup_langfuse_telemetry()
+        elif not self.public_key or not self.secret_key:
+            logger.info("Langfuse credentials not found - telemetry disabled")
+        else:
+            logger.info("Langfuse not reachable - continuing without telemetry")
+    
+    def check_langfuse_available(self) -> bool:
+        """
+        Check if Langfuse is available and reachable.
         
-        # Initialize telemetry
-        self._setup_langfuse_telemetry()
+        This method performs a quick health check to determine if Langfuse
+        should be used. Results are cached for 60 seconds to avoid repeated checks.
+        
+        Returns:
+            True if Langfuse is available, False otherwise
+        """
+        global _LANGFUSE_AVAILABLE_CACHE, _LAST_AVAILABILITY_CHECK
+        
+        # Check cache first (60 second TTL)
+        if _LAST_AVAILABILITY_CHECK and _LANGFUSE_AVAILABLE_CACHE is not None:
+            cache_age = (datetime.now() - _LAST_AVAILABILITY_CHECK).total_seconds()
+            if cache_age < 60:
+                return _LANGFUSE_AVAILABLE_CACHE
+        
+        # Validate credentials exist
+        if not self.public_key or not self.secret_key:
+            _LANGFUSE_AVAILABLE_CACHE = False
+            _LAST_AVAILABILITY_CHECK = datetime.now()
+            return False
+        
+        try:
+            # Create auth header
+            auth_token = base64.b64encode(
+                f"{self.public_key}:{self.secret_key}".encode()
+            ).decode()
+            
+            # Quick health check with 1 second timeout
+            response = requests.get(
+                f"{self.host}/api/public/health",
+                headers={"Authorization": f"Basic {auth_token}"},
+                timeout=1.0
+            )
+            
+            # Cache and return result
+            available = response.status_code in [200, 204]
+            _LANGFUSE_AVAILABLE_CACHE = available
+            _LAST_AVAILABILITY_CHECK = datetime.now()
+            
+            if available:
+                logger.debug(f"Langfuse health check successful at {self.host}")
+            else:
+                logger.debug(f"Langfuse health check failed with status {response.status_code}")
+                
+            return available
+            
+        except requests.exceptions.Timeout:
+            logger.debug("Langfuse health check timed out after 1 second")
+            _LANGFUSE_AVAILABLE_CACHE = False
+            _LAST_AVAILABILITY_CHECK = datetime.now()
+            return False
+        except Exception as e:
+            logger.debug(f"Langfuse health check failed: {type(e).__name__}: {e}")
+            _LANGFUSE_AVAILABLE_CACHE = False
+            _LAST_AVAILABILITY_CHECK = datetime.now()
+            return False
     
     def _setup_langfuse_telemetry(self):
         """
@@ -189,13 +256,14 @@ class LangfuseTelemetry:
 
 
 def configure_langfuse_from_env(service_name: str = "weather-agent",
-                               environment: Optional[str] = None) -> LangfuseTelemetry:
+                               environment: Optional[str] = None) -> Optional[LangfuseTelemetry]:
     """
-    Configure Langfuse telemetry from environment variables.
+    Configure Langfuse telemetry from environment variables with auto-detection.
     
-    This is the recommended way to initialize Langfuse in production.
+    This function will automatically detect if Langfuse is available and configure
+    telemetry accordingly. No explicit enable flag is needed.
     
-    Required environment variables:
+    Environment variables checked:
     - LANGFUSE_PUBLIC_KEY
     - LANGFUSE_SECRET_KEY
     - LANGFUSE_HOST (optional, defaults to cloud.langfuse.com)
@@ -205,22 +273,29 @@ def configure_langfuse_from_env(service_name: str = "weather-agent",
         environment: Environment name (defaults to ENVIRONMENT env var or 'production')
         
     Returns:
-        Configured LangfuseTelemetry instance
+        Configured LangfuseTelemetry instance if available, None otherwise
     """
     env = environment or os.getenv("ENVIRONMENT", "production")
     
+    # Check if basic credentials exist
+    if not os.getenv("LANGFUSE_PUBLIC_KEY") or not os.getenv("LANGFUSE_SECRET_KEY"):
+        logger.info("Langfuse credentials not found - telemetry disabled")
+        return None
+    
+    logger.info("Checking Langfuse availability...")
+    
     telemetry = LangfuseTelemetry(
         service_name=service_name,
-        environment=env
+        environment=env,
+        auto_initialize=True  # Will check availability and initialize if reachable
     )
     
-    if not telemetry.is_enabled():
-        logger.warning(
-            "Langfuse telemetry not enabled. Set LANGFUSE_PUBLIC_KEY and "
-            "LANGFUSE_SECRET_KEY environment variables to enable."
-        )
-    
-    return telemetry
+    if telemetry.is_enabled():
+        logger.info(f"✅ Langfuse telemetry active at {telemetry.host}")
+        return telemetry
+    else:
+        logger.info("ℹ️  Langfuse not available - continuing without telemetry")
+        return None
 
 
 def force_flush_telemetry():

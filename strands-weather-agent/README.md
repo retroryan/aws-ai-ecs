@@ -105,7 +105,6 @@ cp .env.example .env
 ./scripts/start_docker.sh
 # Optional flags:
 #   --debug     Enable debug logging
-#   --telemetry Enable Langfuse observability (requires Langfuse running)
 
 # 3. Test the services
 ./scripts/test_docker.sh
@@ -114,7 +113,7 @@ cp .env.example .env
 ./scripts/stop_docker.sh
 ```
 
-For observability with Langfuse, see the [Metrics Guide](strands-metrics-guide/README.md).
+The system includes **automatic observability** with Langfuse when configured. See the [Final Metrics Guide](FINAL_METRICS.md) for details.
 
 ### Local Development: Direct Python Execution (Interactive Chatbot)
 
@@ -297,6 +296,44 @@ graph TB
 - **Clear Documentation**: In-code and README guides
 - **Local Development**: Run with Python or Docker
 - **Quick Demos**: Interactive chatbot and API modes
+
+## Metrics and Observability
+
+This demo includes **production-grade observability** that showcases:
+- **AWS Strands agents** with AWS Bedrock integration
+- **Langfuse observability** via OpenTelemetry for comprehensive monitoring
+- **Real-time performance metrics** after every query
+- **Zero-configuration auto-detection** - telemetry "just works" when Langfuse is available
+
+### Performance Metrics Display
+
+Every query shows actual performance data:
+```
+📊 Performance Metrics:
+   ├─ Tokens: 17051 total (16588 input, 463 output)
+   ├─ Latency: 13.35 seconds
+   ├─ Throughput: 1277 tokens/second
+   ├─ Model: claude-3-5-sonnet-20241022
+   └─ Cycles: 2
+```
+
+### Auto-Detection Magic
+
+No flags or configuration needed! The system automatically detects Langfuse:
+- ✅ If Langfuse is running and configured → Full telemetry enabled
+- ✅ If Langfuse is not available → Continues normally without telemetry
+- ✅ No errors, no delays, no configuration
+
+### Langfuse Integration
+
+When Langfuse credentials are configured:
+1. Automatic OpenTelemetry instrumentation
+2. Distributed tracing across all components
+3. Token usage and cost tracking
+4. Session and user attribution
+5. Performance monitoring and analysis
+
+See the [Final Metrics Guide](FINAL_METRICS.md) for complete details on the metrics implementation.
 
 ## Example Queries
 

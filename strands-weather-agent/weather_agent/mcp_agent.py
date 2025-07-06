@@ -88,7 +88,7 @@ class MCPWeatherAgent:
                  debug_logging: bool = False, 
                  prompt_type: Optional[str] = None, 
                  session_storage_dir: Optional[str] = None,
-                 enable_telemetry: bool = True,
+                 enable_telemetry: Optional[bool] = None,
                  telemetry_user_id: Optional[str] = None,
                  telemetry_session_id: Optional[str] = None,
                  telemetry_tags: Optional[List[str]] = None):
@@ -99,7 +99,7 @@ class MCPWeatherAgent:
             debug_logging: Enable detailed debug logging for tool calls
             prompt_type: System prompt type (default, agriculture, simple)
             session_storage_dir: Directory for file-based session storage
-            enable_telemetry: Enable Langfuse telemetry
+            enable_telemetry: Control telemetry (None=auto-detect, False=disable, True=force)
             telemetry_user_id: User ID for telemetry tracking
             telemetry_session_id: Session ID for telemetry grouping
             telemetry_tags: Tags for telemetry filtering
@@ -108,16 +108,19 @@ class MCPWeatherAgent:
         self._validate_environment()
         
         # Initialize telemetry BEFORE creating the model
-        self.telemetry_enabled = enable_telemetry
+        # None = auto-detect, False = disabled, True = force enable
         self.telemetry = None
-        if enable_telemetry:
+        self.telemetry_enabled = False
+        
+        if enable_telemetry is not False:  # None or True
             self.telemetry = configure_langfuse_from_env(
                 service_name="weather-agent",
                 environment=os.getenv("ENVIRONMENT", "production")
             )
-            if not self.telemetry.is_enabled():
-                logger.warning("Langfuse telemetry requested but not configured properly")
-                self.telemetry_enabled = False
+            self.telemetry_enabled = self.telemetry is not None and self.telemetry.is_enabled()
+            
+            if enable_telemetry is True and not self.telemetry_enabled:
+                logger.warning("Langfuse telemetry was requested but is not available")
         
         # Model configuration
         self.model_id = os.getenv("BEDROCK_MODEL_ID", 
@@ -166,6 +169,9 @@ class MCPWeatherAgent:
         
         # Langfuse v3 client for direct operations (scoring, etc.)
         self._langfuse_client = None
+        
+        # Store last query metrics for display
+        self.last_metrics = None
         
         logger.info(f"Initialized MCPWeatherAgent with model: {self.model_id}")
         logger.info(f"MCP servers configured: {len(self.mcp_clients)}")
@@ -371,8 +377,10 @@ class MCPWeatherAgent:
                 
                 # Process query with streaming
                 response_text = ""
+                self.last_metrics = None  # Reset metrics
                 
                 # Use async streaming for better performance
+                # Note: stream_async yields callback events, not the full event structure
                 async for event in agent.stream_async(message):
                     if "data" in event:
                         response_text += event["data"]
@@ -383,6 +391,10 @@ class MCPWeatherAgent:
                         print(f"\n🔧 [AGENT DEBUG - Tool Call]: {tool_info.get('name', 'unknown')}")
                         if 'input' in tool_info:
                             print(f"   📥 [AGENT DEBUG - Tool Input]: {tool_info['input']}")
+                
+                # After streaming completes, get metrics from the agent's event loop
+                if hasattr(agent, 'event_loop_metrics'):
+                    self.last_metrics = agent.event_loop_metrics
                 
                 # Update session with new messages
                 if session_id:
@@ -845,13 +857,13 @@ class MCPWeatherAgent:
 async def create_weather_agent(
     debug_logging: bool = False, 
     prompt_type: Optional[str] = None,
-    enable_telemetry: bool = True,
+    enable_telemetry: Optional[bool] = None,
     telemetry_user_id: Optional[str] = None,
     telemetry_session_id: Optional[str] = None,
     telemetry_tags: Optional[List[str]] = None
 ) -> MCPWeatherAgent:
     """
-    Create and initialize a weather agent.
+    Create and initialize a weather agent with auto-detected telemetry.
     
     This follows the Strands best practice of testing connectivity
     before returning the agent.
@@ -859,7 +871,7 @@ async def create_weather_agent(
     Args:
         debug_logging: Enable debug logging
         prompt_type: System prompt type
-        enable_telemetry: Enable Langfuse telemetry
+        enable_telemetry: Control telemetry (None=auto-detect, False=disable, True=force)
         telemetry_user_id: User ID for telemetry tracking
         telemetry_session_id: Session ID for telemetry grouping
         telemetry_tags: Tags for telemetry filtering

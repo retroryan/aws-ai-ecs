@@ -5,22 +5,16 @@ set -e
 
 # Parse command line arguments
 DEBUG_MODE=""
-TELEMETRY_MODE=""
 while [[ $# -gt 0 ]]; do
     case $1 in
         --debug|-d)
             DEBUG_MODE="true"
             shift
             ;;
-        --telemetry|-t)
-            TELEMETRY_MODE="true"
-            shift
-            ;;
         --help|-h)
             echo "Usage: $0 [OPTIONS]"
             echo "Options:"
             echo "  --debug, -d      Enable debug logging"
-            echo "  --telemetry, -t  Enable Langfuse telemetry"
             echo "  --help, -h       Show this help message"
             exit 0
             ;;
@@ -34,12 +28,8 @@ done
 
 # Build startup message
 STARTUP_MSG="Starting Strands Weather Agent services"
-if [ "$DEBUG_MODE" = "true" ] && [ "$TELEMETRY_MODE" = "true" ]; then
-    STARTUP_MSG="$STARTUP_MSG with DEBUG logging and TELEMETRY enabled..."
-elif [ "$DEBUG_MODE" = "true" ]; then
+if [ "$DEBUG_MODE" = "true" ]; then
     STARTUP_MSG="$STARTUP_MSG with DEBUG logging enabled..."
-elif [ "$TELEMETRY_MODE" = "true" ]; then
-    STARTUP_MSG="$STARTUP_MSG with TELEMETRY enabled..."
 else
     STARTUP_MSG="$STARTUP_MSG..."
 fi
@@ -106,16 +96,9 @@ if [ "$DEBUG_MODE" = "true" ]; then
     echo "✓ Debug mode enabled (WEATHER_AGENT_DEBUG=true)"
 fi
 
-# Export telemetry mode if enabled
-if [ "$TELEMETRY_MODE" = "true" ]; then
-    export ENABLE_TELEMETRY=true
-    echo "✓ Telemetry mode enabled (ENABLE_TELEMETRY=true)"
-    
-    # Check if Langfuse credentials are configured
-    if [ -z "${LANGFUSE_PUBLIC_KEY}" ] || [ -z "${LANGFUSE_SECRET_KEY}" ]; then
-        echo "⚠️  Warning: Langfuse credentials not found in .env file"
-        echo "   Telemetry will be disabled unless credentials are set"
-    fi
+# Check if Langfuse is configured (for informational purposes)
+if [ -n "${LANGFUSE_PUBLIC_KEY}" ] && [ -n "${LANGFUSE_SECRET_KEY}" ]; then
+    echo "✓ Langfuse credentials found - telemetry will auto-detect availability"
 fi
 
 # Check if BEDROCK_MODEL_ID is set
@@ -125,25 +108,11 @@ if [ -z "${BEDROCK_MODEL_ID}" ]; then
   exit 1
 fi
 
-# Start services based on telemetry mode
-if [ "$TELEMETRY_MODE" = "true" ]; then
-    # Check if Langfuse is running
-    if ! docker network ls | grep -q "langfuse_default"; then
-        echo "❌ Error: Langfuse network not found. Is Langfuse running?"
-        echo "   Please start Langfuse first: https://github.com/langfuse/langfuse"
-        echo "   Or run without --telemetry flag"
-        exit 1
-    fi
-    
-    # Check required Langfuse credentials
-    if [ -z "${LANGFUSE_PUBLIC_KEY}" ] || [ -z "${LANGFUSE_SECRET_KEY}" ]; then
-        echo "❌ Error: Langfuse credentials not found"
-        echo "   Please set LANGFUSE_PUBLIC_KEY and LANGFUSE_SECRET_KEY in .env"
-        exit 1
-    fi
-    
-    # Use Langfuse-integrated compose configuration
-    echo "✓ Using Langfuse integration (connecting to langfuse_default network)"
+# Start services
+# Check if Langfuse network exists for auto-detection
+if docker network ls | grep -q "langfuse_default" && [ -n "${LANGFUSE_PUBLIC_KEY}" ] && [ -n "${LANGFUSE_SECRET_KEY}" ]; then
+    # Langfuse is available and configured - use integrated configuration
+    echo "✓ Langfuse network detected - using integrated configuration"
     docker compose -f docker-compose.yml -f docker-compose.langfuse.yml up --build -d
 else
     # Use standard compose configuration
@@ -154,7 +123,8 @@ echo ""
 echo "Services started!"
 echo "✓ Weather Agent API: http://localhost:7777"
 
-if [ "$TELEMETRY_MODE" = "true" ]; then
+# Show Langfuse info if it was auto-detected
+if docker network ls | grep -q "langfuse_default" && [ -n "${LANGFUSE_PUBLIC_KEY}" ] && [ -n "${LANGFUSE_SECRET_KEY}" ]; then
     echo "✓ Connected to local Langfuse instance"
     echo ""
     echo "View metrics and traces at: http://localhost:3000"
