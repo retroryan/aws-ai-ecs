@@ -129,15 +129,9 @@ async def lifespan(app: FastAPI):
     
     for attempt in range(max_retries):
         try:
-            # Initialize agent with debug mode and auto-detected telemetry
-            telemetry_user_id = os.getenv("TELEMETRY_USER_ID", "api-user")
-            telemetry_tags = os.getenv("TELEMETRY_TAGS", "weather-agent,api").split(",")
-            
+            # Initialize agent with debug mode
             agent = await create_weather_agent(
-                debug_logging=debug_mode,
-                enable_telemetry=None,  # Auto-detect
-                telemetry_user_id=telemetry_user_id,
-                telemetry_tags=telemetry_tags
+                debug_logging=debug_mode
             )
             
             # Initialize session manager
@@ -195,7 +189,6 @@ class QueryResponse(BaseModel):
     session_new: bool  # True if newly created
     conversation_turn: int
     metrics: Optional[PerformanceMetrics] = None
-    trace_url: Optional[str] = None  # Langfuse trace URL if available
 
 class AgentInfo(BaseModel):
     model: str
@@ -277,7 +270,6 @@ async def process_query(request: QueryRequest):
         
         # Prepare metrics data if available
         metrics_data = None
-        trace_url = None
         
         if hasattr(agent, 'last_metrics') and agent.last_metrics:
             try:
@@ -313,10 +305,6 @@ async def process_query(request: QueryRequest):
                 model=model_name,
                 cycles=agent.last_metrics.cycle_count
             )
-            
-            # Get Langfuse trace URL if available
-            if hasattr(agent, 'get_trace_url'):
-                trace_url = agent.get_trace_url()
         
         # Log query completion
         if debug_mode:
@@ -329,8 +317,7 @@ async def process_query(request: QueryRequest):
             session_id=session_id,
             session_new=session_new,
             conversation_turn=session.conversation_turns if session else 1,
-            metrics=metrics_data,
-            trace_url=trace_url
+            metrics=metrics_data
         )
         
     except HTTPException:
@@ -445,10 +432,6 @@ async def process_query_structured(request: QueryRequest):
                 model=model_name,
                 cycles=agent.last_metrics.cycle_count
             )
-            
-            # Get Langfuse trace URL if available
-            if hasattr(agent, 'get_trace_url'):
-                response.trace_url = agent.get_trace_url()
         
         # Log query completion
         if debug_mode:
@@ -554,19 +537,6 @@ async def clear_session(session_id: str):
     except Exception as e:
         logger.error(f"Error clearing session: {e}")
         raise HTTPException(status_code=500, detail=str(e))
-
-# TODO: Remove debug - Added for coordinate issue investigation
-@app.get("/debug/tool-calls")
-async def get_debug_tool_calls():
-    """Debug endpoint to check recent tool calls."""
-    if not os.getenv("STRANDS_DEBUG_TOOL_CALLS", "false").lower() == "true":
-        raise HTTPException(status_code=404, detail="Debug endpoint not enabled")
-    
-    return {
-        "debug_enabled": True,
-        "message": "Check CloudWatch logs for [COORDINATE_DEBUG] entries",
-        "log_filter": "aws logs filter-log-events --log-group-name /ecs/strands-weather-agent-main --filter-pattern '[COORDINATE_DEBUG]' --region us-east-1"
-    }
 
 if __name__ == "__main__":
     # Parse command line arguments

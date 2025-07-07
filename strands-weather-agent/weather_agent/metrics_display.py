@@ -72,13 +72,15 @@ class SessionMetrics:
         
         duration = (datetime.now() - self.start_time).total_seconds()
         avg_tokens = self.total_tokens / self.total_queries
+        total_cost = SimpleCostEstimator.calculate(self.total_input_tokens, self.total_output_tokens)
         
         return f"""
 📈 Session Summary:
    ├─ Total Queries: {self.total_queries}
    ├─ Total Tokens: {self.total_tokens} ({self.total_input_tokens} in, {self.total_output_tokens} out)
    ├─ Average Tokens/Query: {avg_tokens:.0f}
-   └─ Session Duration: {duration:.0f} seconds
+   ├─ Session Duration: {duration:.0f} seconds
+   └─ Total Cost: ${total_cost:.4f}
 """
 
 

@@ -180,10 +180,6 @@ class WeatherQueryResponse(BaseModel):
         None,
         description="Performance metrics including tokens, latency, and throughput"
     )
-    trace_url: Optional[str] = Field(
-        None,
-        description="Langfuse trace URL for debugging and monitoring if telemetry is enabled"
-    )
     
     def get_primary_location(self) -> ExtractedLocation:
         """Get the primary (first) location."""

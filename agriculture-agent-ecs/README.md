@@ -417,12 +417,15 @@ Environment variables are set in `services.cfn`:
 |-------|-----|-----------------|
 | **Amazon Nova Lite** | `amazon.nova-lite-v1:0` | Fast, cost-effective, good for simple queries |
 | **Amazon Nova Pro** | `amazon.nova-pro-v1:0` | Balanced performance and capability |
-| **Claude 3.5 Sonnet** | `anthropic.claude-3-5-sonnet-20241022-v2:0` | Best overall performance |
-| **Claude 3 Haiku** | `anthropic.claude-3-haiku-20240307-v1:0` | Fast and affordable |
+| **Claude 3.5 Sonnet** | `us.anthropic.claude-3-5-sonnet-20241022-v2:0` | Best overall performance |
+| **Claude 3 Haiku** | `us.anthropic.claude-3-haiku-20240307-v1:0` | Fast and affordable |
 | **Llama 3 70B** | `meta.llama3-70b-instruct-v1:0` | Open source option |
 | **Cohere Command R+** | `cohere.command-r-plus-v1:0` | Optimized for tool use |
 
-**Note**: Model availability varies by region. Check AWS Bedrock console for your region.
+**Important Notes**: 
+- Model availability varies by region. Check AWS Bedrock console for your region.
+- **Claude models require the "us." prefix** (e.g., `us.anthropic.claude-3-5-sonnet-20241022-v2:0`) when using inference profiles for cross-region redundancy. This prefix is automatically added by the `aws-setup.sh` script.
+- If you see errors about "on-demand throughput isn't supported", ensure your model ID includes the region prefix.
 
 ### MCP Server Configuration
 

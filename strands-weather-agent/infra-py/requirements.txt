@@ -1,0 +1,28 @@
+# AWS SDK
+boto3>=1.28.0
+botocore>=1.31.0
+
+# Docker SDK
+docker>=6.1.0
+
+# CLI Framework
+click>=8.1.0
+
+# Configuration and validation
+pydantic>=2.0.0
+python-dotenv>=1.0.0
+
+# Enhanced terminal output
+rich>=13.0.0
+
+# JSON handling
+jsonschema>=4.0.0
+
+# HTTP requests (for API testing)
+requests>=2.31.0
+
+# Date/time handling
+python-dateutil>=2.8.0
+
+# Type checking
+typing-extensions>=4.0.0

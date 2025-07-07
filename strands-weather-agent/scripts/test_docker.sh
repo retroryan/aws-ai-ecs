@@ -131,6 +131,16 @@ echo ""
 echo "3. Running test queries..."
 echo ""
 
+# Initialize metrics totals
+total_queries=0
+successful_queries=0
+total_tokens_all=0
+total_input_tokens=0
+total_output_tokens=0
+total_latency=0
+total_cycles=0
+model_used=""
+
 # Function to test a query
 test_query() {
     local query=$1
@@ -149,6 +159,9 @@ test_query() {
     conversation_turn=$(echo "$response" | jq -r '.conversation_turn' 2>/dev/null || echo "")
     metrics=$(echo "$response" | jq -r '.metrics' 2>/dev/null || echo "null")
     trace_url=$(echo "$response" | jq -r '.trace_url' 2>/dev/null || echo "")
+    
+    # Increment total queries
+    ((total_queries++))
     
     if [[ "$response_text" == "Error"* ]] || [[ "$response_text" == "An error occurred"* ]]; then
         if [[ "$response_text" == *"credentials"* ]] || [[ "$response_text" == *"AWS"* ]] || [[ "$response_text" == *"Bedrock"* ]]; then
@@ -190,6 +203,15 @@ test_query() {
             echo "   ├─ Throughput: ${throughput%.*} tokens/second"
             echo "   ├─ Model: $model"
             echo "   └─ Cycles: $cycles"
+            
+            # Accumulate metrics
+            total_tokens_all=$((total_tokens_all + total_tokens))
+            total_input_tokens=$((total_input_tokens + input_tokens))
+            total_output_tokens=$((total_output_tokens + output_tokens))
+            total_latency=$(echo "$total_latency + $latency_seconds" | bc)
+            total_cycles=$((total_cycles + cycles))
+            model_used=$model
+            ((successful_queries++))
         fi
         
         # Display trace URL if available
@@ -204,6 +226,41 @@ test_query() {
 test_query "What's the weather forecast for Chicago?"
 test_query "How much rain did Seattle get last week?"
 test_query "Are conditions good for planting corn in Iowa?"
+
+# Display metrics summary
+if [[ $successful_queries -gt 0 ]]; then
+    echo ""
+    echo "📊 METRICS SUMMARY"
+    echo "=================="
+    echo ""
+    echo "Total Queries: $total_queries ($successful_queries successful)"
+    echo ""
+    echo "Token Usage:"
+    echo "  Total Tokens: $total_tokens_all"
+    echo "  Input Tokens: $total_input_tokens"
+    echo "  Output Tokens: $total_output_tokens"
+    
+    # Calculate averages
+    avg_tokens=$((total_tokens_all / successful_queries))
+    avg_latency=$(echo "scale=2; $total_latency / $successful_queries" | bc)
+    avg_throughput=$(echo "scale=0; $total_tokens_all / $total_latency" | bc 2>/dev/null || echo "N/A")
+    
+    echo ""
+    echo "Performance:"
+    echo "  Total Processing Time: ${total_latency}s"
+    echo "  Average Latency: ${avg_latency}s per query"
+    echo "  Average Throughput: $avg_throughput tokens/second"
+    echo "  Total Agent Cycles: $total_cycles"
+    echo "  Model: $model_used"
+    
+    # Check if Langfuse is enabled
+    if [[ -n "$LANGFUSE_PUBLIC_KEY" ]] && [[ -n "$LANGFUSE_SECRET_KEY" ]]; then
+        echo ""
+        echo "Telemetry:"
+        echo "  Langfuse Host: ${LANGFUSE_HOST:-https://us.cloud.langfuse.com}"
+        echo "  Traces Available: Yes (check dashboard for details)"
+    fi
+fi
 
 echo ""
 echo "4. Testing session endpoints..."

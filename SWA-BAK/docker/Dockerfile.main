@@ -1,0 +1,31 @@
+# Main Agent Application
+FROM python:3.11-slim
+
+WORKDIR /app
+
+# Install system dependencies
+RUN apt-get update && apt-get install -y \
+    curl \
+    && rm -rf /var/lib/apt/lists/*
+
+# Copy weather agent directory with all files
+COPY weather_agent/ weather_agent/
+
+# Copy MCP server utilities
+COPY mcp_servers/api_utils.py mcp_servers/api_utils.py
+
+# Install dependencies from weather_agent
+RUN pip install --no-cache-dir -r weather_agent/requirements.txt
+
+# Create non-root user
+RUN useradd -m -u 1000 appuser && chown -R appuser:appuser /app
+USER appuser
+
+# Expose API port
+EXPOSE 7777
+
+# Set environment variable for API port (can be overridden)
+ENV API_PORT=7777
+
+# Run the FastAPI application using uvicorn directly
+CMD ["python", "-m", "uvicorn", "weather_agent.main:app", "--host", "0.0.0.0", "--port", "7777"]

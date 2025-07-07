@@ -128,7 +128,7 @@ class SimpleDeployment:
             if parameters:
                 params_str = " ".join([f"ParameterKey={k},ParameterValue={v}" for k, v in parameters.items()])
                 cmd += f" --parameter-overrides {params_str}"
-            cmd += f" --capabilities CAPABILITY_IAM --region {self.region}"
+            cmd += f" --capabilities CAPABILITY_IAM CAPABILITY_NAMED_IAM --region {self.region}"
             self.run_command(cmd)
     
     def deploy_base(self):
@@ -506,6 +506,8 @@ def show_help():
     print("  python3 infra/deploy.py update-services               # Build & redeploy services")
     print("  python3 infra/deploy.py status                        # Check deployment status")
     print("  python3 infra/deploy.py cleanup-services              # Remove services only")
+    print("  python3 infra/deploy.py cleanup-base                  # Remove base infrastructure")
+    print("  python3 infra/deploy.py cleanup-all                   # Remove all infrastructure")
     print("\n📖 For more info: https://github.com/aws-samples/strands-weather-agent")
 
 

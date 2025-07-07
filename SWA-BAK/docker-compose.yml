@@ -1,0 +1,126 @@
+services:
+  # Forecast MCP Server
+  forecast-server:
+    build:
+      context: .
+      dockerfile: docker/Dockerfile.forecast
+    container_name: mcp-forecast-server
+    ports:
+      - "7778:7778"
+    environment:
+      - LOG_LEVEL=${LOG_LEVEL:-INFO}
+      - MCP_PORT=7778
+    networks:
+      - weather-network
+    restart: unless-stopped
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:7778/health"]
+      interval: 30s
+      timeout: 3s
+      retries: 3
+      start_period: 5s
+
+  # Historical MCP Server  
+  historical-server:
+    build:
+      context: .
+      dockerfile: docker/Dockerfile.historical
+    container_name: mcp-historical-server
+    ports:
+      - "7779:7779"
+    environment:
+      - LOG_LEVEL=${LOG_LEVEL:-INFO}
+      - MCP_PORT=7779
+    networks:
+      - weather-network
+    restart: unless-stopped
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:7779/health"]
+      interval: 30s
+      timeout: 3s
+      retries: 3
+      start_period: 5s
+
+  # Agricultural MCP Server
+  agricultural-server:
+    build:
+      context: .
+      dockerfile: docker/Dockerfile.agricultural
+    container_name: mcp-agricultural-server
+    ports:
+      - "7780:7780"
+    environment:
+      - LOG_LEVEL=${LOG_LEVEL:-INFO}
+      - MCP_PORT=7780
+    networks:
+      - weather-network
+    restart: unless-stopped
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:7780/health"]
+      interval: 30s
+      timeout: 3s
+      retries: 3
+      start_period: 5s
+
+  # Weather Agent Application
+  weather-agent:
+    build:
+      context: .
+      dockerfile: docker/Dockerfile.main
+    container_name: weather-agent-app
+    ports:
+      - "7777:7777"
+    environment:
+      # AWS Bedrock Configuration
+      - BEDROCK_MODEL_ID=${BEDROCK_MODEL_ID}
+      - BEDROCK_REGION=${BEDROCK_REGION:-us-east-1}
+      - BEDROCK_TEMPERATURE=${BEDROCK_TEMPERATURE:-0}
+      # AWS Credentials (if not using IAM role)
+      - AWS_ACCESS_KEY_ID=${AWS_ACCESS_KEY_ID}
+      - AWS_SECRET_ACCESS_KEY=${AWS_SECRET_ACCESS_KEY}
+      - AWS_SESSION_TOKEN=${AWS_SESSION_TOKEN}
+      - AWS_DEFAULT_REGION=${AWS_DEFAULT_REGION:-us-east-1}
+      # MCP Server URLs (internal Docker network)
+      - MCP_FORECAST_URL=http://forecast-server:7778/mcp/
+      - MCP_HISTORICAL_URL=http://historical-server:7779/mcp/
+      - MCP_AGRICULTURAL_URL=http://agricultural-server:7780/mcp/
+      # API Configuration
+      - API_PORT=7777
+      # Logging
+      - LOG_LEVEL=${LOG_LEVEL:-INFO}
+      # Debug Mode
+      - WEATHER_AGENT_DEBUG=${WEATHER_AGENT_DEBUG:-false}
+      # Langfuse Telemetry Configuration (auto-detected if credentials exist)
+      - LANGFUSE_PUBLIC_KEY=${LANGFUSE_PUBLIC_KEY}
+      - LANGFUSE_SECRET_KEY=${LANGFUSE_SECRET_KEY}
+      - LANGFUSE_HOST=${LANGFUSE_HOST_DOCKER:-http://langfuse-web:3000}
+      - TELEMETRY_USER_ID=${TELEMETRY_USER_ID:-docker-user}
+      - TELEMETRY_SESSION_ID=${TELEMETRY_SESSION_ID}
+      - TELEMETRY_TAGS=${TELEMETRY_TAGS:-weather-agent,docker}
+      - ENVIRONMENT=${ENVIRONMENT:-production}
+    depends_on:
+      forecast-server:
+        condition: service_healthy
+      historical-server:
+        condition: service_healthy
+      agricultural-server:
+        condition: service_healthy
+    networks:
+      - weather-network
+    restart: unless-stopped
+    volumes:
+      - ./logs:/app/logs
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:7777/health"]
+      interval: 30s
+      timeout: 3s
+      retries: 3
+      start_period: 10s
+
+networks:
+  weather-network:
+    driver: bridge
+
+volumes:
+  logs:
+    driver: local

@@ -7,6 +7,7 @@ This module demonstrates the proper way to use MCP servers with AWS Strands:
 - Proper error handling with specific exception types
 - Simplified architecture with 50% less boilerplate code
 - Built-in streaming and session management
+- Simple Langfuse telemetry integration
 """
 
 import os
@@ -17,15 +18,36 @@ from typing import Optional, List, Dict, Any, Type, TypeVar
 from datetime import datetime
 from pathlib import Path
 
-# Pydantic imports
-from pydantic import ValidationError
+# Load environment variables FIRST (before any Strands imports)
+try:
+    from dotenv import load_dotenv
+    env_path = Path(__file__).parent.parent / '.env'
+    load_dotenv(env_path)
+except ImportError:
+    pass
 
-# Strands imports - using native features
+# Setup telemetry BEFORE importing Strands (critical for OTEL configuration)
+try:
+    from .telemetry import setup_telemetry
+except ImportError:
+    from telemetry import setup_telemetry
+
+# Initialize telemetry at module level with service metadata
+TELEMETRY_ENABLED = setup_telemetry(
+    service_name=os.getenv("OTEL_SERVICE_NAME", "weather-agent"),
+    environment=os.getenv("DEPLOYMENT_ENVIRONMENT", "demo"),
+    version=os.getenv("SERVICE_VERSION", "2.0.0")
+)
+
+# NOW import Strands after telemetry setup
 from strands import Agent
 from strands.models import BedrockModel
 from strands.agent.conversation_manager import SlidingWindowConversationManager
-from mcp.client.streamable_http import streamablehttp_client  # Using streamable HTTP client for HTTP-based MCP servers
+from mcp.client.streamable_http import streamablehttp_client
 from strands.tools.mcp import MCPClient
+
+# Pydantic imports
+from pydantic import ValidationError
 
 # Local imports
 try:
@@ -38,10 +60,6 @@ try:
         WeatherAgentError, MCPConnectionError, 
         StructuredOutputError, ModelInvocationError
     )
-    from .langfuse_telemetry import (
-        LangfuseTelemetry, configure_langfuse_from_env, 
-        get_langfuse_client, create_deterministic_trace_id
-    )
 except ImportError:
     from models.structured_responses import (
         WeatherQueryResponse, ExtractedLocation, WeatherDataSummary,
@@ -52,24 +70,18 @@ except ImportError:
         WeatherAgentError, MCPConnectionError, 
         StructuredOutputError, ModelInvocationError
     )
-    from langfuse_telemetry import (
-        LangfuseTelemetry, configure_langfuse_from_env,
-        get_langfuse_client, create_deterministic_trace_id
-    )
 
 # Type variable for structured output
 T = TypeVar('T')
 
-# Load environment variables
-try:
-    from dotenv import load_dotenv
-    env_path = Path(__file__).parent.parent / '.env'
-    load_dotenv(env_path)
-except ImportError:
-    pass
-
 # Configure logging
 logger = logging.getLogger(__name__)
+
+# Log telemetry status at module load
+if TELEMETRY_ENABLED:
+    logger.info("✅ Langfuse telemetry enabled via OTEL")
+else:
+    logger.info("📊 Langfuse telemetry disabled (no credentials configured)")
 
 
 class MCPWeatherAgent:
@@ -87,11 +99,7 @@ class MCPWeatherAgent:
     def __init__(self, 
                  debug_logging: bool = False, 
                  prompt_type: Optional[str] = None, 
-                 session_storage_dir: Optional[str] = None,
-                 enable_telemetry: Optional[bool] = None,
-                 telemetry_user_id: Optional[str] = None,
-                 telemetry_session_id: Optional[str] = None,
-                 telemetry_tags: Optional[List[str]] = None):
+                 session_storage_dir: Optional[str] = None):
         """
         Initialize the weather agent.
         
@@ -99,49 +107,9 @@ class MCPWeatherAgent:
             debug_logging: Enable detailed debug logging for tool calls
             prompt_type: System prompt type (default, agriculture, simple)
             session_storage_dir: Directory for file-based session storage
-            enable_telemetry: Control telemetry (None=auto-detect, False=disable, True=force)
-            telemetry_user_id: User ID for telemetry tracking
-            telemetry_session_id: Session ID for telemetry grouping
-            telemetry_tags: Tags for telemetry filtering
         """
         # Validate environment variables first
         self._validate_environment()
-        
-        # Initialize telemetry BEFORE creating the model
-        # None = auto-detect, False = disabled, True = force enable
-        self.telemetry = None
-        self.telemetry_enabled = False
-        
-        # Log telemetry configuration attempt
-        logger.info("🔧 Initializing telemetry configuration...")
-        
-        if enable_telemetry is not False:  # None or True
-            # Log Langfuse configuration details
-            langfuse_host = os.getenv("LANGFUSE_HOST", "not configured")
-            langfuse_public_key = os.getenv("LANGFUSE_PUBLIC_KEY", "")[:10] + "..." if os.getenv("LANGFUSE_PUBLIC_KEY") else "not configured"
-            logger.info(f"📊 Langfuse Host: {langfuse_host}")
-            logger.info(f"🔑 Langfuse Public Key: {langfuse_public_key}")
-            
-            try:
-                self.telemetry = configure_langfuse_from_env(
-                    service_name="weather-agent",
-                    environment=os.getenv("ENVIRONMENT", "production")
-                )
-                self.telemetry_enabled = self.telemetry is not None and self.telemetry.is_enabled()
-                
-                if self.telemetry_enabled:
-                    logger.info("✅ Langfuse telemetry successfully initialized")
-                else:
-                    logger.warning("⚠️ Langfuse telemetry configuration completed but is not enabled")
-                    
-            except Exception as e:
-                logger.error(f"❌ Failed to initialize Langfuse telemetry: {e}")
-                self.telemetry_enabled = False
-            
-            if enable_telemetry is True and not self.telemetry_enabled:
-                logger.warning("⚠️ Langfuse telemetry was explicitly requested but is not available")
-        else:
-            logger.info("ℹ️ Telemetry explicitly disabled")
         
         # Model configuration
         self.model_id = os.getenv("BEDROCK_MODEL_ID", 
@@ -183,20 +151,11 @@ class MCPWeatherAgent:
         self._connectivity_cache = {}
         self._last_connectivity_check = None
         
-        # Store telemetry configuration for agent creation
-        self.telemetry_user_id = telemetry_user_id
-        self.telemetry_session_id = telemetry_session_id or str(uuid.uuid4())
-        self.telemetry_tags = telemetry_tags or ["weather-agent", "mcp"]
-        
-        # Langfuse v3 client for direct operations (scoring, etc.)
-        self._langfuse_client = None
-        
         # Store last query metrics for display
         self.last_metrics = None
         
         logger.info(f"Initialized MCPWeatherAgent with model: {self.model_id}")
         logger.info(f"MCP servers configured: {len(self.mcp_clients)}")
-        logger.info(f"Telemetry enabled: {self.telemetry_enabled}")
     
     def _validate_environment(self):
         """
@@ -209,24 +168,6 @@ class MCPWeatherAgent:
         # This method is kept for future use if needed
         pass
     
-    @property
-    def langfuse_client(self) -> Optional['Langfuse']:
-        """
-        Get or create a Langfuse v3 client for direct operations.
-        
-        This is useful for operations like scoring that require
-        the Langfuse API directly.
-        
-        Returns:
-            Langfuse client or None if not available
-        """
-        if not self.telemetry_enabled:
-            return None
-        
-        if self._langfuse_client is None:
-            self._langfuse_client = get_langfuse_client()
-        
-        return self._langfuse_client
     
     def _create_mcp_clients(self) -> List[MCPClient]:
         """
@@ -310,6 +251,7 @@ class MCPWeatherAgent:
         - Tools are collected from MCP servers
         - Agent is created with all configuration
         - No manual session or context management needed
+        - Simple trace attributes for telemetry when enabled
         
         Args:
             session_messages: Optional conversation history
@@ -334,29 +276,28 @@ class MCPWeatherAgent:
             raise MCPConnectionError("No MCP servers available", 
                                    Exception("All MCP servers failed to provide tools"))
         
-        # Create trace attributes for Langfuse if enabled
-        trace_attributes = {}
-        if self.telemetry_enabled and self.telemetry:
-            trace_attributes = self.telemetry.create_trace_attributes(
-                session_id=self.telemetry_session_id,
-                user_id=self.telemetry_user_id,
-                tags=self.telemetry_tags,
-                metadata={
-                    "prompt_type": self.prompt_type,
-                    "model_id": self.model_id,
-                    "mcp_servers_count": len(all_tools),
-                    "environment": os.getenv("ENVIRONMENT", "production")
-                }
-            )
+        # Simple trace attributes when telemetry is enabled
+        trace_attributes = None
+        if TELEMETRY_ENABLED:
+            # Generate session ID if not provided
+            session_id = getattr(self, 'session_id', None) or str(uuid.uuid4())
+            
+            trace_attributes = {
+                "session.id": session_id,
+                "user.id": os.getenv("TELEMETRY_USER_ID", "weather-demo-user"),
+                "langfuse.tags": ["weather-agent", "mcp", "strands-demo", self.prompt_type]
+            }
+            if self.debug_logging:
+                logger.debug(f"Telemetry enabled with session: {session_id}")
         
-        # Create agent with native configuration and trace attributes
+        # Create agent with native configuration
         agent = Agent(
             model=self.bedrock_model,
             system_prompt=self.prompt_manager.get_prompt(self.prompt_type),
             tools=all_tools,
             messages=session_messages or [],
             conversation_manager=self.conversation_manager,
-            trace_attributes=trace_attributes if trace_attributes else None
+            trace_attributes=trace_attributes
         )
         
         return agent
@@ -379,6 +320,9 @@ class MCPWeatherAgent:
         # Generate session ID if not provided
         if session_id is None:
             session_id = str(uuid.uuid4())
+        
+        # Store session_id for telemetry
+        self.session_id = session_id
         
         logger.info(f"Processing query (session: {session_id[:8]}...): {message[:50]}...")
         
@@ -412,14 +356,6 @@ class MCPWeatherAgent:
                         tool_name = tool_info.get('name', 'unknown')
                         
                         # Always log tool calls for coordinate debugging
-                        # TODO: Remove debug - Added for coordinate issue investigation
-                        if os.getenv("STRANDS_DEBUG_TOOL_CALLS", "false").lower() == "true":
-                            logger.debug("[COORDINATE_DEBUG] Tool call: %s", json.dumps({
-                                "tool_name": tool_name,
-                                "input": tool_info.get('input', {}),
-                                "timestamp": datetime.utcnow().isoformat()
-                            }, indent=2))
-                        
                         if self.debug_logging:
                             print(f"\n🔧 [AGENT DEBUG - Tool Call]: {tool_name}")
                             if 'input' in tool_info:
@@ -433,13 +369,6 @@ class MCPWeatherAgent:
                 if session_id:
                     self._save_session_messages(session_id, agent.messages)
                 
-                # Force flush telemetry if enabled (important for demos/testing)
-                if self.telemetry_enabled:
-                    try:
-                        from .langfuse_telemetry import force_flush_telemetry
-                        force_flush_telemetry()
-                    except Exception as e:
-                        logger.debug(f"Failed to flush telemetry: {e}")
                 
                 return response_text
             
@@ -471,6 +400,9 @@ class MCPWeatherAgent:
         # Generate session ID if not provided
         if session_id is None:
             session_id = str(uuid.uuid4())
+        
+        # Store session_id for telemetry
+        self.session_id = session_id
         
         logger.info(f"Processing structured query (session: {session_id[:8]}...)")
         start_time = datetime.utcnow()
@@ -506,16 +438,12 @@ class MCPWeatherAgent:
                 base_prompt = self.prompt_manager.get_prompt(structured_prompt_type)
                 structured_prompt = f"{base_prompt}\n\nUser Query: {message}"
                 
-                # Use structured output (synchronous method in executor)
+                # Use async structured output directly
                 try:
-                    # Strands structured_output is synchronous, so run in executor
-                    import asyncio
-                    loop = asyncio.get_event_loop()
-                    response = await loop.run_in_executor(
-                        None,
-                        agent.structured_output,
+                    # Use the native async version - no thread pool needed!
+                    response = await agent.structured_output_async(
                         WeatherQueryResponse,
-                        message  # Just pass the user's message, not complex prompt
+                        message  # Just pass the user's message
                     )
                 except Exception as e:
                     logger.warning(f"Structured output failed: {e}, falling back to streaming")
@@ -550,7 +478,7 @@ class MCPWeatherAgent:
             logger.error(f"Unexpected error in structured query: {e}", exc_info=True)
             return self._create_generic_error_response(str(e))
     
-    # === Session Management Methods (unchanged) ===
+    # === Session Management Methods ===
     
     def _get_session_messages(self, session_id: str) -> List[Dict[str, Any]]:
         """Get conversation messages for a session."""
@@ -822,17 +750,15 @@ class MCPWeatherAgent:
             "temperature": self.temperature,
             "mcp_servers": len(self.mcp_clients),
             "debug_logging": self.debug_logging,
-            "telemetry": {
-                "enabled": self.telemetry_enabled,
-                "langfuse_v3": self.langfuse_client is not None,
-                "session_id": self.telemetry_session_id,
-                "user_id": self.telemetry_user_id
-            },
             "session_management": {
                 "active_sessions": len(self.sessions),
                 "storage_type": "file" if self.session_storage_dir else "memory",
                 "conversation_manager": "SlidingWindowConversationManager",
                 "window_size": 20
+            },
+            "telemetry": {
+                "enabled": TELEMETRY_ENABLED,
+                "provider": "Langfuse via OTEL" if TELEMETRY_ENABLED else None
             },
             "improvements": [
                 "Native MCP client support",
@@ -840,80 +766,29 @@ class MCPWeatherAgent:
                 "Proper error boundaries", 
                 "50% less boilerplate code",
                 "Fixed model ID configuration",
-                "Langfuse v3 integration"
+                "Simple Langfuse OTEL integration"
             ]
         }
     
     def get_trace_url(self) -> Optional[str]:
-        """Get the Langfuse trace URL if telemetry is enabled."""
-        try:
-            if self.telemetry_enabled and hasattr(self, 'telemetry') and self.telemetry:
-                # Get the current trace ID from telemetry
-                from .langfuse_telemetry import get_current_trace_id, get_langfuse_host
-                trace_id = get_current_trace_id()
-                if trace_id:
-                    host = get_langfuse_host()
-                    # Remove trailing /api if present
-                    if host.endswith('/api'):
-                        host = host[:-4]
-                    return f"{host}/project/default/traces/{trace_id}"
-        except Exception as e:
-            logger.debug(f"Could not get trace URL: {e}")
-        return None
-    
-    async def score_trace(self, 
-                         trace_id: str,
-                         name: str,
-                         value: float,
-                         comment: Optional[str] = None,
-                         data_type: str = "NUMERIC") -> bool:
-        """
-        Score a trace using Langfuse v3 API.
+        """Get Langfuse trace URL if telemetry is enabled.
         
-        This is useful for adding evaluation scores to traces,
-        which can be used for monitoring and improvement.
-        
-        Args:
-            trace_id: The trace ID to score
-            name: Name of the score (e.g., "accuracy", "relevance")
-            value: Numeric score value
-            comment: Optional comment about the score
-            data_type: Type of score (NUMERIC, CATEGORICAL, BOOLEAN)
-            
         Returns:
-            True if scoring succeeded, False otherwise
+            None - trace URLs are available in Langfuse dashboard
         """
-        if not self.langfuse_client:
-            logger.warning("Cannot score trace: Langfuse client not available")
-            return False
-        
-        try:
-            self.langfuse_client.create_score(
-                trace_id=trace_id,
-                name=name,
-                value=value,
-                data_type=data_type,
-                comment=comment
-            )
-            logger.info(f"Successfully scored trace {trace_id} with {name}={value}")
-            return True
-        except Exception as e:
-            logger.error(f"Failed to score trace {trace_id}: {e}")
-            return False
+        if TELEMETRY_ENABLED:
+            logger.info("Traces available at: " + os.getenv("LANGFUSE_HOST", "https://us.cloud.langfuse.com"))
+        return None
 
 
 # === Convenience Functions ===
 
 async def create_weather_agent(
     debug_logging: bool = False, 
-    prompt_type: Optional[str] = None,
-    enable_telemetry: Optional[bool] = None,
-    telemetry_user_id: Optional[str] = None,
-    telemetry_session_id: Optional[str] = None,
-    telemetry_tags: Optional[List[str]] = None
+    prompt_type: Optional[str] = None
 ) -> MCPWeatherAgent:
     """
-    Create and initialize a weather agent with auto-detected telemetry.
+    Create and initialize a weather agent.
     
     This follows the Strands best practice of testing connectivity
     before returning the agent.
@@ -921,10 +796,6 @@ async def create_weather_agent(
     Args:
         debug_logging: Enable debug logging
         prompt_type: System prompt type
-        enable_telemetry: Control telemetry (None=auto-detect, False=disable, True=force)
-        telemetry_user_id: User ID for telemetry tracking
-        telemetry_session_id: Session ID for telemetry grouping
-        telemetry_tags: Tags for telemetry filtering
         
     Returns:
         Initialized MCPWeatherAgent
@@ -936,11 +807,7 @@ async def create_weather_agent(
     
     agent = MCPWeatherAgent(
         debug_logging=debug_logging, 
-        prompt_type=prompt_type,
-        enable_telemetry=enable_telemetry,
-        telemetry_user_id=telemetry_user_id,
-        telemetry_session_id=telemetry_session_id,
-        telemetry_tags=telemetry_tags
+        prompt_type=prompt_type
     )
     
     # Test connectivity as best practice

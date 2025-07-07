@@ -1,0 +1,75 @@
+{
+  "mcpServers": {
+    "aws-iam": {
+      "command": "uvx",
+      "args": [
+        "awslabs.iam-mcp-server"
+      ],
+      "env": {
+        "FASTMCP_LOG_LEVEL": "ERROR"
+      },
+      "timeout": 120000,
+      "disabled": false
+    },
+    "aws-diagram": {
+      "command": "uvx",
+      "args": [
+        "awslabs.diagram-mcp-server"
+      ],
+      "env": {
+        "FASTMCP_LOG_LEVEL": "ERROR"
+      },
+      "timeout": 120000,
+      "disabled": false
+    },
+    "aws-cdk": {
+      "command": "uvx",
+      "args": [
+        "awslabs.cdk-mcp-server"
+      ],
+      "env": {
+        "FASTMCP_LOG_LEVEL": "ERROR"
+      },
+      "timeout": 120000,
+      "disabled": false
+    },
+    "strands": {
+      "command": "uvx",
+      "args": [
+        "strands-agents-mcp-server"
+      ],
+      "timeout": 120000,
+      "disabled": false
+    },
+    "aws-documentation": {
+      "command": "uvx",
+      "args": [
+        "awslabs.aws-documentation-mcp-server"
+      ],
+      "timeout": 120000,
+      "disabled": false
+    },
+    "aws-cloudformation": {
+      "command": "uvx",
+      "args": [
+        "awslabs.cloudformation-mcp-server"
+      ],
+      "env": {
+        "FASTMCP_LOG_LEVEL": "ERROR"
+      },
+      "timeout": 120000,
+      "disabled": false
+    },
+    "code-documentation": {
+      "command": "uvx",
+      "args": [
+        "awslabs.code-documentation-generation-mcp-server"
+      ],
+      "env": {
+        "FASTMCP_LOG_LEVEL": "ERROR"
+      },
+      "timeout": 120000,
+      "disabled": false
+    }
+  }
+}
