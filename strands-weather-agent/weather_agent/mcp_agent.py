@@ -386,11 +386,23 @@ class MCPWeatherAgent:
                         response_text += event["data"]
                         if self.debug_logging:
                             print(event["data"], end="", flush=True)
-                    elif "current_tool_use" in event and self.debug_logging:
+                    elif "current_tool_use" in event:
                         tool_info = event["current_tool_use"]
-                        print(f"\n🔧 [AGENT DEBUG - Tool Call]: {tool_info.get('name', 'unknown')}")
-                        if 'input' in tool_info:
-                            print(f"   📥 [AGENT DEBUG - Tool Input]: {tool_info['input']}")
+                        tool_name = tool_info.get('name', 'unknown')
+                        
+                        # Always log tool calls for coordinate debugging
+                        # TODO: Remove debug - Added for coordinate issue investigation
+                        if os.getenv("STRANDS_DEBUG_TOOL_CALLS", "false").lower() == "true":
+                            logger.debug("[COORDINATE_DEBUG] Tool call: %s", json.dumps({
+                                "tool_name": tool_name,
+                                "input": tool_info.get('input', {}),
+                                "timestamp": datetime.utcnow().isoformat()
+                            }, indent=2))
+                        
+                        if self.debug_logging:
+                            print(f"\n🔧 [AGENT DEBUG - Tool Call]: {tool_name}")
+                            if 'input' in tool_info:
+                                print(f"   📥 [AGENT DEBUG - Tool Input]: {tool_info['input']}")
                 
                 # After streaming completes, get metrics from the agent's event loop
                 if hasattr(agent, 'event_loop_metrics'):

@@ -9,8 +9,10 @@ import os
 import sys
 import subprocess
 import json
+import time
 from pathlib import Path
 import boto3
+from botocore.exceptions import ClientError
 from dotenv import load_dotenv
 
 
@@ -134,12 +136,23 @@ class SimpleDeployment:
         template = Path(__file__).parent / "base.cfn"
         self.deploy_stack(template, self.base_stack)
     
-    def deploy_services(self, enable_telemetry=True):
-        """Deploy ECS services with optional telemetry"""
+    def deploy_services(self, enable_telemetry=True, debug_mode=False):
+        """Deploy ECS services with optional telemetry and debug mode"""
         template = Path(__file__).parent / "services.cfn"
         
         # Load bedrock configuration
         load_dotenv()
+        
+        # If debug mode, load cloud.env and set debug flag
+        if debug_mode:
+            cloud_env_path = Path(__file__).parent.parent / "cloud.env"
+            if cloud_env_path.exists():
+                # Add STRANDS_DEBUG_TOOL_CALLS to cloud.env
+                with open(cloud_env_path, 'a') as f:
+                    if 'STRANDS_DEBUG_TOOL_CALLS' not in open(cloud_env_path).read():
+                        f.write('\n# Debug mode for coordinate issue (added by deploy.py --debug)\n')
+                        f.write('STRANDS_DEBUG_TOOL_CALLS=true\n')
+                print("✅ Debug mode enabled - added STRANDS_DEBUG_TOOL_CALLS=true to cloud.env")
         
         params = {
             "BaseStackName": self.base_stack,
@@ -163,6 +176,125 @@ class SimpleDeployment:
         
         self.deploy_stack(template, self.services_stack, params)
     
+    def update_services(self, enable_telemetry=True, debug_mode=False):
+        """Update services (redeploy)"""
+        print("\n🔄 Updating services...")
+        self.deploy_services(enable_telemetry, debug_mode)
+    
+    def cleanup_services(self):
+        """Remove services stack only"""
+        print(f"\n🗑️  Removing services stack: {self.services_stack}...")
+        try:
+            self.cfn.describe_stacks(StackName=self.services_stack)
+            
+            # Delete the stack
+            self.cfn.delete_stack(StackName=self.services_stack)
+            print("⏳ Waiting for stack deletion...")
+            
+            # Wait for deletion
+            waiter = self.cfn.get_waiter('stack_delete_complete')
+            waiter.wait(StackName=self.services_stack)
+            print("✅ Services stack removed")
+        except ClientError as e:
+            if 'does not exist' in str(e):
+                print("⚠️  Services stack not found")
+            else:
+                print(f"❌ Error: {e}")
+    
+    def cleanup_base(self):
+        """Remove base infrastructure stack"""
+        print(f"\n🗑️  Removing base stack: {self.base_stack}...")
+        try:
+            self.cfn.describe_stacks(StackName=self.base_stack)
+            
+            # Delete the stack
+            self.cfn.delete_stack(StackName=self.base_stack)
+            print("⏳ Waiting for stack deletion...")
+            
+            # Wait for deletion
+            waiter = self.cfn.get_waiter('stack_delete_complete')
+            waiter.wait(StackName=self.base_stack)
+            print("✅ Base stack removed")
+        except ClientError as e:
+            if 'does not exist' in str(e):
+                print("⚠️  Base stack not found")
+            else:
+                print(f"❌ Error: {e}")
+    
+    def cleanup_all(self):
+        """Remove all infrastructure"""
+        print("\n⚠️  WARNING: This will remove all infrastructure!")
+        response = input("Are you sure? (yes/no): ")
+        if response.lower() == "yes":
+            self.cleanup_services()
+            self.cleanup_base()
+            print("\n✅ All infrastructure removed")
+        else:
+            print("❌ Cleanup cancelled")
+    
+    def aws_checks(self):
+        """Run AWS configuration checks"""
+        print("\n🔍 Running AWS configuration checks...")
+        
+        # Check AWS identity
+        try:
+            sts = boto3.client('sts', region_name=self.region)
+            identity = sts.get_caller_identity()
+            print(f"✅ AWS Account: {identity['Account']}")
+            print(f"✅ AWS User/Role: {identity['Arn']}")
+        except Exception as e:
+            print(f"❌ AWS credentials error: {e}")
+            return False
+        
+        # Check Bedrock access
+        print("\n🤖 Checking AWS Bedrock access...")
+        try:
+            bedrock = boto3.client('bedrock', region_name=self.region)
+            models = bedrock.list_foundation_models()
+            available_models = len(models.get('modelSummaries', []))
+            print(f"✅ Bedrock access confirmed - {available_models} models available")
+            
+            # Check specific model
+            model_id = os.getenv("BEDROCK_MODEL_ID", "amazon.nova-lite-v1:0")
+            print(f"🔍 Checking model: {model_id}")
+            
+            # Try to get model info
+            try:
+                bedrock_runtime = boto3.client('bedrock-runtime', region_name=self.region)
+                print(f"✅ Model {model_id} is accessible")
+            except Exception as e:
+                print(f"⚠️  Model {model_id} check: {e}")
+                
+        except Exception as e:
+            print(f"❌ Bedrock access error: {e}")
+            print("   Make sure you have enabled Bedrock in this region")
+            return False
+        
+        # Check ECR access
+        print("\n📦 Checking ECR access...")
+        try:
+            repos = self.ecr.describe_repositories()
+            print(f"✅ ECR access confirmed")
+        except Exception as e:
+            print(f"⚠️  ECR access: {e}")
+        
+        return True
+    
+    def build_push(self):
+        """Build and push Docker images as a separate command"""
+        print("\n🐳 Building and pushing Docker images...")
+        script_path = Path(__file__).parent / "build-push.sh"
+        if script_path.exists():
+            result = self.run_command(f"bash {script_path}")
+            if result:
+                print("✅ Images built and pushed successfully")
+            else:
+                print("❌ Build/push failed")
+                sys.exit(1)
+        else:
+            print("❌ build-push.sh not found")
+            sys.exit(1)
+    
     def get_status(self):
         """Show deployment status"""
         print("\n📊 Deployment Status")
@@ -171,31 +303,70 @@ class SimpleDeployment:
         # Check base stack
         try:
             base_stack = self.cfn.describe_stacks(StackName=self.base_stack)["Stacks"][0]
-            print(f"✅ Base Stack: {base_stack['StackStatus']}")
+            status = base_stack['StackStatus']
+            print(f"✅ Base Stack: {status}")
             
             # Get ALB URL
+            alb_dns = None
             for output in base_stack.get("Outputs", []):
                 if output["OutputKey"] == "ALBDNSName":
-                    print(f"\n🌐 Application URL: http://{output['OutputValue']}")
-                    print(f"📚 API Docs: http://{output['OutputValue']}/docs")
+                    alb_dns = output['OutputValue']
+                    print(f"\n🌐 Application URL: http://{alb_dns}")
+                    print(f"📚 API Docs: http://{alb_dns}/docs")
                     break
-        except:
-            print("❌ Base Stack: Not deployed")
+        except ClientError as e:
+            if 'does not exist' in str(e):
+                print("❌ Base Stack: Not deployed")
+            else:
+                print(f"❌ Base Stack: Error - {e}")
         
         # Check services stack
         try:
             services_stack = self.cfn.describe_stacks(StackName=self.services_stack)["Stacks"][0]
-            print(f"✅ Services Stack: {services_stack['StackStatus']}")
+            status = services_stack['StackStatus']
+            print(f"✅ Services Stack: {status}")
             
-            # Check if telemetry is enabled
+            # Check parameters
+            telemetry_enabled = False
+            model_id = None
             for param in services_stack.get("Parameters", []):
-                if param["ParameterKey"] == "EnableTelemetry" and param["ParameterValue"] == "true":
-                    print("✅ Langfuse Telemetry: Enabled")
-                    break
-        except:
-            print("❌ Services Stack: Not deployed")
+                if param["ParameterKey"] == "EnableTelemetry":
+                    telemetry_enabled = param["ParameterValue"] == "true"
+                elif param["ParameterKey"] == "BedrockModelId":
+                    model_id = param["ParameterValue"]
+            
+            if telemetry_enabled:
+                print("✅ Langfuse Telemetry: Enabled")
+            else:
+                print("⚠️  Langfuse Telemetry: Disabled")
+            
+            if model_id:
+                print(f"🤖 Bedrock Model: {model_id}")
+            
+            # List ECS services
+            try:
+                ecs = boto3.client("ecs", region_name=self.region)
+                services = ecs.list_services(cluster="strands-weather-agent")
+                if services['serviceArns']:
+                    print("\n📦 ECS Services:")
+                    for arn in services['serviceArns']:
+                        service_name = arn.split('/')[-1]
+                        print(f"   - {service_name}")
+            except Exception as e:
+                print(f"⚠️  Could not list ECS services: {e}")
+                
+        except ClientError as e:
+            if 'does not exist' in str(e):
+                print("❌ Services Stack: Not deployed")
+            else:
+                print(f"❌ Services Stack: Error - {e}")
+        
+        print("\n💡 Tips:")
+        print("   - Test the deployment: python3 infra/test_services.py")
+        print("   - View logs: aws logs tail /aws/ecs/strands-weather-agent --follow")
+        print("   - Update services: python3 infra/deploy.py update-services")
     
-    def deploy_all(self, disable_telemetry=False):
+    def deploy_all(self, disable_telemetry=False, debug_mode=False):
         """Deploy everything"""
         print("🚀 Starting full deployment...")
         
@@ -212,7 +383,7 @@ class SimpleDeployment:
         
         # Deploy stacks
         self.deploy_base()
-        self.deploy_services(enable_telemetry)
+        self.deploy_services(enable_telemetry, debug_mode)
         
         # Show final status
         self.get_status()
@@ -221,13 +392,63 @@ class SimpleDeployment:
         print("   python3 infra/test_services.py")
 
 
+def show_help():
+    """Show detailed help message"""
+    print("Strands Weather Agent Infrastructure Deployment Script")
+    print("=" * 55)
+    print("\nUsage: python3 infra/deploy.py [command] [options]")
+    print("\nCommands:")
+    print("  aws-checks       Check AWS configuration and Bedrock access")
+    print("  setup-ecr        Setup ECR repositories and Docker authentication")
+    print("  build-push       Build and push Docker images to ECR")
+    print("  all              Deploy all infrastructure (base + services)")
+    print("  base             Deploy only base infrastructure")
+    print("  services         Deploy only services (requires base)")
+    print("  update-services  Update services (redeploy task definitions)")
+    print("  status           Show current deployment status")
+    print("  cleanup-services Remove services stack only")
+    print("  cleanup-base     Remove base infrastructure stack")
+    print("  cleanup-all      Remove all infrastructure")
+    print("  help             Show this help message")
+    print("\nOptions:")
+    print("  --disable-telemetry  Disable Langfuse telemetry")
+    print("  --region REGION      AWS region (default: us-east-1)")
+    print("  --debug              Enable debug mode for coordinate issue investigation")
+    print("\nEnvironment Variables:")
+    print("  AWS_REGION          AWS region (default: us-east-1)")
+    print("  BEDROCK_MODEL_ID    Bedrock model to use (default: amazon.nova-lite-v1:0)")
+    print("  BEDROCK_REGION      Bedrock region (default: us-east-1)")
+    print("  BEDROCK_TEMPERATURE Model temperature (default: 0)")
+    print("  LOG_LEVEL           Logging level (default: INFO)")
+    print("\nExamples:")
+    print("  python3 infra/deploy.py aws-checks                    # Check AWS setup")
+    print("  python3 infra/deploy.py setup-ecr                     # Setup ECR repositories")
+    print("  python3 infra/deploy.py build-push                    # Build and push images")
+    print("  python3 infra/deploy.py all                           # Full deployment")
+    print("  python3 infra/deploy.py all --disable-telemetry       # Deploy without telemetry")
+    print("  python3 infra/deploy.py update-services --debug       # Redeploy with debug mode")
+    print("  python3 infra/deploy.py status                        # Check deployment status")
+    print("  python3 infra/deploy.py cleanup-services              # Remove services only")
+    print("\n📖 For more info: https://github.com/aws-samples/strands-weather-agent")
+
+
 def main():
+    # Show help if no arguments provided
+    if len(sys.argv) == 1:
+        show_help()
+        sys.exit(0)
+    
     parser = argparse.ArgumentParser(
-        description="Deploy Strands Weather Agent to AWS ECS"
+        description="Deploy Strands Weather Agent to AWS ECS",
+        add_help=False  # We handle help ourselves
     )
     parser.add_argument(
         "command",
-        choices=["all", "base", "services", "status", "setup-ecr"],
+        choices=[
+            "all", "base", "services", "status", "setup-ecr",
+            "aws-checks", "build-push", "update-services",
+            "cleanup-services", "cleanup-base", "cleanup-all", "help"
+        ],
         help="Deployment command"
     )
     parser.add_argument(
@@ -237,26 +458,48 @@ def main():
     )
     parser.add_argument(
         "--region",
-        default="us-east-1",
+        default=os.getenv("AWS_REGION", "us-east-1"),
         help="AWS region"
+    )
+    parser.add_argument(
+        "--debug",
+        action="store_true",
+        help="Enable debug mode for coordinate issue investigation"
     )
     
     args = parser.parse_args()
+    
+    # Handle help command
+    if args.command == "help":
+        show_help()
+        sys.exit(0)
     
     # Create deployment manager
     deployment = SimpleDeployment(args.region)
     
     # Execute command
     if args.command == "all":
-        deployment.deploy_all(args.disable_telemetry)
+        deployment.deploy_all(args.disable_telemetry, args.debug)
     elif args.command == "base":
         deployment.deploy_base()
     elif args.command == "services":
-        deployment.deploy_services(not args.disable_telemetry)
+        deployment.deploy_services(not args.disable_telemetry, args.debug)
+    elif args.command == "update-services":
+        deployment.update_services(not args.disable_telemetry, args.debug)
     elif args.command == "status":
         deployment.get_status()
     elif args.command == "setup-ecr":
         deployment.setup_ecr()
+    elif args.command == "aws-checks":
+        deployment.aws_checks()
+    elif args.command == "build-push":
+        deployment.build_push()
+    elif args.command == "cleanup-services":
+        deployment.cleanup_services()
+    elif args.command == "cleanup-base":
+        deployment.cleanup_base()
+    elif args.command == "cleanup-all":
+        deployment.cleanup_all()
 
 
 if __name__ == "__main__":

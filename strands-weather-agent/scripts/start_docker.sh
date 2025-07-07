@@ -93,7 +93,9 @@ fi
 # Export debug mode if enabled
 if [ "$DEBUG_MODE" = "true" ]; then
     export WEATHER_AGENT_DEBUG=true
+    export STRANDS_DEBUG_TOOL_CALLS=true
     echo "✓ Debug mode enabled (WEATHER_AGENT_DEBUG=true)"
+    echo "✓ Tool call debugging enabled (STRANDS_DEBUG_TOOL_CALLS=true)"
 fi
 
 # Check if Langfuse is configured (for informational purposes)
@@ -134,6 +136,8 @@ if [ "$DEBUG_MODE" = "true" ]; then
     echo ""
     echo "Debug logs will be saved to:"
     echo "  logs/weather_agent_debug_*.log"
+    echo ""
+    echo "Tool call debugging logs will include [COORDINATE_DEBUG] prefix"
     echo ""
     echo "To view logs in real-time:"
     echo "  docker compose logs -f weather-agent"

@@ -481,6 +481,19 @@ async def clear_session(session_id: str):
         logger.error(f"Error clearing session: {e}")
         raise HTTPException(status_code=500, detail=str(e))
 
+# TODO: Remove debug - Added for coordinate issue investigation
+@app.get("/debug/tool-calls")
+async def get_debug_tool_calls():
+    """Debug endpoint to check recent tool calls."""
+    if not os.getenv("STRANDS_DEBUG_TOOL_CALLS", "false").lower() == "true":
+        raise HTTPException(status_code=404, detail="Debug endpoint not enabled")
+    
+    return {
+        "debug_enabled": True,
+        "message": "Check CloudWatch logs for [COORDINATE_DEBUG] entries",
+        "log_filter": "aws logs filter-log-events --log-group-name /ecs/strands-weather-agent-main --filter-pattern '[COORDINATE_DEBUG]' --region us-east-1"
+    }
+
 if __name__ == "__main__":
     # Parse command line arguments
     parser = argparse.ArgumentParser(
