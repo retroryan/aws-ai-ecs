@@ -4,14 +4,14 @@ FastMCP server for OpenMeteo historical weather data.
 Returns raw JSON from the Open-Meteo API for LLM interpretation.
 """
 
-from typing import Optional
+from typing import Optional, Union
 from datetime import datetime, date, timedelta
 from fastmcp import FastMCP
 from starlette.requests import Request
 from starlette.responses import JSONResponse
 
 # Import shared utilities
-from api_utils import get_coordinates, OpenMeteoClient, get_daily_params, get_hourly_params, API_TYPE_ARCHIVE
+from api_utils import get_coordinates, OpenMeteoClient, get_daily_params, get_hourly_params, API_TYPE_ARCHIVE, parse_coordinate
 
 # Initialize FastMCP server
 server = FastMCP(name="openmeteo-historical")
@@ -29,8 +29,8 @@ async def get_historical_weather(
     start_date: str,
     end_date: str,
     location: Optional[str] = None,
-    latitude: Optional[float] = None,
-    longitude: Optional[float] = None
+    latitude: Optional[Union[str, float]] = None,
+    longitude: Optional[Union[str, float]] = None
 ) -> dict:
     """Get historical weather with coordinate optimization.
     
@@ -40,8 +40,8 @@ async def get_historical_weather(
         start_date: Start date (YYYY-MM-DD)
         end_date: End date (YYYY-MM-DD)
         location: Location name (requires geocoding - slower)
-        latitude: Direct latitude (-90 to 90) - PREFERRED
-        longitude: Direct longitude (-180 to 180) - PREFERRED
+        latitude: Direct latitude (-90 to 90) - PREFERRED (accepts string or float)
+        longitude: Direct longitude (-180 to 180) - PREFERRED (accepts string or float)
     
     Returns:
         Structured historical weather data with daily aggregates
@@ -67,9 +67,13 @@ async def get_historical_weather(
                 "error": f"Historical data only available before {min_date}. Use forecast API for recent dates."
             }
 
+        # Parse coordinates if they are strings
+        lat = parse_coordinate(latitude)
+        lon = parse_coordinate(longitude)
+
         # Coordinate priority: direct coords > location name
-        if latitude is not None and longitude is not None:
-            coords = {"latitude": latitude, "longitude": longitude, "name": location or f"{latitude:.4f},{longitude:.4f}"}
+        if lat is not None and lon is not None:
+            coords = {"latitude": lat, "longitude": lon, "name": location or f"{lat:.4f},{lon:.4f}"}
         elif location:
             coords = await get_coordinates(location)
             if not coords:

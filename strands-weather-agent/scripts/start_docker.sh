@@ -98,6 +98,10 @@ if [ "$DEBUG_MODE" = "true" ]; then
     echo "✓ Tool call debugging enabled (STRANDS_DEBUG_TOOL_CALLS=true)"
 fi
 
+# Always enable telemetry by default
+export ENABLE_TELEMETRY=true
+echo "✓ Telemetry enabled by default (ENABLE_TELEMETRY=true)"
+
 # Check if Langfuse is configured (for informational purposes)
 if [ -n "${LANGFUSE_PUBLIC_KEY}" ] && [ -n "${LANGFUSE_SECRET_KEY}" ]; then
     echo "✓ Langfuse credentials found - telemetry will auto-detect availability"
@@ -111,25 +115,34 @@ if [ -z "${BEDROCK_MODEL_ID}" ]; then
 fi
 
 # Start services
-# Check if Langfuse network exists for auto-detection
-if docker network ls | grep -q "langfuse_default" && [ -n "${LANGFUSE_PUBLIC_KEY}" ] && [ -n "${LANGFUSE_SECRET_KEY}" ]; then
-    # Langfuse is available and configured - use integrated configuration
-    echo "✓ Langfuse network detected - using integrated configuration"
-    docker compose -f docker-compose.yml -f docker-compose.langfuse.yml up --build -d
-else
-    # Use standard compose configuration
-    docker compose up --build -d
+# Always use Langfuse configuration for telemetry
+echo "✓ Starting services with Langfuse telemetry enabled"
+
+# Check if Langfuse network exists, create if needed
+if ! docker network ls | grep -q "langfuse_default"; then
+    echo "ℹ️  Langfuse network not found, creating it..."
+    docker network create langfuse_default || echo "ℹ️  Could not create langfuse_default network (may not be needed)"
 fi
+
+# Always use the Langfuse compose configuration
+docker compose -f docker-compose.yml -f docker-compose.langfuse.yml up --build -d
 
 echo ""
 echo "Services started!"
 echo "✓ Weather Agent API: http://localhost:7777"
 
-# Show Langfuse info if it was auto-detected
-if docker network ls | grep -q "langfuse_default" && [ -n "${LANGFUSE_PUBLIC_KEY}" ] && [ -n "${LANGFUSE_SECRET_KEY}" ]; then
-    echo "✓ Connected to local Langfuse instance"
-    echo ""
-    echo "View metrics and traces at: http://localhost:3000"
+# Show Langfuse info
+if [ -n "${LANGFUSE_PUBLIC_KEY}" ] && [ -n "${LANGFUSE_SECRET_KEY}" ]; then
+    echo "✓ Langfuse telemetry configured"
+    if docker network ls | grep -q "langfuse_default"; then
+        echo "✓ Connected to local Langfuse instance"
+        echo ""
+        echo "View metrics and traces at: http://localhost:3000"
+    else
+        echo "✓ Using remote Langfuse instance at: ${LANGFUSE_HOST}"
+    fi
+else
+    echo "⚠️  Langfuse credentials not found - telemetry will be disabled"
 fi
 
 if [ "$DEBUG_MODE" = "true" ]; then

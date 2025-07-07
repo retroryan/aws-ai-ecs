@@ -5,13 +5,13 @@ Returns raw JSON from the Open-Meteo API for LLM interpretation.
 """
 
 import json
-from typing import Optional
+from typing import Optional, Union
 from fastmcp import FastMCP
 from starlette.requests import Request
 from starlette.responses import JSONResponse
 
 # Import shared utilities
-from api_utils import get_coordinates, OpenMeteoClient, get_daily_params, get_hourly_params, API_TYPE_FORECAST
+from api_utils import get_coordinates, OpenMeteoClient, get_daily_params, get_hourly_params, API_TYPE_FORECAST, parse_coordinate
 
 # Initialize FastMCP server
 server = FastMCP(name="openmeteo-forecast")
@@ -27,8 +27,8 @@ async def health_check(request: Request) -> JSONResponse:
 @server.tool
 async def get_weather_forecast(
     location: Optional[str] = None,
-    latitude: Optional[float] = None,
-    longitude: Optional[float] = None,
+    latitude: Optional[Union[str, float]] = None,
+    longitude: Optional[Union[str, float]] = None,
     days: int = 7
 ) -> dict:
     """Get weather forecast with coordinate optimization.
@@ -37,8 +37,8 @@ async def get_weather_forecast(
     
     Args:
         location: Location name (requires geocoding - slower)
-        latitude: Direct latitude (-90 to 90) - PREFERRED
-        longitude: Direct longitude (-180 to 180) - PREFERRED
+        latitude: Direct latitude (-90 to 90) - PREFERRED (accepts string or float)
+        longitude: Direct longitude (-180 to 180) - PREFERRED (accepts string or float)
         days: Forecast days (1-16)
     
     Returns:
@@ -48,9 +48,13 @@ async def get_weather_forecast(
         # Validate days parameter
         days = min(max(days, 1), 16)
 
+        # Parse coordinates if they are strings
+        lat = parse_coordinate(latitude)
+        lon = parse_coordinate(longitude)
+
         # Coordinate priority: direct coords > location name
-        if latitude is not None and longitude is not None:
-            coords = {"latitude": latitude, "longitude": longitude, "name": location or f"{latitude:.4f},{longitude:.4f}"}
+        if lat is not None and lon is not None:
+            coords = {"latitude": lat, "longitude": lon, "name": location or f"{lat:.4f},{lon:.4f}"}
         elif location:
             coords = await get_coordinates(location)
             if not coords:
