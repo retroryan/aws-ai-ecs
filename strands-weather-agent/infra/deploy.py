@@ -136,50 +136,128 @@ class SimpleDeployment:
         template = Path(__file__).parent / "base.cfn"
         self.deploy_stack(template, self.base_stack)
     
-    def deploy_services(self, enable_telemetry=True, debug_mode=False):
-        """Deploy ECS services with optional telemetry and debug mode"""
+    def deploy_services(self, enable_telemetry=True):
+        """Deploy ECS services with optional telemetry"""
         template = Path(__file__).parent / "services.cfn"
         
-        # Load bedrock configuration
-        load_dotenv()
+        # Load cloud.env first if it exists (for AWS deployments)
+        cloud_env_path = Path(__file__).parent.parent / "cloud.env"
+        if cloud_env_path.exists():
+            print(f"📄 Loading configuration from cloud.env...")
+            load_dotenv(cloud_env_path, override=True)
+        else:
+            # Fall back to regular .env
+            load_dotenv()
         
-        # If debug mode, load cloud.env and set debug flag
-        if debug_mode:
-            cloud_env_path = Path(__file__).parent.parent / "cloud.env"
-            if cloud_env_path.exists():
-                # Add STRANDS_DEBUG_TOOL_CALLS to cloud.env
-                with open(cloud_env_path, 'a') as f:
-                    if 'STRANDS_DEBUG_TOOL_CALLS' not in open(cloud_env_path).read():
-                        f.write('\n# Debug mode for coordinate issue (added by deploy.py --debug)\n')
-                        f.write('STRANDS_DEBUG_TOOL_CALLS=true\n')
-                print("✅ Debug mode enabled - added STRANDS_DEBUG_TOOL_CALLS=true to cloud.env")
+        # Get Bedrock configuration (now from cloud.env if available)
+        bedrock_model_id = os.getenv("BEDROCK_MODEL_ID", "amazon.nova-lite-v1:0")
+        bedrock_region = os.getenv("BEDROCK_REGION", self.region)
+        
+        print(f"🤖 Using Bedrock model: {bedrock_model_id}")
+        print(f"🌍 Bedrock region: {bedrock_region}")
         
         params = {
             "BaseStackName": self.base_stack,
-            "BedrockModelId": os.getenv("BEDROCK_MODEL_ID", "amazon.nova-lite-v1:0"),
-            "BedrockRegion": os.getenv("BEDROCK_REGION", self.region),
+            "BedrockModelId": bedrock_model_id,
+            "BedrockRegion": bedrock_region,
             "BedrockTemperature": os.getenv("BEDROCK_TEMPERATURE", "0"),
             "LogLevel": os.getenv("LOG_LEVEL", "INFO"),
             "EnableTelemetry": "true" if enable_telemetry else "false"
         }
         
+        # Load image tags from .image-tags file if it exists
+        image_tags_file = Path(__file__).parent / ".image-tags"
+        if image_tags_file.exists():
+            print(f"📦 Loading image tags from {image_tags_file}")
+            with open(image_tags_file) as f:
+                for line in f:
+                    line = line.strip()
+                    if line and '=' in line:
+                        key, value = line.split('=', 1)
+                        if key == "MAIN_IMAGE_TAG":
+                            params["MainImageTag"] = value
+                            print(f"  Main image: {value}")
+                        elif key == "FORECAST_IMAGE_TAG":
+                            params["ForecastImageTag"] = value
+                            print(f"  Forecast image: {value}")
+                        elif key == "HISTORICAL_IMAGE_TAG":
+                            params["HistoricalImageTag"] = value
+                            print(f"  Historical image: {value}")
+                        elif key == "AGRICULTURAL_IMAGE_TAG":
+                            params["AgriculturalImageTag"] = value
+                            print(f"  Agricultural image: {value}")
+        else:
+            print("⚠️ No .image-tags file found, using 'latest' tags")
+            params.update({
+                "MainImageTag": "latest",
+                "ForecastImageTag": "latest",
+                "HistoricalImageTag": "latest",
+                "AgriculturalImageTag": "latest"
+            })
+        
         # Add Langfuse parameters if telemetry is enabled
         if enable_telemetry:
-            cloud_env_path = Path(__file__).parent.parent / "cloud.env"
-            if cloud_env_path.exists():
-                load_dotenv(cloud_env_path)
-                langfuse_host = os.getenv("LANGFUSE_HOST")
-                if langfuse_host:
-                    params["LangfuseHost"] = langfuse_host
-                    params["TelemetryTags"] = os.getenv("TELEMETRY_TAGS", "production,aws-strands,weather-agent")
-                    # Note: Public and Secret keys are handled via Parameter Store
+            langfuse_host = os.getenv("LANGFUSE_HOST")
+            if langfuse_host:
+                params["LangfuseHost"] = langfuse_host
+                params["TelemetryTags"] = os.getenv("TELEMETRY_TAGS", "production,aws-strands,weather-agent")
+                print(f"📊 Telemetry enabled with host: {langfuse_host}")
+                # Note: Public and Secret keys are handled via Parameter Store
         
         self.deploy_stack(template, self.services_stack, params)
     
-    def update_services(self, enable_telemetry=True, debug_mode=False):
+    def update_services(self, enable_telemetry=True):
         """Update services (redeploy)"""
         print("\n🔄 Updating services...")
-        self.deploy_services(enable_telemetry, debug_mode)
+        
+        # Load cloud.env to ensure we have the latest configuration
+        cloud_env_path = Path(__file__).parent.parent / "cloud.env"
+        if cloud_env_path.exists():
+            print(f"📄 Loading configuration from cloud.env...")
+            load_dotenv(cloud_env_path, override=True)
+        
+        # Build and push new images first
+        print("\n📦 Building and pushing updated Docker images...")
+        self.build_and_push()
+        
+        # Then deploy the services with new images
+        self.deploy_services(enable_telemetry)
+        
+        # Force ECS to use the new images by updating services
+        print("\n🔄 Forcing ECS services to use new images...")
+        self._force_ecs_update()
+    
+    def _force_ecs_update(self):
+        """Force ECS services to pull new images by updating service"""
+        try:
+            ecs = boto3.client("ecs", region_name=self.region)
+            
+            # Get cluster name - it's always "strands-weather-agent"
+            cluster_name = "strands-weather-agent"
+            
+            # List services in the cluster
+            response = ecs.list_services(cluster=cluster_name)
+            service_arns = response.get('serviceArns', [])
+            
+            for service_arn in service_arns:
+                service_name = service_arn.split('/')[-1]
+                print(f"  Updating service: {service_name}")
+                
+                # Force new deployment
+                ecs.update_service(
+                    cluster=cluster_name,
+                    service=service_name,
+                    forceNewDeployment=True
+                )
+            
+            if service_arns:
+                print(f"✅ Forced update for {len(service_arns)} services")
+            else:
+                print("⚠️  No services found to update")
+                
+        except Exception as e:
+            print(f"⚠️  Could not force ECS update: {e}")
+            # Non-critical error, continue
     
     def cleanup_services(self):
         """Remove services stack only"""
@@ -364,9 +442,9 @@ class SimpleDeployment:
         print("\n💡 Tips:")
         print("   - Test the deployment: python3 infra/test_services.py")
         print("   - View logs: aws logs tail /aws/ecs/strands-weather-agent --follow")
-        print("   - Update services: python3 infra/deploy.py update-services")
+        print("   - Update with code changes: python3 infra/deploy.py update-services")
     
-    def deploy_all(self, disable_telemetry=False, debug_mode=False):
+    def deploy_all(self, disable_telemetry=False):
         """Deploy everything"""
         print("🚀 Starting full deployment...")
         
@@ -383,7 +461,7 @@ class SimpleDeployment:
         
         # Deploy stacks
         self.deploy_base()
-        self.deploy_services(enable_telemetry, debug_mode)
+        self.deploy_services(enable_telemetry)
         
         # Show final status
         self.get_status()
@@ -404,7 +482,7 @@ def show_help():
     print("  all              Deploy all infrastructure (base + services)")
     print("  base             Deploy only base infrastructure")
     print("  services         Deploy only services (requires base)")
-    print("  update-services  Update services (redeploy task definitions)")
+    print("  update-services  Build new images and redeploy services")
     print("  status           Show current deployment status")
     print("  cleanup-services Remove services stack only")
     print("  cleanup-base     Remove base infrastructure stack")
@@ -413,7 +491,6 @@ def show_help():
     print("\nOptions:")
     print("  --disable-telemetry  Disable Langfuse telemetry")
     print("  --region REGION      AWS region (default: us-east-1)")
-    print("  --debug              Enable debug mode for coordinate issue investigation")
     print("\nEnvironment Variables:")
     print("  AWS_REGION          AWS region (default: us-east-1)")
     print("  BEDROCK_MODEL_ID    Bedrock model to use (default: amazon.nova-lite-v1:0)")
@@ -426,7 +503,7 @@ def show_help():
     print("  python3 infra/deploy.py build-push                    # Build and push images")
     print("  python3 infra/deploy.py all                           # Full deployment")
     print("  python3 infra/deploy.py all --disable-telemetry       # Deploy without telemetry")
-    print("  python3 infra/deploy.py update-services --debug       # Redeploy with debug mode")
+    print("  python3 infra/deploy.py update-services               # Build & redeploy services")
     print("  python3 infra/deploy.py status                        # Check deployment status")
     print("  python3 infra/deploy.py cleanup-services              # Remove services only")
     print("\n📖 For more info: https://github.com/aws-samples/strands-weather-agent")
@@ -461,11 +538,6 @@ def main():
         default=os.getenv("AWS_REGION", "us-east-1"),
         help="AWS region"
     )
-    parser.add_argument(
-        "--debug",
-        action="store_true",
-        help="Enable debug mode for coordinate issue investigation"
-    )
     
     args = parser.parse_args()
     
@@ -479,13 +551,13 @@ def main():
     
     # Execute command
     if args.command == "all":
-        deployment.deploy_all(args.disable_telemetry, args.debug)
+        deployment.deploy_all(args.disable_telemetry)
     elif args.command == "base":
         deployment.deploy_base()
     elif args.command == "services":
-        deployment.deploy_services(not args.disable_telemetry, args.debug)
+        deployment.deploy_services(not args.disable_telemetry)
     elif args.command == "update-services":
-        deployment.update_services(not args.disable_telemetry, args.debug)
+        deployment.update_services(not args.disable_telemetry)
     elif args.command == "status":
         deployment.get_status()
     elif args.command == "setup-ecr":

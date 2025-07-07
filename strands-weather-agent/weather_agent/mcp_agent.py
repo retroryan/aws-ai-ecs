@@ -112,15 +112,36 @@ class MCPWeatherAgent:
         self.telemetry = None
         self.telemetry_enabled = False
         
+        # Log telemetry configuration attempt
+        logger.info("🔧 Initializing telemetry configuration...")
+        
         if enable_telemetry is not False:  # None or True
-            self.telemetry = configure_langfuse_from_env(
-                service_name="weather-agent",
-                environment=os.getenv("ENVIRONMENT", "production")
-            )
-            self.telemetry_enabled = self.telemetry is not None and self.telemetry.is_enabled()
+            # Log Langfuse configuration details
+            langfuse_host = os.getenv("LANGFUSE_HOST", "not configured")
+            langfuse_public_key = os.getenv("LANGFUSE_PUBLIC_KEY", "")[:10] + "..." if os.getenv("LANGFUSE_PUBLIC_KEY") else "not configured"
+            logger.info(f"📊 Langfuse Host: {langfuse_host}")
+            logger.info(f"🔑 Langfuse Public Key: {langfuse_public_key}")
+            
+            try:
+                self.telemetry = configure_langfuse_from_env(
+                    service_name="weather-agent",
+                    environment=os.getenv("ENVIRONMENT", "production")
+                )
+                self.telemetry_enabled = self.telemetry is not None and self.telemetry.is_enabled()
+                
+                if self.telemetry_enabled:
+                    logger.info("✅ Langfuse telemetry successfully initialized")
+                else:
+                    logger.warning("⚠️ Langfuse telemetry configuration completed but is not enabled")
+                    
+            except Exception as e:
+                logger.error(f"❌ Failed to initialize Langfuse telemetry: {e}")
+                self.telemetry_enabled = False
             
             if enable_telemetry is True and not self.telemetry_enabled:
-                logger.warning("Langfuse telemetry was requested but is not available")
+                logger.warning("⚠️ Langfuse telemetry was explicitly requested but is not available")
+        else:
+            logger.info("ℹ️ Telemetry explicitly disabled")
         
         # Model configuration
         self.model_id = os.getenv("BEDROCK_MODEL_ID", 
@@ -823,6 +844,23 @@ class MCPWeatherAgent:
             ]
         }
     
+    def get_trace_url(self) -> Optional[str]:
+        """Get the Langfuse trace URL if telemetry is enabled."""
+        try:
+            if self.telemetry_enabled and hasattr(self, 'telemetry') and self.telemetry:
+                # Get the current trace ID from telemetry
+                from .langfuse_telemetry import get_current_trace_id, get_langfuse_host
+                trace_id = get_current_trace_id()
+                if trace_id:
+                    host = get_langfuse_host()
+                    # Remove trailing /api if present
+                    if host.endswith('/api'):
+                        host = host[:-4]
+                    return f"{host}/project/default/traces/{trace_id}"
+        except Exception as e:
+            logger.debug(f"Could not get trace URL: {e}")
+        return None
+    
     async def score_trace(self, 
                          trace_id: str,
                          name: str,
@@ -894,6 +932,8 @@ async def create_weather_agent(
     Raises:
         RuntimeError: If no MCP servers are available
     """
+    logger.info("🌟 Creating Weather Agent...")
+    
     agent = MCPWeatherAgent(
         debug_logging=debug_logging, 
         prompt_type=prompt_type,
@@ -904,8 +944,22 @@ async def create_weather_agent(
     )
     
     # Test connectivity as best practice
+    logger.info("🔌 Testing MCP server connectivity...")
     connectivity = await agent.test_connectivity()
+    
+    # Log connectivity status
+    connected_count = sum(1 for v in connectivity.values() if v)
+    logger.info(f"📡 MCP servers: {connected_count}/{len(connectivity)} connected")
+    
+    for server, is_connected in connectivity.items():
+        if is_connected:
+            logger.info(f"  ✅ {server}: connected")
+        else:
+            logger.warning(f"  ❌ {server}: disconnected")
+    
     if not any(connectivity.values()):
+        logger.error("❌ No MCP servers are available - agent cannot function")
         raise RuntimeError("No MCP servers are available")
     
+    logger.info("✅ Weather Agent initialized successfully")
     return agent

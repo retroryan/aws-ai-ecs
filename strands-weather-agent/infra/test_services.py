@@ -77,6 +77,23 @@ class ServiceTester:
                 print(f"✅ Response: {data['response']}")
                 if 'session_id' in data:
                     print(f"📝 Session ID: {data['session_id']}")
+                
+                # Display performance metrics if available
+                if 'metrics' in data and data['metrics']:
+                    metrics = data['metrics']
+                    print("\n📊 Performance Metrics:")
+                    print(f"   ├─ Tokens: {metrics.get('total_tokens', 0)} total "
+                          f"({metrics.get('input_tokens', 0)} input, "
+                          f"{metrics.get('output_tokens', 0)} output)")
+                    print(f"   ├─ Latency: {metrics.get('latency_seconds', 0)} seconds")
+                    print(f"   ├─ Throughput: {metrics.get('throughput_tokens_per_second', 0):.0f} tokens/second")
+                    print(f"   ├─ Model: {metrics.get('model', 'unknown')}")
+                    print(f"   └─ Cycles: {metrics.get('cycles', 0)}")
+                
+                # Display trace URL if available
+                if 'trace_url' in data and data['trace_url']:
+                    print(f"\n🔗 Trace: {data['trace_url']}")
+                
                 return True
             else:
                 print(f"❌ Query failed: {resp.status_code}")
@@ -203,18 +220,63 @@ class ServiceTester:
         all_passed &= self.test_health(base_url)
         all_passed &= self.test_mcp_status(base_url)
         
-        # Test some queries
+        # Test some queries and collect metrics
         queries = [
             "What's the weather in Seattle?",
             "Give me a 5-day forecast for Chicago",
             "Are conditions good for planting corn in Iowa?"
         ]
         
+        total_tokens = 0
+        total_latency = 0
+        query_count = 0
+        
         for query in queries:
-            all_passed &= self.test_query(base_url, query)
+            start_time = time.time()
+            resp = requests.post(
+                f"{base_url}/query",
+                json={"query": query},
+                timeout=30
+            )
+            
+            if resp.status_code == 200:
+                data = resp.json()
+                all_passed &= True
+                print(f"\n🤖 Testing query: '{query}'")
+                print(f"✅ Response: {data['response']}")
+                
+                # Collect metrics
+                if 'metrics' in data and data['metrics']:
+                    metrics = data['metrics']
+                    total_tokens += metrics.get('total_tokens', 0)
+                    total_latency += metrics.get('latency_seconds', 0)
+                    query_count += 1
+                    
+                    print("\n📊 Performance Metrics:")
+                    print(f"   ├─ Tokens: {metrics.get('total_tokens', 0)} total "
+                          f"({metrics.get('input_tokens', 0)} input, "
+                          f"{metrics.get('output_tokens', 0)} output)")
+                    print(f"   ├─ Latency: {metrics.get('latency_seconds', 0)} seconds")
+                    print(f"   ├─ Throughput: {metrics.get('throughput_tokens_per_second', 0):.0f} tokens/second")
+                    print(f"   ├─ Model: {metrics.get('model', 'unknown')}")
+                    print(f"   └─ Cycles: {metrics.get('cycles', 0)}")
+            else:
+                all_passed &= False
         
         # Test Langfuse if configured
         self.test_langfuse_connectivity()
+        
+        # Performance Summary
+        if query_count > 0:
+            print("\n📊 Performance Summary")
+            print("=" * 50)
+            print(f"Total queries processed: {query_count}")
+            print(f"Total tokens used: {total_tokens:,}")
+            print(f"Average tokens per query: {total_tokens // query_count:,}")
+            print(f"Total model processing time: {total_latency:.1f} seconds")
+            print(f"Average latency per query: {total_latency / query_count:.1f} seconds")
+            if total_latency > 0:
+                print(f"Overall throughput: {total_tokens / total_latency:.0f} tokens/second")
         
         # Summary
         print("\n" + "=" * 50)

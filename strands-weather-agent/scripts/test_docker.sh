@@ -147,6 +147,8 @@ test_query() {
     session_id=$(echo "$response" | jq -r '.session_id' 2>/dev/null || echo "")
     session_new=$(echo "$response" | jq -r '.session_new' 2>/dev/null || echo "")
     conversation_turn=$(echo "$response" | jq -r '.conversation_turn' 2>/dev/null || echo "")
+    metrics=$(echo "$response" | jq -r '.metrics' 2>/dev/null || echo "null")
+    trace_url=$(echo "$response" | jq -r '.trace_url' 2>/dev/null || echo "")
     
     if [[ "$response_text" == "Error"* ]] || [[ "$response_text" == "An error occurred"* ]]; then
         if [[ "$response_text" == *"credentials"* ]] || [[ "$response_text" == *"AWS"* ]] || [[ "$response_text" == *"Bedrock"* ]]; then
@@ -170,6 +172,29 @@ test_query() {
         # Display session info if available
         if [[ -n "$session_id" ]] && [[ "$session_id" != "null" ]]; then
             echo -e "\nSession: ${GREEN}✓${NC} ID: ${session_id:0:8}... | New: $session_new | Turn: $conversation_turn"
+        fi
+        
+        # Display metrics if available
+        if [[ "$metrics" != "null" ]] && [[ -n "$metrics" ]]; then
+            echo -e "\n📊 Performance Metrics:"
+            total_tokens=$(echo "$metrics" | jq -r '.total_tokens' 2>/dev/null || echo "0")
+            input_tokens=$(echo "$metrics" | jq -r '.input_tokens' 2>/dev/null || echo "0")
+            output_tokens=$(echo "$metrics" | jq -r '.output_tokens' 2>/dev/null || echo "0")
+            latency_seconds=$(echo "$metrics" | jq -r '.latency_seconds' 2>/dev/null || echo "0")
+            throughput=$(echo "$metrics" | jq -r '.throughput_tokens_per_second' 2>/dev/null || echo "0")
+            model=$(echo "$metrics" | jq -r '.model' 2>/dev/null || echo "unknown")
+            cycles=$(echo "$metrics" | jq -r '.cycles' 2>/dev/null || echo "0")
+            
+            echo "   ├─ Tokens: $total_tokens total ($input_tokens input, $output_tokens output)"
+            echo "   ├─ Latency: $latency_seconds seconds"
+            echo "   ├─ Throughput: ${throughput%.*} tokens/second"
+            echo "   ├─ Model: $model"
+            echo "   └─ Cycles: $cycles"
+        fi
+        
+        # Display trace URL if available
+        if [[ -n "$trace_url" ]] && [[ "$trace_url" != "null" ]]; then
+            echo -e "\n🔗 Trace: $trace_url"
         fi
     fi
     echo ""

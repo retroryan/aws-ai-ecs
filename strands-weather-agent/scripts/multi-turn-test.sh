@@ -66,11 +66,37 @@ display_result() {
     local session_id=$(echo "$response" | jq -r '.session_id // "No session"')
     local session_new=$(echo "$response" | jq -r '.session_new // false')
     local conversation_turn=$(echo "$response" | jq -r '.conversation_turn // 0')
+    local metrics=$(echo "$response" | jq -r '.metrics // null' 2>/dev/null)
+    local trace_url=$(echo "$response" | jq -r '.trace_url // ""' 2>/dev/null)
     
     echo -e "${CYAN}Turn $turn:${NC}"
     echo -e "${BLUE}Query:${NC} $query"
     echo -e "${GREEN}Response:${NC} $response_text"
     echo -e "${YELLOW}Session:${NC} ${session_id:0:8}... | New: $session_new | Turn: $conversation_turn"
+    
+    # Display metrics if available
+    if [[ "$metrics" != "null" ]] && [[ -n "$metrics" ]]; then
+        echo -e "\n📊 Performance Metrics:"
+        local total_tokens=$(echo "$metrics" | jq -r '.total_tokens' 2>/dev/null || echo "0")
+        local input_tokens=$(echo "$metrics" | jq -r '.input_tokens' 2>/dev/null || echo "0")
+        local output_tokens=$(echo "$metrics" | jq -r '.output_tokens' 2>/dev/null || echo "0")
+        local latency_seconds=$(echo "$metrics" | jq -r '.latency_seconds' 2>/dev/null || echo "0")
+        local throughput=$(echo "$metrics" | jq -r '.throughput_tokens_per_second' 2>/dev/null || echo "0")
+        local model=$(echo "$metrics" | jq -r '.model' 2>/dev/null || echo "unknown")
+        local cycles=$(echo "$metrics" | jq -r '.cycles' 2>/dev/null || echo "0")
+        
+        echo "   ├─ Tokens: $total_tokens total ($input_tokens input, $output_tokens output)"
+        echo "   ├─ Latency: $latency_seconds seconds"
+        echo "   ├─ Throughput: ${throughput%.*} tokens/second"
+        echo "   ├─ Model: $model"
+        echo "   └─ Cycles: $cycles"
+    fi
+    
+    # Display trace URL if available
+    if [[ -n "$trace_url" ]] && [[ "$trace_url" != "null" ]]; then
+        echo -e "\n🔗 Trace: $trace_url"
+    fi
+    
     echo ""
 }
 
@@ -218,19 +244,50 @@ perf_session=$(echo "$perf_response1" | jq -r '.session_id')
 end_time=$(date +%s.%N)
 time1=$(echo "$end_time - $start_time" | bc)
 
+# Extract metrics from first query
+metrics1=$(echo "$perf_response1" | jq -r '.metrics // null' 2>/dev/null)
+if [[ "$metrics1" != "null" ]]; then
+    echo -e "${CYAN}First Query Metrics:${NC}"
+    tokens1=$(echo "$metrics1" | jq -r '.total_tokens' 2>/dev/null || echo "0")
+    latency1=$(echo "$metrics1" | jq -r '.latency_seconds' 2>/dev/null || echo "0")
+    throughput1=$(echo "$metrics1" | jq -r '.throughput_tokens_per_second' 2>/dev/null || echo "0")
+    echo -e "  API round-trip time: ${YELLOW}${time1}s${NC}"
+    echo -e "  Model processing time: ${YELLOW}${latency1}s${NC}"
+    echo -e "  Tokens processed: ${YELLOW}${tokens1}${NC}"
+    echo -e "  Throughput: ${YELLOW}${throughput1%.*} tokens/sec${NC}"
+fi
+
 start_time=$(date +%s.%N)
 perf_response2=$(make_query "And humidity?" "$perf_session")
 end_time=$(date +%s.%N)
 time2=$(echo "$end_time - $start_time" | bc)
 
-echo -e "First query time: ${YELLOW}${time1}s${NC}"
-echo -e "Follow-up query time: ${YELLOW}${time2}s${NC}"
+# Extract metrics from second query
+metrics2=$(echo "$perf_response2" | jq -r '.metrics // null' 2>/dev/null)
+if [[ "$metrics2" != "null" ]]; then
+    echo -e "\n${CYAN}Follow-up Query Metrics:${NC}"
+    tokens2=$(echo "$metrics2" | jq -r '.total_tokens' 2>/dev/null || echo "0")
+    latency2=$(echo "$metrics2" | jq -r '.latency_seconds' 2>/dev/null || echo "0")
+    throughput2=$(echo "$metrics2" | jq -r '.throughput_tokens_per_second' 2>/dev/null || echo "0")
+    echo -e "  API round-trip time: ${YELLOW}${time2}s${NC}"
+    echo -e "  Model processing time: ${YELLOW}${latency2}s${NC}"
+    echo -e "  Tokens processed: ${YELLOW}${tokens2}${NC}"
+    echo -e "  Throughput: ${YELLOW}${throughput2%.*} tokens/sec${NC}"
+fi
 
-# Check if follow-up was faster (it might not be due to API calls)
+# Comparison
+echo -e "\n${CYAN}Performance Comparison:${NC}"
 if (( $(echo "$time2 < $time1" | bc -l) )); then
-    echo -e "${GREEN}✓${NC} Follow-up query was faster"
+    echo -e "  ${GREEN}✓${NC} Follow-up API call was faster"
 else
-    echo -e "${YELLOW}ℹ${NC} Follow-up query took similar time (expected with API calls)"
+    echo -e "  ${YELLOW}ℹ${NC} Follow-up API call took similar time"
+fi
+
+# Compare token counts if available
+if [[ "$metrics1" != "null" ]] && [[ "$metrics2" != "null" ]]; then
+    if (( $(echo "$tokens2 < $tokens1" | bc -l) )); then
+        echo -e "  ${GREEN}✓${NC} Follow-up used fewer tokens (context efficiency)"
+    fi
 fi
 echo ""
 

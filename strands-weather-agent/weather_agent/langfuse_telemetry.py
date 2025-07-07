@@ -90,13 +90,18 @@ class LangfuseTelemetry:
         self.environment = environment
         self.telemetry_initialized = False
         
+        logger.info(f"🔍 Langfuse Telemetry Init - Host: {self.host}, Service: {self.service_name}")
+        
         # Check if we should auto-initialize
-        if auto_initialize and self.check_langfuse_available():
-            self._setup_langfuse_telemetry()
-        elif not self.public_key or not self.secret_key:
-            logger.info("Langfuse credentials not found - telemetry disabled")
-        else:
-            logger.info("Langfuse not reachable - continuing without telemetry")
+        if auto_initialize:
+            if not self.public_key or not self.secret_key:
+                logger.info("📋 Langfuse credentials not found - telemetry disabled")
+            else:
+                logger.info(f"🌐 Checking Langfuse connectivity at {self.host}...")
+                if self.check_langfuse_available():
+                    self._setup_langfuse_telemetry()
+                else:
+                    logger.warning(f"⚠️ Langfuse not reachable at {self.host} - continuing without telemetry")
     
     def check_langfuse_available(self) -> bool:
         """
@@ -128,9 +133,12 @@ class LangfuseTelemetry:
                 f"{self.public_key}:{self.secret_key}".encode()
             ).decode()
             
+            health_url = f"{self.host}/api/public/health"
+            logger.debug(f"🔗 Attempting Langfuse health check at: {health_url}")
+            
             # Quick health check with 1 second timeout
             response = requests.get(
-                f"{self.host}/api/public/health",
+                health_url,
                 headers={"Authorization": f"Basic {auth_token}"},
                 timeout=1.0
             )
@@ -141,19 +149,25 @@ class LangfuseTelemetry:
             _LAST_AVAILABILITY_CHECK = datetime.now()
             
             if available:
-                logger.debug(f"Langfuse health check successful at {self.host}")
+                logger.info(f"✅ Langfuse health check successful at {self.host} (status: {response.status_code})")
             else:
-                logger.debug(f"Langfuse health check failed with status {response.status_code}")
+                logger.warning(f"❌ Langfuse health check failed at {self.host} with status {response.status_code}")
+                logger.debug(f"Response: {response.text[:200]}")
                 
             return available
             
         except requests.exceptions.Timeout:
-            logger.debug("Langfuse health check timed out after 1 second")
+            logger.warning(f"⏱️ Langfuse health check timed out after 1 second at {self.host}")
+            _LANGFUSE_AVAILABLE_CACHE = False
+            _LAST_AVAILABILITY_CHECK = datetime.now()
+            return False
+        except requests.exceptions.ConnectionError as e:
+            logger.warning(f"🔌 Cannot connect to Langfuse at {self.host}: {e}")
             _LANGFUSE_AVAILABLE_CACHE = False
             _LAST_AVAILABILITY_CHECK = datetime.now()
             return False
         except Exception as e:
-            logger.debug(f"Langfuse health check failed: {type(e).__name__}: {e}")
+            logger.warning(f"❌ Langfuse health check failed: {type(e).__name__}: {e}")
             _LANGFUSE_AVAILABLE_CACHE = False
             _LAST_AVAILABILITY_CHECK = datetime.now()
             return False
@@ -376,3 +390,23 @@ def create_deterministic_trace_id(seed: str) -> Optional[str]:
     except Exception as e:
         logger.error(f"Failed to create deterministic trace ID: {e}")
         return None
+
+
+def get_current_trace_id() -> Optional[str]:
+    """Get the current trace ID from the active span context."""
+    try:
+        from opentelemetry import trace
+        span = trace.get_current_span()
+        if span and span.is_recording():
+            span_context = span.get_span_context()
+            if span_context and span_context.is_valid:
+                # Convert trace ID to hex string format
+                return format(span_context.trace_id, '032x')
+    except Exception as e:
+        logger.debug(f"Could not get current trace ID: {e}")
+    return None
+
+
+def get_langfuse_host() -> str:
+    """Get the configured Langfuse host URL."""
+    return os.getenv("LANGFUSE_HOST", "https://cloud.langfuse.com")

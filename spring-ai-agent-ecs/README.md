@@ -2,6 +2,8 @@
 
 Provides a sample Spring AI MCP Server that runs on ECS; which is used by a Spring AI Agent using Bedrock; which also runs on ECS and is exposed publicly via a Load Balancer.
 
+This is forked and modified from (James Ward spring-ai-agent-ecs)[https://github.com/jamesward/Sample-Model-Context-Protocol-Demos/tree/main/modules/spring-ai-agent-ecs] and the goal is to have it provide a separate mcp server for integration with the strands-weather-agent. There is currently an issue because Spring AI seems to only use sse but AWS Strands uses streaming http - I think?
+
 ```mermaid
 flowchart LR
     subgraph aws[AWS]

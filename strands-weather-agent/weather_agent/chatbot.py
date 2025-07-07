@@ -6,7 +6,7 @@ This demonstrates how MCP servers work with AWS Strands:
 - Native MCP integration without custom wrappers
 - Clean, simple API design
 - Optional structured output display
-- 50% less code than traditional frameworks
+- Significantly less code than traditional frameworks
 """
 
 import asyncio

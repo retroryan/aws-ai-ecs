@@ -5,7 +5,7 @@ SCRIPT_DIR="$( cd "$( dirname "${BASH_SOURCE[0]}" )" && pwd )"
 source "${SCRIPT_DIR}/common.sh"
 
 echo "=================================================="
-echo "AWS Configuration Check for Spring AI Agent"
+echo "AWS Configuration Check for Strands Weather Agent"
 echo "=================================================="
 echo ""
 

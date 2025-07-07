@@ -179,11 +179,23 @@ class QueryRequest(BaseModel):
     session_id: Optional[str] = None
     create_session: bool = True  # Auto-create if not provided
 
+class PerformanceMetrics(BaseModel):
+    total_tokens: int
+    input_tokens: int
+    output_tokens: int
+    latency_ms: int
+    latency_seconds: float
+    throughput_tokens_per_second: float
+    model: str
+    cycles: int
+
 class QueryResponse(BaseModel):
     response: str
     session_id: str  # Always included
     session_new: bool  # True if newly created
     conversation_turn: int
+    metrics: Optional[PerformanceMetrics] = None
+    trace_url: Optional[str] = None  # Langfuse trace URL if available
 
 class AgentInfo(BaseModel):
     model: str
@@ -263,17 +275,48 @@ async def process_query(request: QueryRequest):
         await session_manager.update_activity(session_id)
         session = await session_manager.get_session(session_id)
         
-        # Log metrics if available (always show for demo)
+        # Prepare metrics data if available
+        metrics_data = None
+        trace_url = None
+        
         if hasattr(agent, 'last_metrics') and agent.last_metrics:
             try:
                 from .metrics_display import format_metrics
             except ImportError:
                 from metrics_display import format_metrics
+            
+            # Log formatted metrics
             logger.info(format_metrics(agent.last_metrics))
             
             # Add to global metrics
             if global_metrics:
                 global_metrics.add_query(agent.last_metrics)
+            
+            # Extract metrics for response
+            total_tokens = agent.last_metrics.accumulated_usage.get('totalTokens', 0)
+            input_tokens = agent.last_metrics.accumulated_usage.get('inputTokens', 0)
+            output_tokens = agent.last_metrics.accumulated_usage.get('outputTokens', 0)
+            latency_ms = agent.last_metrics.accumulated_metrics.get('latencyMs', 0)
+            latency_seconds = latency_ms / 1000.0
+            throughput = total_tokens / latency_seconds if latency_seconds > 0 else 0
+            
+            model_id = os.environ.get('BEDROCK_MODEL_ID', 'unknown')
+            model_name = model_id.split('.')[-1].split('-v')[0] if '.' in model_id else model_id
+            
+            metrics_data = PerformanceMetrics(
+                total_tokens=total_tokens,
+                input_tokens=input_tokens,
+                output_tokens=output_tokens,
+                latency_ms=latency_ms,
+                latency_seconds=latency_seconds,
+                throughput_tokens_per_second=throughput,
+                model=model_name,
+                cycles=agent.last_metrics.cycle_count
+            )
+            
+            # Get Langfuse trace URL if available
+            if hasattr(agent, 'get_trace_url'):
+                trace_url = agent.get_trace_url()
         
         # Log query completion
         if debug_mode:
@@ -285,7 +328,9 @@ async def process_query(request: QueryRequest):
             response=response,
             session_id=session_id,
             session_new=session_new,
-            conversation_turn=session.conversation_turns if session else 1
+            conversation_turn=session.conversation_turns if session else 1,
+            metrics=metrics_data,
+            trace_url=trace_url
         )
         
     except HTTPException:
@@ -364,17 +409,46 @@ async def process_query_structured(request: QueryRequest):
         if not validation.valid:
             logger.warning(f"Response validation issues: {validation.errors}")
         
-        # Log metrics if available (always show for demo)
+        # Prepare metrics data if available
         if hasattr(agent, 'last_metrics') and agent.last_metrics:
             try:
                 from .metrics_display import format_metrics
             except ImportError:
                 from metrics_display import format_metrics
+            
+            # Log formatted metrics
             logger.info(format_metrics(agent.last_metrics))
             
             # Add to global metrics
             if global_metrics:
                 global_metrics.add_query(agent.last_metrics)
+            
+            # Extract metrics for response
+            total_tokens = agent.last_metrics.accumulated_usage.get('totalTokens', 0)
+            input_tokens = agent.last_metrics.accumulated_usage.get('inputTokens', 0)
+            output_tokens = agent.last_metrics.accumulated_usage.get('outputTokens', 0)
+            latency_ms = agent.last_metrics.accumulated_metrics.get('latencyMs', 0)
+            latency_seconds = latency_ms / 1000.0
+            throughput = total_tokens / latency_seconds if latency_seconds > 0 else 0
+            
+            model_id = os.environ.get('BEDROCK_MODEL_ID', 'unknown')
+            model_name = model_id.split('.')[-1].split('-v')[0] if '.' in model_id else model_id
+            
+            # Add metrics to structured response
+            response.metrics = PerformanceMetrics(
+                total_tokens=total_tokens,
+                input_tokens=input_tokens,
+                output_tokens=output_tokens,
+                latency_ms=latency_ms,
+                latency_seconds=latency_seconds,
+                throughput_tokens_per_second=throughput,
+                model=model_name,
+                cycles=agent.last_metrics.cycle_count
+            )
+            
+            # Get Langfuse trace URL if available
+            if hasattr(agent, 'get_trace_url'):
+                response.trace_url = agent.get_trace_url()
         
         # Log query completion
         if debug_mode:

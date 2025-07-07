@@ -35,25 +35,6 @@ async def get_coordinates(location: str) -> Optional[Dict[str, Union[str, float]
         return None
 
 
-def parse_coordinate(value: Union[str, float, None]) -> Optional[float]:
-    """
-    Parse a coordinate value that might be a string or float.
-    
-    Args:
-        value: Coordinate value (string, float, or None)
-        
-    Returns:
-        Float value or None if invalid
-    """
-    if value is None:
-        return None
-    
-    try:
-        # Handle both string and float inputs
-        return float(value)
-    except (ValueError, TypeError):
-        return None
-
 
 # Parameter helpers
 def get_daily_params() -> List[str]:

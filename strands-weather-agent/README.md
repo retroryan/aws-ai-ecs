@@ -148,59 +148,67 @@ cd .. && ./scripts/stop_servers.sh
 
 ### API Examples (Docker/Web Server Mode)
 
-When running with Docker, the weather agent runs as a FastAPI web server. Test it with HTTP requests:
+Use the provided test scripts to verify the deployment:
 
 ```bash
-# Health check
-curl http://localhost:7777/health
+# Basic service testing
+./scripts/test_docker.sh
 
-# Get weather forecast
-curl -X POST http://localhost:7777/query \
-  -H "Content-Type: application/json" \
-  -d '{"query": "What is the weather forecast for Seattle?"}'
-
-# Get structured weather data
-curl -X POST http://localhost:7777/query/structured \
-  -H "Content-Type: application/json" \
-  -d '{"query": "Show me the temperature in Chicago"}'
-
-# Check MCP server connectivity
-curl http://localhost:7777/mcp/status
+# Multi-turn conversation testing
+./scripts/multi-turn-test.sh
 ```
 
 ### AWS ECS Deployment
 
+Deploy to AWS ECS using the Python deployment script:
+
 ```bash
-# 1. Navigate to infrastructure directory
-cd infra
+# 1. Configure cloud environment (optional)
+cp cloud.env.example cloud.env  # Same format as .env.example
+# Edit cloud.env with Langfuse credentials (if using telemetry)
 
 # 2. Deploy everything to AWS ECS
-./deploy.sh all
+python3 infra/deploy.py all
 
-# 3. Get the application URL
-./deploy.sh status
-
-# The deployment will:
-# - Create ECR repositories
-# - Build and push Docker images
-# - Deploy VPC, ECS cluster, and ALB
-# - Deploy all services with auto-scaling
+# 3. Get the application URL and status
+python3 infra/deploy.py status
 ```
+
+The deployment script will:
+- Check AWS configuration and Bedrock access
+- Create ECR repositories
+- Build and push Docker images
+- Deploy VPC, ECS cluster, and ALB
+- Deploy all services with auto-scaling
+- Configure Langfuse telemetry (if cloud.env is provided)
+
+For detailed AWS deployment information and infrastructure scripts, see [infra/README.md](infra/README.md).
 
 ### Deployment Options
 
 ```bash
-# Deploy with specific model
-BEDROCK_MODEL_ID="anthropic.claude-3-haiku-20240307-v1:0" ./infra/deploy.sh all
+# Full deployment with default settings
+python3 infra/deploy.py all
+
+# Deploy without telemetry
+python3 infra/deploy.py all --disable-telemetry
+
+# Deploy with specific model (set in .env or environment)
+BEDROCK_MODEL_ID="anthropic.claude-3-haiku-20240307-v1:0" python3 infra/deploy.py all
 
 # Individual deployment steps
-./infra/deploy.sh setup-ecr        # Create ECR repositories
-./infra/deploy.sh build           # Build Docker images
-./infra/deploy.sh push            # Push images to ECR
-./infra/deploy.sh deploy-base     # Deploy VPC, ECS cluster, ALB
-./infra/deploy.sh deploy-services # Deploy application services
-./infra/deploy.sh status          # Check deployment status
-./infra/deploy.sh cleanup         # Remove all resources
+python3 infra/deploy.py aws-checks       # Check AWS configuration
+python3 infra/deploy.py setup-ecr        # Create ECR repositories
+python3 infra/deploy.py build-push       # Build and push Docker images
+python3 infra/deploy.py base             # Deploy VPC, ECS cluster, ALB
+python3 infra/deploy.py services         # Deploy application services
+python3 infra/deploy.py update-services  # Update services (rebuild & redeploy)
+python3 infra/deploy.py status           # Check deployment status
+
+# Cleanup options
+python3 infra/deploy.py cleanup-services # Remove services only
+python3 infra/deploy.py cleanup-base     # Remove base infrastructure
+python3 infra/deploy.py cleanup-all      # Remove all resources
 ```
 
 ## Architecture
@@ -492,92 +500,6 @@ curl http://localhost:7777/mcp/status                     # Check MCP server sta
 ```
 
 
-## AWS Deployment Guide
-
-### Infrastructure Overview
-
-The deployment creates AWS infrastructure using CloudFormation:
-
-#### Base Infrastructure (`infra/base.cfn`)
-- **Networking**: VPC with 2 public subnets across availability zones
-- **Load Balancing**: Application Load Balancer with health checks
-- **ECS Cluster**: Fargate-based cluster with Container Insights
-- **Service Discovery**: Private DNS namespace (weather.local)
-- **Security**: Security groups and IAM roles with least-privilege
-
-#### Services Infrastructure (`infra/services.cfn`)
-- **ECS Services**: 4 services (1 agent + 3 MCP servers)
-- **Task Definitions**: Resource limits and environment configuration
-- **Service Connect**: Internal service mesh for communication
-- **CloudWatch Logs**: Log groups with 7-day retention
-- **Auto-scaling**: Optional scaling policies based on CPU/memory
-
-### AWS Infrastructure Details
-
-1. **Networking**:
-   - VPC with public/private subnets across 2 AZs
-   - Internet Gateway for outbound connectivity
-   - Security groups for ALB and services
-
-2. **ECS Cluster**:
-   - Fargate launch type (serverless containers)
-   - Container Insights enabled
-   - Auto-scaling policies
-
-3. **Services**:
-   - 4 ECS services (agent + 3 MCP servers)
-   - Service discovery for internal communication
-   - Health checks for reliability
-
-4. **Load Balancing**:
-   - Application Load Balancer for external access
-   - Target group with health checks
-   - Auto-assigned DNS name
-
-5. **Storage**:
-   - ECR repositories for Docker images
-   - CloudWatch Log Groups for each service
-
-6. **Security**:
-   - IAM roles with least-privilege access
-   - No hardcoded credentials
-   - VPC isolation for services
-
-### Deployment Process
-
-```bash
-# One command deployment
-./infra/deploy.sh all
-
-# Or step-by-step:
-./infra/deploy.sh setup-ecr      # Create repositories
-./infra/deploy.sh build-push     # Build and push images
-./infra/deploy.sh base           # Deploy infrastructure
-./infra/deploy.sh services       # Deploy ECS services
-```
-
-### Monitoring & Updates
-
-```bash
-# Check deployment status
-./infra/status.sh
-
-# Update after code changes
-./infra/deploy.sh update
-
-# View logs
-./infra/logs.sh weather-agent
-```
-
-### Infrastructure Scripts
-
-| Script | Purpose | Usage |
-|--------|---------|-------|
-| `deploy.sh` | Main orchestrator | `deploy.sh [all\|base\|services\|update]` |
-| `aws-checks.sh` | Verify prerequisites | Run before first deploy |
-| `test_services.sh` | Test deployment | Validates all endpoints |
-| `status.sh` | Deployment status | Shows health and URLs |
-| `logs.sh` | View CloudWatch logs | `logs.sh [service-name]` |
 
 ## Configuration
 

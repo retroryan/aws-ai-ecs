@@ -175,6 +175,16 @@ class WeatherQueryResponse(BaseModel):
         description="The conversation turn number within the session"
     )
     
+    # Performance metrics (optional - populated by API)
+    metrics: Optional[Dict[str, Any]] = Field(
+        None,
+        description="Performance metrics including tokens, latency, and throughput"
+    )
+    trace_url: Optional[str] = Field(
+        None,
+        description="Langfuse trace URL for debugging and monitoring if telemetry is enabled"
+    )
+    
     def get_primary_location(self) -> ExtractedLocation:
         """Get the primary (first) location."""
         return self.locations[0]
