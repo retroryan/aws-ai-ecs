@@ -239,7 +239,7 @@ class WeatherAgentDemo:
             self.display_result(2, "What about just New York next week?", response2)
             
             response3 = self.make_query("And Los Angeles?", session_id2)
-            self.display_result(3, "And Los Angeles?", session_id2)
+            self.display_result(3, "And Los Angeles?", response3)
         
         # Test 3: Agricultural Context
         print("3. Testing Agricultural Context")
@@ -253,10 +253,10 @@ class WeatherAgentDemo:
         
         if session_id3:
             response2 = self.make_query("What about soybeans?", session_id3)
-            self.display_result(2, "What about soybeans?", session_id3)
+            self.display_result(2, "What about soybeans?", response2)
             
             response3 = self.make_query("Is there any frost risk in the next week?", session_id3)
-            self.display_result(3, "Is there any frost risk in the next week?", session_id3)
+            self.display_result(3, "Is there any frost risk in the next week?", response3)
         
         # Test 4: Session Management
         print("4. Testing Session Management")
@@ -354,7 +354,7 @@ class WeatherAgentDemo:
         # Summary
         print("Summary")
         print("-------")
-        print(f"{Colors.GREEN}✅ Multi-turn conversation demo completed!{Colors.RESET}")
+        print(f"{Colors.GREEN}✅ Multi-turn conversation test completed!{Colors.RESET}")
         print()
         print("Key findings:")
         print("- Sessions persist across multiple queries")
