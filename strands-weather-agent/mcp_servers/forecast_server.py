@@ -5,13 +5,25 @@ Returns raw JSON from the Open-Meteo API for LLM interpretation.
 """
 
 import json
-from typing import Optional
+import logging
+from typing import Optional, Union
 from fastmcp import FastMCP
 from starlette.requests import Request
 from starlette.responses import JSONResponse
 
+# Set up logging
+logging.basicConfig(level=logging.INFO)
+logger = logging.getLogger(__name__)
+
 # Import shared utilities
-from api_utils import get_coordinates, OpenMeteoClient, get_daily_params, get_hourly_params
+try:
+    # When running as a script
+    from api_utils import get_coordinates, OpenMeteoClient, get_daily_params, get_hourly_params, API_TYPE_FORECAST
+    from models import ForecastRequest
+except ImportError:
+    # When imported as a module
+    from .api_utils import get_coordinates, OpenMeteoClient, get_daily_params, get_hourly_params, API_TYPE_FORECAST
+    from .models import ForecastRequest
 
 # Initialize FastMCP server
 server = FastMCP(name="openmeteo-forecast")
@@ -25,39 +37,35 @@ async def health_check(request: Request) -> JSONResponse:
 
 
 @server.tool
-async def get_weather_forecast(
-    location: Optional[str] = None,
-    latitude: Optional[float] = None,
-    longitude: Optional[float] = None,
-    days: int = 7
-) -> dict:
+async def get_weather_forecast(request: ForecastRequest) -> dict:
     """Get weather forecast with coordinate optimization.
     
     Performance tip: Providing latitude/longitude is 3x faster than location name.
+    Pydantic automatically handles type conversion from strings to floats.
     
     Args:
-        location: Location name (requires geocoding - slower)
-        latitude: Direct latitude (-90 to 90) - PREFERRED
-        longitude: Direct longitude (-180 to 180) - PREFERRED
-        days: Forecast days (1-16)
+        request: ForecastRequest with location/coordinates and days
     
     Returns:
         Structured forecast data with location info, current conditions, and daily/hourly data
     """
     try:
-        # Validate days parameter
-        days = min(max(days, 1), 16)
-
+        # Pydantic has already validated the request and converted types
         # Coordinate priority: direct coords > location name
-        if latitude is not None and longitude is not None:
-            coords = {"latitude": latitude, "longitude": longitude, "name": location or f"{latitude:.4f},{longitude:.4f}"}
-        elif location:
-            coords = await get_coordinates(location)
+        if request.latitude is not None and request.longitude is not None:
+            coords = {
+                "latitude": request.latitude, 
+                "longitude": request.longitude, 
+                "name": request.location or f"{request.latitude:.4f},{request.longitude:.4f}"
+            }
+        elif request.location:
+            coords = await get_coordinates(request.location)
             if not coords:
                 return {
-                    "error": f"Could not find location: {location}. Please try a major city name."
+                    "error": f"Could not find location: {request.location}. Please try a major city name."
                 }
         else:
+            # This should not happen due to Pydantic validation
             return {
                 "error": "Either location name or coordinates (latitude, longitude) required"
             }
@@ -66,18 +74,18 @@ async def get_weather_forecast(
         params = {
             "latitude": coords["latitude"],
             "longitude": coords["longitude"],
-            "forecast_days": days,
+            "forecast_days": request.days,
             "daily": ",".join(get_daily_params()),
             "hourly": ",".join(get_hourly_params()),
             "current": "temperature_2m,relative_humidity_2m,precipitation,weather_code,wind_speed_10m",
             "timezone": "auto"
         }
         
-        data = await client.get("forecast", params)
+        data = await client.get(API_TYPE_FORECAST, params)
         
         # Add location info
         data["location_info"] = {
-            "name": coords.get("name", location),
+            "name": coords.get("name", request.location),
             "coordinates": {
                 "latitude": coords["latitude"],
                 "longitude": coords["longitude"]
@@ -85,7 +93,7 @@ async def get_weather_forecast(
         }
         
         # Add summary
-        data["summary"] = f"Weather forecast for {coords.get('name', location)} ({days} days)"
+        data["summary"] = f"Weather forecast for {coords.get('name', request.location)} ({request.days} days)"
         
         return data
         
@@ -99,6 +107,6 @@ if __name__ == "__main__":
     # Start the server with HTTP transport
     import os
     host = os.getenv("MCP_HOST", "0.0.0.0" if os.path.exists("/.dockerenv") else "127.0.0.1")
-    port = int(os.getenv("MCP_PORT", "8081"))
+    port = int(os.getenv("MCP_PORT", "7778"))
     print(f"Starting forecast server on {host}:{port}")
     server.run(transport="streamable-http", host=host, port=port, path="/mcp")

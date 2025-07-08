@@ -19,7 +19,7 @@ CYAN='\033[0;36m'
 NC='\033[0m' # No Color
 
 # API endpoint
-API_URL="${API_URL:-http://localhost:8090}"
+API_URL="${API_URL:-http://localhost:7777}"
 
 # Check if jq is installed
 if ! command -v jq &> /dev/null; then
@@ -61,16 +61,61 @@ display_result() {
     local query="$2"
     local response="$3"
     
+    # Increment total queries
+    ((total_queries++))
+    
     # Extract fields
     local response_text=$(echo "$response" | jq -r '.response // "No response"')
     local session_id=$(echo "$response" | jq -r '.session_id // "No session"')
     local session_new=$(echo "$response" | jq -r '.session_new // false')
     local conversation_turn=$(echo "$response" | jq -r '.conversation_turn // 0')
+    local metrics=$(echo "$response" | jq -r '.metrics // null' 2>/dev/null)
+    local trace_url=$(echo "$response" | jq -r '.trace_url // ""' 2>/dev/null)
+    
+    # Track session IDs
+    if [[ "$session_id" != "No session" ]] && [[ "$session_id" != "null" ]]; then
+        if [[ ! " ${all_session_ids[@]} " =~ " ${session_id} " ]]; then
+            all_session_ids+=("$session_id")
+        fi
+    fi
     
     echo -e "${CYAN}Turn $turn:${NC}"
     echo -e "${BLUE}Query:${NC} $query"
     echo -e "${GREEN}Response:${NC} $response_text"
     echo -e "${YELLOW}Session:${NC} ${session_id:0:8}... | New: $session_new | Turn: $conversation_turn"
+    
+    # Display metrics if available
+    if [[ "$metrics" != "null" ]] && [[ -n "$metrics" ]]; then
+        echo -e "\n📊 Performance Metrics:"
+        local total_tokens=$(echo "$metrics" | jq -r '.total_tokens' 2>/dev/null || echo "0")
+        local input_tokens=$(echo "$metrics" | jq -r '.input_tokens' 2>/dev/null || echo "0")
+        local output_tokens=$(echo "$metrics" | jq -r '.output_tokens' 2>/dev/null || echo "0")
+        local latency_seconds=$(echo "$metrics" | jq -r '.latency_seconds' 2>/dev/null || echo "0")
+        local throughput=$(echo "$metrics" | jq -r '.throughput_tokens_per_second' 2>/dev/null || echo "0")
+        local model=$(echo "$metrics" | jq -r '.model' 2>/dev/null || echo "unknown")
+        local cycles=$(echo "$metrics" | jq -r '.cycles' 2>/dev/null || echo "0")
+        
+        echo "   ├─ Tokens: $total_tokens total ($input_tokens input, $output_tokens output)"
+        echo "   ├─ Latency: $latency_seconds seconds"
+        echo "   ├─ Throughput: ${throughput%.*} tokens/second"
+        echo "   ├─ Model: $model"
+        echo "   └─ Cycles: $cycles"
+        
+        # Accumulate metrics
+        total_tokens_all=$((total_tokens_all + total_tokens))
+        total_input_tokens=$((total_input_tokens + input_tokens))
+        total_output_tokens=$((total_output_tokens + output_tokens))
+        total_latency=$(echo "$total_latency + $latency_seconds" | bc)
+        total_cycles=$((total_cycles + cycles))
+        model_used=$model
+        ((successful_queries++))
+    fi
+    
+    # Display trace URL if available
+    if [[ -n "$trace_url" ]] && [[ "$trace_url" != "null" ]]; then
+        echo -e "\n🔗 Trace: $trace_url"
+    fi
+    
     echo ""
 }
 
@@ -89,6 +134,17 @@ test_session_info() {
     fi
     echo ""
 }
+
+# Initialize global metrics tracking
+total_queries=0
+successful_queries=0
+total_tokens_all=0
+total_input_tokens=0
+total_output_tokens=0
+total_latency=0
+total_cycles=0
+model_used=""
+all_session_ids=()
 
 echo "1. Testing Basic Multi-Turn Conversation"
 echo "----------------------------------------"
@@ -218,19 +274,58 @@ perf_session=$(echo "$perf_response1" | jq -r '.session_id')
 end_time=$(date +%s.%N)
 time1=$(echo "$end_time - $start_time" | bc)
 
+# Extract metrics from first query
+metrics1=$(echo "$perf_response1" | jq -r '.metrics // null' 2>/dev/null)
+if [[ "$metrics1" != "null" ]]; then
+    echo -e "${CYAN}First Query Metrics:${NC}"
+    tokens1=$(echo "$metrics1" | jq -r '.total_tokens' 2>/dev/null || echo "0")
+    latency1=$(echo "$metrics1" | jq -r '.latency_seconds' 2>/dev/null || echo "0")
+    throughput1=$(echo "$metrics1" | jq -r '.throughput_tokens_per_second' 2>/dev/null || echo "0")
+    echo -e "  API round-trip time: ${YELLOW}${time1}s${NC}"
+    echo -e "  Model processing time: ${YELLOW}${latency1}s${NC}"
+    echo -e "  Tokens processed: ${YELLOW}${tokens1}${NC}"
+    echo -e "  Throughput: ${YELLOW}${throughput1%.*} tokens/sec${NC}"
+    
+    # Count these queries in our totals
+    ((total_queries++))
+    ((successful_queries++))
+fi
+
 start_time=$(date +%s.%N)
 perf_response2=$(make_query "And humidity?" "$perf_session")
 end_time=$(date +%s.%N)
 time2=$(echo "$end_time - $start_time" | bc)
 
-echo -e "First query time: ${YELLOW}${time1}s${NC}"
-echo -e "Follow-up query time: ${YELLOW}${time2}s${NC}"
+# Extract metrics from second query
+metrics2=$(echo "$perf_response2" | jq -r '.metrics // null' 2>/dev/null)
+if [[ "$metrics2" != "null" ]]; then
+    echo -e "\n${CYAN}Follow-up Query Metrics:${NC}"
+    tokens2=$(echo "$metrics2" | jq -r '.total_tokens' 2>/dev/null || echo "0")
+    latency2=$(echo "$metrics2" | jq -r '.latency_seconds' 2>/dev/null || echo "0")
+    throughput2=$(echo "$metrics2" | jq -r '.throughput_tokens_per_second' 2>/dev/null || echo "0")
+    echo -e "  API round-trip time: ${YELLOW}${time2}s${NC}"
+    echo -e "  Model processing time: ${YELLOW}${latency2}s${NC}"
+    echo -e "  Tokens processed: ${YELLOW}${tokens2}${NC}"
+    echo -e "  Throughput: ${YELLOW}${throughput2%.*} tokens/sec${NC}"
+    
+    # Count these queries in our totals
+    ((total_queries++))
+    ((successful_queries++))
+fi
 
-# Check if follow-up was faster (it might not be due to API calls)
+# Comparison
+echo -e "\n${CYAN}Performance Comparison:${NC}"
 if (( $(echo "$time2 < $time1" | bc -l) )); then
-    echo -e "${GREEN}✓${NC} Follow-up query was faster"
+    echo -e "  ${GREEN}✓${NC} Follow-up API call was faster"
 else
-    echo -e "${YELLOW}ℹ${NC} Follow-up query took similar time (expected with API calls)"
+    echo -e "  ${YELLOW}ℹ${NC} Follow-up API call took similar time"
+fi
+
+# Compare token counts if available
+if [[ "$metrics1" != "null" ]] && [[ "$metrics2" != "null" ]]; then
+    if (( $(echo "$tokens2 < $tokens1" | bc -l) )); then
+        echo -e "  ${GREEN}✓${NC} Follow-up used fewer tokens (context efficiency)"
+    fi
 fi
 echo ""
 
@@ -238,6 +333,49 @@ echo "Summary"
 echo "-------"
 echo -e "${GREEN}✅ Multi-turn conversation test completed!${NC}"
 echo ""
+
+# Display comprehensive metrics summary
+if [[ $successful_queries -gt 0 ]]; then
+    echo "📊 OVERALL METRICS SUMMARY"
+    echo "=========================="
+    echo ""
+    echo "Query Statistics:"
+    echo "  Total Queries: $total_queries"
+    echo "  Successful Queries: $successful_queries"
+    echo "  Unique Sessions: ${#all_session_ids[@]}"
+    echo ""
+    echo "Token Usage:"
+    echo "  Total Tokens: $total_tokens_all"
+    echo "  Input Tokens: $total_input_tokens"
+    echo "  Output Tokens: $total_output_tokens"
+    
+    # Calculate averages
+    avg_tokens=$((total_tokens_all / successful_queries))
+    avg_input=$((total_input_tokens / successful_queries))
+    avg_output=$((total_output_tokens / successful_queries))
+    avg_latency=$(echo "scale=2; $total_latency / $successful_queries" | bc)
+    avg_throughput=$(echo "scale=0; $total_tokens_all / $total_latency" | bc 2>/dev/null || echo "N/A")
+    
+    echo "  Average per Query: $avg_tokens tokens ($avg_input in, $avg_output out)"
+    echo ""
+    echo "Performance:"
+    echo "  Total Processing Time: ${total_latency}s"
+    echo "  Average Latency: ${avg_latency}s per query"
+    echo "  Overall Throughput: $avg_throughput tokens/second"
+    echo "  Total Agent Cycles: $total_cycles"
+    echo "  Model: $model_used"
+    
+    # Check if Langfuse is enabled
+    if [[ -n "$LANGFUSE_PUBLIC_KEY" ]] && [[ -n "$LANGFUSE_SECRET_KEY" ]]; then
+        echo ""
+        echo "Telemetry:"
+        echo "  Langfuse Host: ${LANGFUSE_HOST:-https://us.cloud.langfuse.com}"
+        echo "  Traces Generated: $successful_queries"
+        echo "  Sessions Tracked: ${#all_session_ids[@]}"
+    fi
+    
+fi
+
 echo "Key findings:"
 echo "- Sessions persist across multiple queries"
 echo "- Context is maintained for follow-up questions"

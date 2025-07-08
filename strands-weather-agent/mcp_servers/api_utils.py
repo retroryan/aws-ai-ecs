@@ -11,6 +11,12 @@ from typing import Dict, List, Optional, Tuple, Union
 from datetime import datetime, timedelta, date
 
 
+# API Type Constants
+API_TYPE_FORECAST = "forecast"
+API_TYPE_ARCHIVE = "archive"
+API_TYPE_GEOCODING = "geocoding"
+
+
 # Helper function for servers
 async def get_coordinates(location: str) -> Optional[Dict[str, Union[str, float]]]:
     """
@@ -27,6 +33,7 @@ async def get_coordinates(location: str) -> Optional[Dict[str, Union[str, float]
         }
     except Exception:
         return None
+
 
 
 # Parameter helpers
@@ -103,11 +110,11 @@ class OpenMeteoClient:
         """Generic method to get data from Open-Meteo APIs."""
         client = await self.ensure_client()
         
-        if api_type == "forecast":
+        if api_type == API_TYPE_FORECAST:
             url = self.forecast_url
-        elif api_type == "archive":
+        elif api_type == API_TYPE_ARCHIVE:
             url = self.archive_url
-        elif api_type == "geocoding":
+        elif api_type == API_TYPE_GEOCODING:
             url = self.geocoding_url
         else:
             raise ValueError(f"Unknown API type: {api_type}")

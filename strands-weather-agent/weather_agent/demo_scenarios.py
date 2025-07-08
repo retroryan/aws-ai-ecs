@@ -14,8 +14,10 @@ from typing import Optional
 # Handle both module and direct script execution
 try:
     from .mcp_agent import create_weather_agent, MCPWeatherAgent
+    from .metrics_display import SessionMetrics
 except ImportError:
     from mcp_agent import create_weather_agent, MCPWeatherAgent
+    from metrics_display import SessionMetrics
 
 
 async def run_mcp_multi_turn_demo(structured: bool = False):
@@ -33,6 +35,13 @@ async def run_mcp_multi_turn_demo(structured: bool = False):
     print("session-based conversation management.")
     print("=" * 50)
     
+    if structured:
+        print("\n🔍 DEBUG MODE ENABLED:")
+        print("   - Model's natural language will appear as it streams")
+        print("   - 🔧 [AGENT DEBUG - Tool Call] = Our agent's tool usage logging")
+        print("   - 📥 [AGENT DEBUG - Tool Input] = Tool parameters being sent")
+        print("   - Strands internal debug logs = Framework's internal processing")
+    
     # Initialize the agent
     print("\n🔌 Initializing AWS Strands agent with MCP connections...")
     agent = await create_weather_agent(structured)
@@ -41,6 +50,9 @@ async def run_mcp_multi_turn_demo(structured: bool = False):
     session_id = str(uuid.uuid4())
     print(f"✅ Ready for multi-turn conversation!")
     print(f"🆔 Session ID: {session_id[:8]}...\n")
+    
+    # Initialize session metrics
+    session_metrics = SessionMetrics()
     
     # Multi-turn conversation scenarios
     conversation_turns = [
@@ -73,17 +85,37 @@ async def run_mcp_multi_turn_demo(structured: bool = False):
     
     try:
         for turn in conversation_turns:
-            print(f"\n{'='*50}")
-            print(f"Turn {turn['turn']}: {turn['description']}")
-            print(f"{'='*50}")
+            print(f"\n{'#'*70}")
+            print(f"# CONVERSATION TURN {turn['turn']}: {turn['description']}")
+            print(f"{'#'*70}")
             print(f"👤 User: {turn['query']}")
             
-            # Process the query with session context
-            print(f"🤖 Assistant: ", end="", flush=True)
+            # Show query processing start
+            print("\n" + "="*60)
+            print("🔄 PROCESSING YOUR QUERY")
+            print("="*60)
+            print(f"📝 Query: {turn['query']}\n")
             
+            # Process the query with session context
             response = await agent.query(turn['query'], session_id=session_id)
             
-            # Print the response content
+            # Display metrics if available
+            if hasattr(agent, 'last_metrics') and agent.last_metrics:
+                try:
+                    from .metrics_display import format_metrics
+                except ImportError:
+                    from metrics_display import format_metrics
+                print(format_metrics(agent.last_metrics))
+                # Add to session metrics
+                session_metrics.add_query(agent.last_metrics)
+            
+            # Show completion
+            print("\n" + "="*60)
+            print("✅ RESPONSE COMPLETE")
+            print("="*60)
+            
+            # Print the response
+            print(f"\n🤖 Assistant: ", end="")
             if hasattr(response, 'content'):
                 print(response.content)
             else:
@@ -104,6 +136,9 @@ async def run_mcp_multi_turn_demo(structured: bool = False):
             print(f"   🔢 Total messages: {session_info['total_messages']}")
             print(f"   🔄 Conversation turns: {session_info['conversation_turns']}")
             print(f"   💾 Storage type: {session_info['storage_type']}")
+        
+        # Show session metrics summary
+        print(session_metrics.get_summary())
         
         print("="*50)
         
@@ -139,6 +174,9 @@ async def run_context_switching_demo(structured: bool = False):
     session_id = str(uuid.uuid4())
     print(f"✅ Ready for context switching demo!")
     print(f"🆔 Session ID: {session_id[:8]}...\n")
+    
+    # Initialize session metrics
+    session_metrics = SessionMetrics()
     
     # Context switching scenarios
     scenarios = [
@@ -187,6 +225,16 @@ async def run_context_switching_demo(structured: bool = False):
             else:
                 print(response)
             
+            # Display metrics if available
+            if hasattr(agent, 'last_metrics') and agent.last_metrics:
+                try:
+                    from .metrics_display import format_metrics
+                except ImportError:
+                    from metrics_display import format_metrics
+                print(format_metrics(agent.last_metrics))
+                # Add to session metrics
+                session_metrics.add_query(agent.last_metrics)
+            
             await asyncio.sleep(1)
         
         print("\n" + "="*50)
@@ -201,6 +249,9 @@ async def run_context_switching_demo(structured: bool = False):
             print(f"   🔢 Total messages: {session_info['total_messages']}")
             print(f"   🔄 Conversation turns: {session_info['conversation_turns']}")
             print(f"   💾 Storage type: {session_info['storage_type']}")
+        
+        # Show session metrics summary
+        print(session_metrics.get_summary())
         
         print("="*50)
         

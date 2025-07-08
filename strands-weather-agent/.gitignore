@@ -205,3 +205,6 @@ Temporary Items
 # Project specific
 logs/
 *.pid
+
+# Debug test results
+debug_results/

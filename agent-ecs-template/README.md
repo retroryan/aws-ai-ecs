@@ -183,46 +183,6 @@ Configures AWS Bedrock settings:
 - Creates a bedrock.env configuration file
 - Used by `scripts/setup.sh` for local development
 
-### AWS Infrastructure Scripts
-
-All AWS deployment scripts are in the `infra/` directory:
-
-#### `infra/deploy.sh`
-Main deployment script with the following commands:
-- `setup-ecr` - Setup ECR repositories and Docker authentication
-- `build-push` - Build and push Docker images to ECR
-- `all` - Deploy all infrastructure (base + services)
-- `base` - Deploy only base infrastructure
-- `services` - Deploy only services (requires base)
-- `update-services` - Update services after code changes
-- `status` - Show current deployment status
-- `cleanup-services` - Remove services stack only
-- `cleanup-base` - Remove base infrastructure
-- `cleanup-all` - Remove all infrastructure
-- `help` - Show help message
-
-#### `infra/setup-ecr.sh`
-Automates ECR repository creation and Docker authentication:
-- Creates ECR repositories for both server and client images
-- Authenticates Docker with ECR (logs in for docker push)
-- Sets up proper repository lifecycle policies
-- Provides the ECR_REPO environment variable for builds
-- **Important:** Run this script if you get "Your authorization token has expired" errors during docker push
-
-#### `infra/build-push.sh`
-Builds and pushes Docker images to ECR:
-- Builds Python Flask Docker images for both server and client
-- Tags and pushes images to ECR
-- Handles authentication and error checking
-- Detects expired authentication tokens and suggests running `setup-ecr.sh`
-- **Common failures:** Most push failures are due to expired ECR authentication tokens
-
-#### `infra/test_services.sh`
-Tests the deployed services end-to-end:
-- Retrieves the load balancer URL from CloudFormation
-- Sends a test request to the Python application endpoint
-- Validates that the services are responding correctly
-- Provides immediate feedback on deployment success
 
 ## Architecture Overview
 
@@ -297,15 +257,7 @@ agent-ecs-template/
 - `POST /api/employee/{employee_id}/ask` - Ask a specific specialist a question using AWS Bedrock
 
 ### Knowledge Specialists
-The demo includes 8 knowledge specialists in different fields:
-1. **Dr. Sarah Chen** - Aerospace & Aviation
-2. **Prof. Marcus Rodriguez** - Planetary Science
-3. **Dr. Emily Thompson** - Forest Ecology
-4. **Dr. James Wilson** - Agricultural Science
-5. **Dr. Maria Garcia** - Marine Biology
-6. **Prof. David Kim** - Wildlife Conservation
-7. **Dr. Lisa Anderson** - Soil Science
-8. **Dr. Robert Johnson** - Oceanography
+The demo includes 8 knowledge specialists across various scientific and technical fields. Use the `/employees` endpoint to discover their areas of expertise.
 
 ## Local Development
 

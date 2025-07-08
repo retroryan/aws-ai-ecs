@@ -147,8 +147,9 @@ check_model_tools() {
 
 # Define model categories and their preferred models (in order of preference)
 # Using simple variables instead of associative array for compatibility
-MODELS_BEST_PERFORMANCE="anthropic.claude-3-5-sonnet-20241022-v2:0|anthropic.claude-3-5-sonnet-20240620-v1:0"
-MODELS_FAST_CHEAP="anthropic.claude-3-haiku-20240307-v1:0"
+# Note: Claude models require "us." prefix for inference profiles
+MODELS_BEST_PERFORMANCE="us.anthropic.claude-3-5-sonnet-20241022-v2:0|us.anthropic.claude-3-5-sonnet-20240620-v1:0"
+MODELS_FAST_CHEAP="us.anthropic.claude-3-haiku-20240307-v1:0"
 MODELS_OPEN_SOURCE="meta.llama3-1-70b-instruct-v1:0|meta.llama3-70b-instruct-v1:0|meta.llama3-8b-instruct-v1:0"
 MODELS_RAG_OPTIMIZED="cohere.command-r-plus-v1:0|cohere.command-r-v1:0"
 

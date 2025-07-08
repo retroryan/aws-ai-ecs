@@ -15,8 +15,6 @@ This directory contains all tests for the AWS Strands + FastMCP Weather Agent.
 - **test_mcp_servers.py** - Tests for MCP server functionality (forecast, historical, agricultural)
 - **test_mcp_agent.py** - Tests for the MCP weather agent integration
 
-### Structured Output Tests
-- **test_structured_output_demo.py** - Tests for structured data output with Pydantic models
 
 ## Running Tests
 

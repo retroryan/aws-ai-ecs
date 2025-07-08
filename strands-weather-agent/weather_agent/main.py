@@ -10,9 +10,18 @@ from typing import Optional, Dict, Any
 import asyncio
 import uvicorn
 import os
-from .mcp_agent import create_weather_agent, MCPWeatherAgent
-from .models.structured_responses import WeatherQueryResponse, ValidationResult
-from .session_manager import SessionManager, SessionData
+import sys
+import argparse
+from datetime import datetime
+from pathlib import Path
+try:
+    from .mcp_agent import create_weather_agent, MCPWeatherAgent
+    from .models.structured_responses import WeatherQueryResponse, ValidationResult
+    from .session_manager import SessionManager, SessionData
+except ImportError:
+    from mcp_agent import create_weather_agent, MCPWeatherAgent
+    from models.structured_responses import WeatherQueryResponse, ValidationResult
+    from session_manager import SessionManager, SessionData
 from contextlib import asynccontextmanager
 import logging
 
@@ -23,12 +32,125 @@ logger = logging.getLogger(__name__)
 # Global instances
 agent: Optional[MCPWeatherAgent] = None
 session_manager: Optional[SessionManager] = None
+debug_mode: bool = False
+global_metrics: Optional['SessionMetrics'] = None
+
+
+def configure_debug_logging(enable_debug: bool = False):
+    """
+    Configure debug logging for AWS Strands with file output.
+    
+    Args:
+        enable_debug: Whether to enable debug logging
+    """
+    if not enable_debug:
+        return
+    
+    # Create logs directory if it doesn't exist
+    logs_dir = Path(__file__).parent.parent / "logs"
+    logs_dir.mkdir(exist_ok=True)
+    
+    # Create timestamped log file
+    timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")
+    log_file = logs_dir / f"weather_api_debug_{timestamp}.log"
+    
+    # Configure root logger for debug
+    root_logger = logging.getLogger()
+    root_logger.setLevel(logging.DEBUG)
+    
+    # Clear existing handlers
+    root_logger.handlers.clear()
+    
+    # Console handler - INFO level for cleaner output
+    console_handler = logging.StreamHandler(sys.stdout)
+    console_handler.setLevel(logging.INFO)
+    console_formatter = logging.Formatter("%(levelname)s | %(name)s | %(message)s")
+    console_handler.setFormatter(console_formatter)
+    
+    # File handler - DEBUG level for detailed logs
+    file_handler = logging.FileHandler(log_file, encoding='utf-8')
+    file_handler.setLevel(logging.DEBUG)
+    file_formatter = logging.Formatter(
+        "%(asctime)s | %(levelname)s | %(name)s | %(funcName)s:%(lineno)d | %(message)s"
+    )
+    file_handler.setFormatter(file_formatter)
+    
+    # Add handlers
+    root_logger.addHandler(console_handler)
+    root_logger.addHandler(file_handler)
+    
+    # Enable debug for specific Strands modules as per the guide
+    logging.getLogger("strands").setLevel(logging.DEBUG)
+    logging.getLogger("strands.tools").setLevel(logging.DEBUG)
+    logging.getLogger("strands.models").setLevel(logging.DEBUG)
+    logging.getLogger("strands.event_loop").setLevel(logging.DEBUG)
+    logging.getLogger("strands.agent").setLevel(logging.DEBUG)
+    
+    # Also enable debug for our modules
+    logging.getLogger("weather_agent").setLevel(logging.DEBUG)
+    logging.getLogger("__main__").setLevel(logging.DEBUG)
+    
+    # FastAPI/Uvicorn specific loggers
+    logging.getLogger("uvicorn").setLevel(logging.DEBUG)
+    logging.getLogger("uvicorn.access").setLevel(logging.DEBUG)
+    
+    print(f"\n🔍 Debug logging enabled. Logs will be written to: {log_file}")
+    print("📊 Console will show INFO level, file will contain DEBUG details.")
+    print("\n🔍 DEBUG MODE ENABLED:")
+    print("   - Model's natural language will appear as it streams")
+    print("   - 🔧 [AGENT DEBUG - Tool Call] = Our agent's tool usage logging")
+    print("   - 📥 [AGENT DEBUG - Tool Input] = Tool parameters being sent")
+    print("   - Strands internal debug logs = Framework's internal processing\n")
 
 @asynccontextmanager
 async def lifespan(app: FastAPI):
     """Initialize the agent and session manager on startup and cleanup on shutdown."""
-    global agent, session_manager
+    global agent, session_manager, debug_mode, global_metrics
+    
+    # Check debug mode from environment variable
+    debug_mode = os.getenv("WEATHER_AGENT_DEBUG", "false").lower() == "true"
+    
+    # Configure debug logging if enabled
+    configure_debug_logging(debug_mode)
+    
     print("🚀 Starting AWS Strands Weather Agent API...")
+    
+    # Log telemetry status with enhanced debugging
+    telemetry_enabled = os.getenv("ENABLE_TELEMETRY", "true").lower() == "true"
+    if telemetry_enabled:
+        # Check if Langfuse credentials are configured
+        pk = os.getenv("LANGFUSE_PUBLIC_KEY")
+        sk = os.getenv("LANGFUSE_SECRET_KEY")
+        host = os.getenv("LANGFUSE_HOST", "https://us.cloud.langfuse.com")
+        
+        if pk and sk:
+            print(f"📊 Telemetry: ✅ ENABLED")
+            print(f"   - Langfuse Host: {host}")
+            print(f"   - Service: {os.getenv('OTEL_SERVICE_NAME', 'weather-agent')}")
+            print(f"   - Environment: {os.getenv('DEPLOYMENT_ENVIRONMENT', 'demo')}")
+            
+            # Enhanced debugging information
+            if debug_mode:
+                print(f"   - Public Key (first/last 8): {pk[:8]}...{pk[-8:]}" if len(pk) > 16 else f"   - Public Key: {pk}")
+                print(f"   - Secret Key (first/last 8): {sk[:8]}...{sk[-8:]}" if len(sk) > 16 else f"   - Secret Key: {sk}")
+                print(f"   - OTEL Endpoint: {os.getenv('OTEL_EXPORTER_OTLP_TRACES_ENDPOINT', 'NOT SET')}")
+                print(f"   - OTEL Headers (length): {len(os.getenv('OTEL_EXPORTER_OTLP_TRACES_HEADERS', ''))}")
+        else:
+            print(f"📊 Telemetry: ⚠️  CONFIGURED but missing Langfuse credentials")
+            print(f"   - LANGFUSE_PUBLIC_KEY: {'SET' if pk else 'NOT SET'}")
+            print(f"   - LANGFUSE_SECRET_KEY: {'SET' if sk else 'NOT SET'}")
+            print(f"   - LANGFUSE_HOST: {host}")
+            print(f"   - Set LANGFUSE_PUBLIC_KEY and LANGFUSE_SECRET_KEY to enable")
+    else:
+        print(f"📊 Telemetry: ❌ DISABLED (ENABLE_TELEMETRY=false)")
+    
+    # Import and initialize global metrics tracker
+    try:
+        from .metrics_display import SessionMetrics
+    except ImportError:
+        from metrics_display import SessionMetrics
+    
+    global_metrics = SessionMetrics()
     
     # Add retry logic for MCP server connectivity
     max_retries = 5
@@ -36,8 +158,10 @@ async def lifespan(app: FastAPI):
     
     for attempt in range(max_retries):
         try:
-            # Initialize agent
-            agent = await create_weather_agent()
+            # Initialize agent with debug mode
+            agent = await create_weather_agent(
+                debug_logging=debug_mode
+            )
             
             # Initialize session manager
             default_ttl = int(os.getenv("SESSION_DEFAULT_TTL_MINUTES", "60"))
@@ -57,8 +181,13 @@ async def lifespan(app: FastAPI):
             logger.error(f"Failed to initialize: {e}")
             raise
     
-    # Cleanup (Strands handles this automatically)
-    print("🧹 Shutting down...")
+    # Cleanup and show final metrics
+    print("\n🧹 Shutting down...")
+    
+    # Show final session metrics if any queries were processed
+    if global_metrics and global_metrics.total_queries > 0:
+        print("\n📊 Final Usage Statistics:")
+        print(global_metrics.get_summary())
 
 # Create FastAPI app
 app = FastAPI(
@@ -73,11 +202,22 @@ class QueryRequest(BaseModel):
     session_id: Optional[str] = None
     create_session: bool = True  # Auto-create if not provided
 
+class PerformanceMetrics(BaseModel):
+    total_tokens: int
+    input_tokens: int
+    output_tokens: int
+    latency_ms: int
+    latency_seconds: float
+    throughput_tokens_per_second: float
+    model: str
+    cycles: int
+
 class QueryResponse(BaseModel):
     response: str
     session_id: str  # Always included
     session_new: bool  # True if newly created
     conversation_turn: int
+    metrics: Optional[PerformanceMetrics] = None
 
 class AgentInfo(BaseModel):
     model: str
@@ -117,6 +257,12 @@ async def process_query(request: QueryRequest):
         raise HTTPException(status_code=503, detail="Service not initialized")
     
     try:
+        # Log query processing start
+        if debug_mode:
+            logger.info("="*60)
+            logger.info("🔄 PROCESSING YOUR QUERY")
+            logger.info("="*60)
+            logger.info(f"📝 Query: {request.query}")
         # Handle session creation/retrieval
         session_new = False
         session_id = request.session_id
@@ -151,11 +297,56 @@ async def process_query(request: QueryRequest):
         await session_manager.update_activity(session_id)
         session = await session_manager.get_session(session_id)
         
+        # Prepare metrics data if available
+        metrics_data = None
+        
+        if hasattr(agent, 'last_metrics') and agent.last_metrics:
+            try:
+                from .metrics_display import format_metrics
+            except ImportError:
+                from metrics_display import format_metrics
+            
+            # Log formatted metrics
+            logger.info(format_metrics(agent.last_metrics))
+            
+            # Add to global metrics
+            if global_metrics:
+                global_metrics.add_query(agent.last_metrics)
+            
+            # Extract metrics for response
+            total_tokens = agent.last_metrics.accumulated_usage.get('totalTokens', 0)
+            input_tokens = agent.last_metrics.accumulated_usage.get('inputTokens', 0)
+            output_tokens = agent.last_metrics.accumulated_usage.get('outputTokens', 0)
+            latency_ms = agent.last_metrics.accumulated_metrics.get('latencyMs', 0)
+            latency_seconds = latency_ms / 1000.0
+            throughput = total_tokens / latency_seconds if latency_seconds > 0 else 0
+            
+            model_id = os.environ.get('BEDROCK_MODEL_ID', 'unknown')
+            model_name = model_id.split('.')[-1].split('-v')[0] if '.' in model_id else model_id
+            
+            metrics_data = PerformanceMetrics(
+                total_tokens=total_tokens,
+                input_tokens=input_tokens,
+                output_tokens=output_tokens,
+                latency_ms=latency_ms,
+                latency_seconds=latency_seconds,
+                throughput_tokens_per_second=throughput,
+                model=model_name,
+                cycles=agent.last_metrics.cycle_count
+            )
+        
+        # Log query completion
+        if debug_mode:
+            logger.info("="*60)
+            logger.info("✅ RESPONSE COMPLETE")
+            logger.info("="*60)
+        
         return QueryResponse(
             response=response,
             session_id=session_id,
             session_new=session_new,
-            conversation_turn=session.conversation_turns if session else 1
+            conversation_turn=session.conversation_turns if session else 1,
+            metrics=metrics_data
         )
         
     except HTTPException:
@@ -184,6 +375,12 @@ async def process_query_structured(request: QueryRequest):
         raise HTTPException(status_code=503, detail="Service not initialized")
     
     try:
+        # Log query processing start
+        if debug_mode:
+            logger.info("="*60)
+            logger.info("🔄 PROCESSING YOUR QUERY (Structured)")
+            logger.info("="*60)
+            logger.info(f"📝 Query: {request.query}")
         # Handle session creation/retrieval (same logic as /query)
         session_new = False
         session_id = request.session_id
@@ -227,6 +424,49 @@ async def process_query_structured(request: QueryRequest):
         validation = agent.validate_response(response)
         if not validation.valid:
             logger.warning(f"Response validation issues: {validation.errors}")
+        
+        # Prepare metrics data if available
+        if hasattr(agent, 'last_metrics') and agent.last_metrics:
+            try:
+                from .metrics_display import format_metrics
+            except ImportError:
+                from metrics_display import format_metrics
+            
+            # Log formatted metrics
+            logger.info(format_metrics(agent.last_metrics))
+            
+            # Add to global metrics
+            if global_metrics:
+                global_metrics.add_query(agent.last_metrics)
+            
+            # Extract metrics for response
+            total_tokens = agent.last_metrics.accumulated_usage.get('totalTokens', 0)
+            input_tokens = agent.last_metrics.accumulated_usage.get('inputTokens', 0)
+            output_tokens = agent.last_metrics.accumulated_usage.get('outputTokens', 0)
+            latency_ms = agent.last_metrics.accumulated_metrics.get('latencyMs', 0)
+            latency_seconds = latency_ms / 1000.0
+            throughput = total_tokens / latency_seconds if latency_seconds > 0 else 0
+            
+            model_id = os.environ.get('BEDROCK_MODEL_ID', 'unknown')
+            model_name = model_id.split('.')[-1].split('-v')[0] if '.' in model_id else model_id
+            
+            # Add metrics to structured response
+            response.metrics = PerformanceMetrics(
+                total_tokens=total_tokens,
+                input_tokens=input_tokens,
+                output_tokens=output_tokens,
+                latency_ms=latency_ms,
+                latency_seconds=latency_seconds,
+                throughput_tokens_per_second=throughput,
+                model=model_name,
+                cycles=agent.last_metrics.cycle_count
+            )
+        
+        # Log query completion
+        if debug_mode:
+            logger.info("="*60)
+            logger.info("✅ RESPONSE COMPLETE (Structured)")
+            logger.info("="*60)
         
         return response
         
@@ -328,12 +568,42 @@ async def clear_session(session_id: str):
         raise HTTPException(status_code=500, detail=str(e))
 
 if __name__ == "__main__":
+    # Parse command line arguments
+    parser = argparse.ArgumentParser(
+        description="AWS Strands Weather Agent API Server"
+    )
+    parser.add_argument(
+        '--debug',
+        action='store_true',
+        help='Enable debug logging with detailed Strands traces to file'
+    )
+    parser.add_argument(
+        '--port',
+        type=int,
+        default=int(os.getenv("API_PORT", "7777")),
+        help='Port to run the server on (default: 7777)'
+    )
+    parser.add_argument(
+        '--reload',
+        action='store_true',
+        default=True,
+        help='Enable auto-reload for development (default: True)'
+    )
+    
+    args = parser.parse_args()
+    
+    # Set global debug mode - check both CLI arg and environment variable
+    debug_mode = args.debug or os.getenv("WEATHER_AGENT_DEBUG", "false").lower() == "true"
+    
+    # Configure debug logging if requested
+    if debug_mode:
+        configure_debug_logging(enable_debug=True)
+    
     # Run the server
-    port = int(os.getenv("API_PORT", "8090"))
     uvicorn.run(
         "weather_agent.main:app",
         host="0.0.0.0",
-        port=port,
-        reload=True,
-        log_level="info"
+        port=args.port,
+        reload=args.reload,
+        log_level="debug" if debug_mode else "info"
     )

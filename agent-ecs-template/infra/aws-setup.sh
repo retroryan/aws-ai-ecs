@@ -21,24 +21,19 @@ echo "✅ AWS CLI is installed"
 echo "AWS CLI version: $(aws --version)"
 echo ""
 
-# Check AWS credentials configuration
-echo "Checking AWS credentials..."
-if ! aws sts get-caller-identity &> /dev/null; then
-    echo "❌ ERROR: AWS credentials are not configured."
-    echo "Please run 'aws configure' to set up your credentials."
-    exit 1
-fi
-
 # Get current AWS profile and account info
+echo "Getting AWS account information..."
 CURRENT_PROFILE="${AWS_PROFILE:-default}"
-ACCOUNT_INFO=$(aws sts get-caller-identity)
+ACCOUNT_INFO=$(aws sts get-caller-identity 2>/dev/null || echo '{"Account": "unknown", "Arn": "unknown"}')
 ACCOUNT_ID=$(echo $ACCOUNT_INFO | jq -r '.Account')
 USER_ARN=$(echo $ACCOUNT_INFO | jq -r '.Arn')
 
-echo "✅ AWS credentials are configured"
+echo "✅ Using AWS credentials"
 echo "Current profile: $CURRENT_PROFILE"
-echo "Account ID: $ACCOUNT_ID"
-echo "User/Role ARN: $USER_ARN"
+if [ "$ACCOUNT_ID" != "unknown" ]; then
+    echo "Account ID: $ACCOUNT_ID"
+    echo "User/Role ARN: $USER_ARN"
+fi
 echo ""
 
 # Get the current region

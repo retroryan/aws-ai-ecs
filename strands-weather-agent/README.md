@@ -56,6 +56,8 @@ This demonstration showcases:
 - **Distributed Architecture**: Multiple MCP servers for different data domains
 - **Real Weather Data**: Integration with Open-Meteo API for live weather information (no API key required)
 - **50% Less Code**: Compared to traditional orchestration frameworks like LangGraph
+- **Deep Observability**: AWS Strands debug logging for insights into agent orchestration internals
+- **Production Metrics**: Langfuse integration for token usage, latency tracking, and cost monitoring
 
 ## Why AWS Strands? The Next Evolution
 
@@ -90,6 +92,8 @@ agent = Agent(
 ✅ **AWS Account** with Bedrock access enabled  
 ✅ **Python 3.12** (for direct Python execution)
 
+**Recommended Model**: Use `BEDROCK_MODEL_ID="anthropic.claude-3-haiku-20240307-v1:0"` for the best tool calling demonstration. This model excels at function/tool calling while being cost-effective.
+
 ### Local Development: Docker (FastAPI Web Server)
 
 Run the weather agent as a web API server with all services containerized:
@@ -97,10 +101,12 @@ Run the weather agent as a web API server with all services containerized:
 ```bash
 # 1. Configure AWS Bedrock model
 cp .env.example .env
-# Edit .env and set BEDROCK_MODEL_ID
+# Edit .env and set BEDROCK_MODEL_ID="anthropic.claude-3-haiku-20240307-v1:0"
 
 # 2. Start all services with AWS credentials
 ./scripts/start_docker.sh
+# Optional flags:
+#   --debug     Enable debug logging
 
 # 3. Test the services
 ./scripts/test_docker.sh
@@ -108,6 +114,8 @@ cp .env.example .env
 # 4. Stop services when done
 ./scripts/stop_docker.sh
 ```
+
+The system includes **automatic observability** with Langfuse when configured. See the [Final Metrics Guide](FINAL_METRICS.md) for details.
 
 ### Local Development: Direct Python Execution (Interactive Chatbot)
 
@@ -132,66 +140,61 @@ python chatbot.py                    # Interactive mode
 python chatbot.py --demo             # Demo mode with example queries
 python chatbot.py --multi-turn-demo  # Multi-turn conversation demo
 
+# Add --debug to any mode to see internal processing:
+python chatbot.py --demo --debug     # Shows tool calls and streaming
+python chatbot.py --multi-turn-demo --debug  # Shows context retention
+
 # 6. Stop servers when done (from project root)
 cd .. && ./scripts/stop_servers.sh
 ```
 
 ### API Examples (Docker/Web Server Mode)
 
-When running with Docker, the weather agent runs as a FastAPI web server. Test it with HTTP requests:
+Use the provided test scripts to verify the deployment:
 
 ```bash
-# Health check
-curl http://localhost:8090/health
+# Basic service testing
+./scripts/test_docker.sh
 
-# Get weather forecast
-curl -X POST http://localhost:8090/query \
-  -H "Content-Type: application/json" \
-  -d '{"query": "What is the weather forecast for Seattle?"}'
-
-# Get structured weather data
-curl -X POST http://localhost:8090/query/structured \
-  -H "Content-Type: application/json" \
-  -d '{"query": "Show me the temperature in Chicago"}'
-
-# Check MCP server connectivity
-curl http://localhost:8090/mcp/status
+# Multi-turn conversation testing
+./scripts/multi-turn-test.sh
 ```
 
 ### AWS ECS Deployment
 
-```bash
-# 1. Navigate to infrastructure directory
-cd infra
-
-# 2. Deploy everything to AWS ECS
-./deploy.sh all
-
-# 3. Get the application URL
-./deploy.sh status
-
-# The deployment will:
-# - Create ECR repositories
-# - Build and push Docker images
-# - Deploy VPC, ECS cluster, and ALB
-# - Deploy all services with auto-scaling
-```
-
-### Deployment Options
+Deploy to AWS ECS using the Python deployment scripts:
 
 ```bash
-# Deploy with specific model
-BEDROCK_MODEL_ID="anthropic.claude-3-haiku-20240307-v1:0" ./infra/deploy.sh all
+# Setup AWS, validate environment, and update cloud.env
+# This also creates ECR repositories if needed
+python infra/commands/setup.py
 
-# Individual deployment steps
-./infra/deploy.sh setup-ecr        # Create ECR repositories
-./infra/deploy.sh build           # Build Docker images
-./infra/deploy.sh push            # Push images to ECR
-./infra/deploy.sh deploy-base     # Deploy VPC, ECS cluster, ALB
-./infra/deploy.sh deploy-services # Deploy application services
-./infra/deploy.sh status          # Check deployment status
-./infra/deploy.sh cleanup         # Remove all resources
+# The configuration is automatically written to cloud.env
+# Edit cloud.env to customize if needed
 ```
+
+### Deploy Everything
+
+```bash
+# Deploy complete infrastructure
+python infra/deploy.py all
+
+# Check deployment status
+python infra/status.py
+
+# Test the deployed services
+python infra/tests/test_services.py
+```
+
+The deployment will:
+- Check AWS configuration and Bedrock access
+- Create ECR repositories
+- Build and push Docker images
+- Deploy VPC, ECS cluster, and ALB
+- Deploy all services with auto-scaling
+- Configure Langfuse telemetry (if cloud.env is provided)
+
+For detailed AWS deployment information and infrastructure scripts, see [infra/README.md](infra/README.md).
 
 ## Architecture
 
@@ -206,9 +209,9 @@ graph TB
     WA --> Bedrock["AWS Bedrock<br/>(Foundation Models)"]
     WA --> SD["MCP Service Discovery<br/>(Internal: *.local)"]
     
-    SD --> FS["Forecast Server<br/>(Port 8081)"]
-    SD --> HS["Historical Server<br/>(Port 8082)"]
-    SD --> AS["Agricultural Server<br/>(Port 8083)"]
+    SD --> FS["Forecast Server<br/>(Port 7778)"]
+    SD --> HS["Historical Server<br/>(Port 7779)"]
+    SD --> AS["Agricultural Server<br/>(Port 7780)"]
     
     FS --> OM["Open-Meteo API<br/>(Weather Data)"]
     HS --> OM
@@ -287,6 +290,44 @@ graph TB
 - **Local Development**: Run with Python or Docker
 - **Quick Demos**: Interactive chatbot and API modes
 
+## Metrics and Observability
+
+This demo includes **production-grade observability** that showcases:
+- **AWS Strands agents** with AWS Bedrock integration
+- **Langfuse observability** via OpenTelemetry for comprehensive monitoring
+- **Real-time performance metrics** after every query
+- **Zero-configuration auto-detection** - telemetry "just works" when Langfuse is available
+
+### Performance Metrics Display
+
+Every query shows actual performance data:
+```
+📊 Performance Metrics:
+   ├─ Tokens: 17051 total (16588 input, 463 output)
+   ├─ Latency: 13.35 seconds
+   ├─ Throughput: 1277 tokens/second
+   ├─ Model: claude-3-5-sonnet-20241022
+   └─ Cycles: 2
+```
+
+### Auto-Detection Magic
+
+No flags or configuration needed! The system automatically detects Langfuse:
+- ✅ If Langfuse is running and configured → Full telemetry enabled
+- ✅ If Langfuse is not available → Continues normally without telemetry
+- ✅ No errors, no delays, no configuration
+
+### Langfuse Integration
+
+When Langfuse credentials are configured:
+1. Automatic OpenTelemetry instrumentation
+2. Distributed tracing across all components
+3. Token usage and cost tracking
+4. Session and user attribution
+5. Performance monitoring and analysis
+
+See the [Final Metrics Guide](FINAL_METRICS.md) for complete details on the metrics implementation.
+
 ## Example Queries
 
 The system handles various types of weather and agricultural queries:
@@ -323,6 +364,30 @@ The structured output preserves all geographic intelligence and weather data:
 
 ## Demo and Testing
 
+### Debug Mode - Understanding the Output
+
+When running demos with `--debug`, you'll see the internal workings of AWS Strands:
+
+```
+🔍 DEBUG MODE ENABLED:
+   - Model's natural language will appear as it streams
+   - 🔧 [AGENT DEBUG - Tool Call] = Our agent's tool usage logging
+   - 📥 [AGENT DEBUG - Tool Input] = Tool parameters being sent
+   - Strands internal debug logs = Framework's internal processing
+```
+
+Example output breakdown:
+- **"Tool #1: get_weather_forecast"** - The LLM's natural language describing what it's doing
+- **"🔧 [AGENT DEBUG - Tool Call]: get_weather_forecast"** - Our agent tracking tool execution
+- **"📥 [AGENT DEBUG - Tool Input]: {'location': 'Seattle'}"** - Parameters sent to the tool
+- **Strands logs** - Framework's internal processing (event loops, streaming, etc.)
+
+This helps you understand:
+1. How the LLM thinks about tool usage
+2. Which tools are actually being called
+3. What parameters are being passed
+4. How Strands orchestrates the entire flow
+
 ### Running Interactive Demos
 
 #### 1. Simple Interactive Chatbot
@@ -353,41 +418,6 @@ python -m weather_agent.demo_scenarios --structured
 - **Turn 4:** Agricultural queries with location context
 - **Turn 5:** Comprehensive summaries using accumulated context
 
-#### 3. Structured Output Demo
-```bash
-# Comprehensive structured output demonstration
-python -m examples.structured_output_demo
-
-# Quick structured output test
-python -c "
-import asyncio
-from weather_agent.mcp_agent import MCPWeatherAgent
-
-async def test():
-    agent = MCPWeatherAgent()
-    response = await agent.query_structured('Weather in Chicago?')
-    print('Query type:', response.query_type)
-    print('Locations found:', len(response.locations))
-    if response.locations:
-        loc = response.locations[0]
-        print(f'Location: {loc.name} at ({loc.latitude}, {loc.longitude})')
-
-asyncio.run(test())
-"
-```
-
-#### 4. Context Retention Testing 🧪 **NEW**
-```bash
-# Comprehensive context retention test suite
-python test_context_retention.py
-
-# Expected output:
-# 🎉 All Tests Completed Successfully!
-# ✅ Basic context retention: PASSED
-# ✅ Context switching: PASSED  
-# ✅ Structured output context: PASSED
-# ✅ Session management: PASSED
-```
 
 ### Running Test Suites
 
@@ -413,143 +443,41 @@ python -m pytest tests/test_coordinates_consolidated.py -v
 
 ```bash
 # Health check
-curl http://localhost:8090/health
+curl http://localhost:7777/health
 
 # Simple query
-curl -X POST http://localhost:8090/query \
+curl -X POST http://localhost:7777/query \
   -H "Content-Type: application/json" \
   -d '{"query": "What is the weather like in Chicago?"}'
 
 # Structured output query
-curl -X POST http://localhost:8090/query/structured \
+curl -X POST http://localhost:7777/query/structured \
   -H "Content-Type: application/json" \
   -d '{"query": "What is the weather like in Seattle?"}'
 
 # Multi-turn conversation with session
-curl -X POST http://localhost:8090/query \
+curl -X POST http://localhost:7777/query \
   -H "Content-Type: application/json" \
   -d '{"query": "What is the weather in Denver?", "session_id": "conversation_1"}'
 
-curl -X POST http://localhost:8090/query \
+curl -X POST http://localhost:7777/query \
   -H "Content-Type: application/json" \
   -d '{"query": "How does it compare to Phoenix?", "session_id": "conversation_1"}'
 
 # Session management endpoints
-curl http://localhost:8090/session/conversation_1         # Get session info
-curl -X DELETE http://localhost:8090/session/conversation_1  # Clear session
-curl http://localhost:8090/mcp/status                     # Check MCP server status
+curl http://localhost:7777/session/conversation_1         # Get session info
+curl -X DELETE http://localhost:7777/session/conversation_1  # Clear session
+curl http://localhost:7777/mcp/status                     # Check MCP server status
 ```
 
 
-## AWS Deployment Guide
-
-### Infrastructure Overview
-
-The deployment creates AWS infrastructure using CloudFormation:
-
-#### Base Infrastructure (`infra/base.cfn`)
-- **Networking**: VPC with 2 public subnets across availability zones
-- **Load Balancing**: Application Load Balancer with health checks
-- **ECS Cluster**: Fargate-based cluster with Container Insights
-- **Service Discovery**: Private DNS namespace (weather.local)
-- **Security**: Security groups and IAM roles with least-privilege
-
-#### Services Infrastructure (`infra/services.cfn`)
-- **ECS Services**: 4 services (1 agent + 3 MCP servers)
-- **Task Definitions**: Resource limits and environment configuration
-- **Service Connect**: Internal service mesh for communication
-- **CloudWatch Logs**: Log groups with 7-day retention
-- **Auto-scaling**: Optional scaling policies based on CPU/memory
-
-### AWS Infrastructure Details
-
-1. **Networking**:
-   - VPC with public/private subnets across 2 AZs
-   - Internet Gateway for outbound connectivity
-   - Security groups for ALB and services
-
-2. **ECS Cluster**:
-   - Fargate launch type (serverless containers)
-   - Container Insights enabled
-   - Auto-scaling policies
-
-3. **Services**:
-   - 4 ECS services (agent + 3 MCP servers)
-   - Service discovery for internal communication
-   - Health checks for reliability
-
-4. **Load Balancing**:
-   - Application Load Balancer for external access
-   - Target group with health checks
-   - Auto-assigned DNS name
-
-5. **Storage**:
-   - ECR repositories for Docker images
-   - CloudWatch Log Groups for each service
-
-6. **Security**:
-   - IAM roles with least-privilege access
-   - No hardcoded credentials
-   - VPC isolation for services
-
-### Deployment Process
-
-```bash
-# One command deployment
-./infra/deploy.sh all
-
-# Or step-by-step:
-./infra/deploy.sh setup-ecr      # Create repositories
-./infra/deploy.sh build-push     # Build and push images
-./infra/deploy.sh base           # Deploy infrastructure
-./infra/deploy.sh services       # Deploy ECS services
-```
-
-### Monitoring & Updates
-
-```bash
-# Check deployment status
-./infra/status.sh
-
-# Update after code changes
-./infra/deploy.sh update
-
-# View logs
-./infra/logs.sh weather-agent
-```
-
-### Infrastructure Scripts
-
-| Script | Purpose | Usage |
-|--------|---------|-------|
-| `deploy.sh` | Main orchestrator | `deploy.sh [all\|base\|services\|update]` |
-| `aws-checks.sh` | Verify prerequisites | Run before first deploy |
-| `test_services.sh` | Test deployment | Validates all endpoints |
-| `status.sh` | Deployment status | Shows health and URLs |
-| `logs.sh` | View CloudWatch logs | `logs.sh [service-name]` |
 
 ## Configuration
 
-### Environment Variables
-
-Create a `.env` file with:
-
-```bash
-# Required - AWS Bedrock Model
-BEDROCK_MODEL_ID=amazon.nova-lite-v1:0  # or any supported model
-BEDROCK_REGION=us-east-1
-
-# Optional
-BEDROCK_TEMPERATURE=0
-LOG_LEVEL=INFO
-SYSTEM_PROMPT=default  # or 'agriculture', 'concise'
-
-# AWS Credentials (if not using IAM role)
-AWS_ACCESS_KEY_ID=your_access_key
-AWS_SECRET_ACCESS_KEY=your_secret_key
-
-# AWS credentials handled automatically by scripts
-```
+Copy `.env.example` to `.env` and customize as needed. See [.env.example](.env.example) for all available configuration options including:
+- AWS Bedrock model selection
+- Langfuse telemetry configuration (optional)
+- Service metadata settings
 
 ### Supported AWS Bedrock Models
 
@@ -626,100 +554,23 @@ export BEDROCK_MODEL_ID="meta.llama3-70b-instruct-v1:0"
 MCP servers using FastMCP don't provide traditional REST health endpoints. Use JSON-RPC:
 
 ```bash
-curl -X POST http://localhost:8081/mcp/ \
+curl -X POST http://localhost:7778/mcp/ \
   -H "Content-Type: application/json" \
   -H "Accept: application/json, text/event-stream" \
   -d '{"jsonrpc": "2.0", "method": "mcp/list_tools", "id": 1}'
 ```
 
-#### Custom Tool Development
-Add new tools to existing servers:
-
-```python
-from fastmcp import FastMCP
-
-weather_server = FastMCP("weather-server")
-
-@weather_server.tool()
-async def get_weather_alerts(location: str) -> dict:
-    """Get weather alerts for a location."""
-    # Implementation here
-    return {"alerts": [...]}
-```
-
 
 ## Troubleshooting
 
-### Common Issues
+For comprehensive troubleshooting information including:
+- Common issues and solutions
+- Docker and AWS deployment problems
+- Network configuration errors
+- The complete investigation journey of fixes
+- Quick debugging commands
 
-1. **Model Access Denied**: 
-   - Enable the model in AWS Bedrock console
-   - Check IAM permissions
-   - Run `./scripts/aws-setup.sh` to diagnose
-
-2. **Servers not starting**: Check if ports are already in use
-   ```bash
-   lsof -i :8081
-   lsof -i :8082
-   lsof -i :8083
-   ```
-
-3. **Missing BEDROCK_MODEL_ID**: The application requires this environment variable
-   ```bash
-   export BEDROCK_MODEL_ID="amazon.nova-lite-v1:0"
-   ```
-
-4. **Import errors**: Verify all dependencies are installed:
-   ```bash
-   pip install -r requirements.txt
-   ```
-
-5. **Server connection errors**: Ensure MCP servers are running:
-   ```bash
-   ./scripts/start_servers.sh
-   ps aux | grep python | grep server
-   ```
-
-### Docker-Specific Issues
-
-1. **Docker build fails**: Ensure Docker daemon is running
-   ```bash
-   docker info
-   ```
-
-2. **Services not starting**: Check container logs
-   ```bash
-   docker-compose logs forecast-server
-   docker-compose logs weather-agent
-   ```
-
-3. **Network issues**: Verify Docker network
-   ```bash
-   docker network ls
-   docker network inspect strands-weather-agent_weather-network
-   ```
-
-4. **Environment variables not loading**: Check .env file
-   ```bash
-   docker-compose config  # Shows resolved configuration
-   ```
-
-### AWS Deployment Issues
-
-1. **CloudFormation Stack Fails**:
-   - Check CloudFormation events for specific errors
-   - Verify AWS quotas (VPCs, EIPs, etc.)
-   - Ensure region supports all services
-
-2. **ECS Tasks Not Starting**:
-   - Check CloudWatch logs for task errors
-   - Verify ECR images exist
-   - Check IAM role permissions
-
-3. **ALB Health Checks Failing**:
-   - Verify security group allows health check traffic
-   - Check service logs for startup errors
-   - Ensure health check path returns 200 OK
+See the [Troubleshooting Guide](docs/troubleshooting.md).
 
 ## Clean Up
 
@@ -767,14 +618,6 @@ async def get_weather_alerts(location: str) -> dict:
 
 # Add to scripts/start_servers.sh
 ```
-
-### Customizing the Agent
-
-Modify `weather_agent/mcp_agent.py` to:
-- Change agent prompts
-- Add new response formats
-- Implement custom tool selection logic
-- Add new structured output models
 
 ## Making This Production-Ready
 
@@ -872,345 +715,10 @@ self.agent = Agent(
 | Session Management | Custom checkpointer | Automatic |
 | Code Complexity | High | Low |
 | Lines of Code | ~500 | ~250 |
+| State Persistence | Checkpointers with cross-thread memory | In-memory sessions |
+| Time Travel Debugging | Yes, via checkpoint history | No |
+| Human-in-the-Loop | Built-in with state inspection | Not built-in |
 
-## Common Docker and AWS Infrastructure Issues
+**Note**: LangGraph has advantages in state persistence with its checkpointer system, which enables saving conversation state to databases (PostgreSQL, SQLite), time-travel debugging through checkpoint history, and cross-thread memory via the Store interface. This makes LangGraph well-suited for applications requiring durable state persistence, human-in-the-loop workflows, and sharing user context across multiple conversations.
 
-### 🎯 How We Got Docker and AWS Working: A Journey of Fixes
 
-This project went through multiple rounds of debugging to get both Docker and AWS deployments working. Here's the complete story of what went wrong and how we fixed it, so you can avoid the same pain.
-
-### The Investigation Journey
-
-We went through 3 rounds of investigation and fixes before achieving a successful deployment:
-
-#### Round 1: Health Check Configuration Error
-**The Problem**: MCP servers had health checks in ECS task definitions, but MCP servers using FastMCP don't provide traditional REST health endpoints - they use JSON-RPC which requires session management.
-
-**The Fix**: Removed health checks from all MCP server task definitions in services.cfn. Only the main service should have health checks.
-
-**Key Learning**: Not all services support simple HTTP health checks. Understand your protocol before adding health checks.
-
-#### Round 2: URL Trailing Slash Mismatch
-**The Problem**: Docker Compose used `/mcp/` (with trailing slash) but ECS used `/mcp` (without). This small difference caused connection failures because HTTP routers can treat these as different endpoints.
-
-**The Fix**: Added trailing slashes to all MCP URLs in services.cfn to match Docker configuration.
-
-**Key Learning**: Always ensure exact URL consistency between environments. A single character difference can break everything.
-
-#### Round 3: Network Binding Issue
-**The Problem**: MCP servers were listening on `127.0.0.1` (localhost) instead of `0.0.0.0` (all interfaces), making them inaccessible from other containers in the ECS network.
-
-**The Root Cause**: The MCP_HOST environment variable wasn't set in task definitions, so servers defaulted to localhost.
-
-**The Fix**: Added `MCP_HOST=0.0.0.0` and `MCP_PORT=[port]` environment variables to all MCP server task definitions.
-
-**Key Learning**: Containers must bind to 0.0.0.0, not 127.0.0.1. Always explicitly set host bindings in containerized environments.
-
-### The Complete Recipe for Success
-
-Here's exactly how to get Docker and AWS working based on our hard-won experience:
-
-#### 1. Docker Development Setup
-```bash
-# Always use the start script that exports AWS credentials
-./scripts/start_docker.sh
-
-# This script does the magic:
-export $(aws configure export-credentials --format env-no-export 2>/dev/null)
-
-# Why this works:
-# - Extracts credentials from ANY AWS auth method (SSO, profiles, IAM roles)
-# - Passes them as environment variables to Docker
-# - Works with temporary credentials and session tokens
-```
-
-#### 2. Critical Docker Configuration
-```yaml
-# docker-compose.yml essentials
-services:
-  mcp-server:
-    environment:
-      - MCP_HOST=0.0.0.0  # MUST bind to all interfaces
-      - MCP_PORT=8081
-      # AWS credentials from start_docker.sh
-      - AWS_ACCESS_KEY_ID=${AWS_ACCESS_KEY_ID}
-      - AWS_SECRET_ACCESS_KEY=${AWS_SECRET_ACCESS_KEY}
-      - AWS_SESSION_TOKEN=${AWS_SESSION_TOKEN}
-    healthcheck:
-      test: ["CMD", "curl", "-f", "http://localhost:8081/health"]
-      # Health checks OK in Docker, NOT in ECS for MCP servers
-```
-
-#### 3. ECS Task Definition Requirements
-```yaml
-# Critical environment variables for MCP servers
-Environment:
-  - Name: MCP_HOST
-    Value: 0.0.0.0  # MUST be 0.0.0.0, not 127.0.0.1
-  - Name: MCP_PORT
-    Value: 8081
-# NO HealthCheck section for MCP servers!
-```
-
-#### 4. URL Consistency
-```yaml
-# Ensure trailing slashes match everywhere
-# Docker Compose:
-- MCP_URL=http://server:8081/mcp/
-
-# ECS Task Definition:
-- Name: MCP_URL
-  Value: http://server.namespace.local:8081/mcp/  # Same trailing slash!
-```
-
-### Deployment Workflow That Actually Works
-
-1. **Make code changes**
-2. **ALWAYS rebuild images** (this step is often forgotten!):
-   ```bash
-   ./infra/deploy.sh build-push
-   ```
-3. **Deploy to ECS**:
-   ```bash
-   ./infra/deploy.sh services
-   ```
-4. **Test the deployment**:
-   ```bash
-   ./infra/test_services.sh
-   ```
-5. **Monitor logs if issues**:
-   ```bash
-   aws logs tail /ecs/strands-weather-agent-main --follow
-   ```
-
-### Critical Success Factors
-
-1. **Docker ≠ Production**: What works in Docker might not work in ECS. Always test both.
-2. **Rebuild Images**: After ANY code change, rebuild. Stale images are a silent killer.
-3. **Network Bindings**: 0.0.0.0 for containers, always. 127.0.0.1 only works locally.
-4. **URL Exactness**: Every character matters. `/api` ≠ `/api/`
-5. **Health Checks**: Understand your protocol. Not everything supports HTTP GET /health.
-6. **Environment Variables**: Explicitly set everything. Don't rely on defaults.
-7. **Service Discovery**: Use the correct DNS format: `service.namespace.local`
-8. **Logs Are Truth**: When in doubt, check CloudWatch logs. They reveal all.
-
-### The "Never Again" Checklist
-
-Before deploying, verify:
-- [ ] All services bind to 0.0.0.0, not 127.0.0.1
-- [ ] URLs have consistent trailing slashes across all configs
-- [ ] Docker images are freshly built after code changes
-- [ ] Health checks are only on services that support them
-- [ ] All required environment variables are explicitly set
-- [ ] Service discovery names match the pattern: service.namespace.local
-- [ ] Security groups allow traffic on all required ports
-- [ ] Task definitions have sufficient CPU/memory
-- [ ] Execution role can pull images and write logs
-- [ ] Task role has permissions for application needs
-
-### Troubleshooting Guide
-
-When deploying containerized applications to AWS ECS, you may encounter various configuration issues. Here are the most common problems and their solutions:
-
-#### 1. Network Binding Issues
-**Problem**: Services listening on `127.0.0.1` (localhost) instead of `0.0.0.0` (all interfaces)
-```
-# Wrong - only accessible from localhost
-Starting server on http://127.0.0.1:8080
-
-# Correct - accessible from other containers
-Starting server on http://0.0.0.0:8080
-```
-**Solution**: Always bind to `0.0.0.0` in containers. Use environment variables like `HOST=0.0.0.0` or check for Docker environment.
-
-#### 2. URL Format Mismatches
-**Problem**: Trailing slash inconsistencies between environments
-```yaml
-# Docker Compose
-- MCP_URL=http://server:8080/api/
-
-# ECS (missing trailing slash)
-- Name: MCP_URL
-  Value: http://server:8080/api
-```
-**Solution**: Be consistent with trailing slashes. Many HTTP routers treat `/api` and `/api/` as different endpoints.
-
-#### 3. Service Discovery DNS Issues
-**Problem**: Using incorrect DNS names for inter-service communication
-```yaml
-# Wrong - using external DNS
-- API_URL=http://api.example.com:8080
-
-# Correct - using service discovery
-- API_URL=http://api.namespace.local:8080
-```
-**Solution**: Use AWS Service Discovery DNS names (format: `service-name.namespace.local`) for internal communication.
-
-#### 4. Health Check Configuration Errors
-**Problem**: Adding health checks to services that don't support them
-```yaml
-# Wrong - MCP servers don't have REST health endpoints
-HealthCheck:
-  Command: ["CMD", "curl", "-f", "http://localhost:8080/health"]
-```
-**Solution**: Only add health checks to services with proper health endpoints. Some protocols (like JSON-RPC) don't support simple HTTP health checks.
-
-#### 5. Port Mapping Misalignment
-**Problem**: Container port doesn't match application port
-```yaml
-# Container expects port 8080
-PortMappings:
-  - ContainerPort: 80  # Wrong port!
-
-# Application listening on
-app.listen(8080)
-```
-**Solution**: Ensure container port matches the port your application listens on.
-
-#### 6. Missing Environment Variables
-**Problem**: Required environment variables not set in task definitions
-```yaml
-# Application expects DATABASE_URL
-# But task definition missing:
-Environment:
-  - Name: API_KEY
-    Value: xxx
-  # DATABASE_URL missing!
-```
-**Solution**: Review application requirements and ensure all environment variables are defined in task definitions.
-
-#### 7. Security Group Blocking
-**Problem**: Security groups not allowing traffic between services
-```
-# Main service can't connect to backend on port 8081
-Connection refused to backend:8081
-```
-**Solution**: Ensure security groups allow traffic on required ports between services in the same VPC.
-
-#### 8. Docker Image Not Updated
-**Problem**: Deploying with old Docker images after code changes
-```bash
-# Code changed but image not rebuilt
-./deploy.sh services  # Deploys old image!
-```
-**Solution**: Always rebuild and push images after code changes:
-```bash
-./deploy.sh build-push
-./deploy.sh services
-```
-
-#### 9. Insufficient Task Resources
-**Problem**: Container runs out of memory or CPU
-```yaml
-# Too small for application needs
-Cpu: '256'
-Memory: '512'
-```
-**Solution**: Monitor resource usage and allocate sufficient CPU/memory. Common minimums:
-- Simple services: 256 CPU, 512 MB
-- API services: 512 CPU, 1024 MB
-- Heavy workloads: 1024+ CPU, 2048+ MB
-
-#### 10. Incorrect AWS Region
-**Problem**: Resources created in wrong region
-```bash
-# Resources in us-east-1 but trying to deploy to us-west-2
-aws ecs update-service --region us-west-2  # Service not found!
-```
-**Solution**: Ensure consistent region across all commands and configurations.
-
-#### 11. Task Role vs Execution Role Confusion
-**Problem**: Using wrong IAM role for permissions
-```yaml
-# Wrong - Execution role is for pulling images
-ExecutionRoleArn: !Ref TaskRole
-
-# Correct
-ExecutionRoleArn: !Ref ExecutionRole  # For ECR/CloudWatch
-TaskRoleArn: !Ref TaskRole           # For app permissions
-```
-**Solution**: 
-- Execution Role: Permissions for ECS to pull images and write logs
-- Task Role: Permissions for your application (S3, DynamoDB, etc.)
-
-#### 12. CloudWatch Logs Configuration
-**Problem**: Logs not appearing or going to wrong location
-```yaml
-LogConfiguration:
-  LogDriver: awslogs
-  Options:
-    awslogs-group: /ecs/myapp      # Group doesn't exist
-    awslogs-region: us-east-1      # Wrong region
-```
-**Solution**: Create log groups before deployment and ensure region matches.
-
-#### 13. Load Balancer Target Group Issues
-**Problem**: ALB can't reach containers
-```
-# Target group health checks failing
-# All targets showing "unhealthy"
-```
-**Solution**: 
-- Verify container port matches target group port
-- Ensure health check path returns 200 OK
-- Check security group allows ALB to reach containers
-
-#### 14. Service Discovery Registration Failures
-**Problem**: Services not registering with AWS Cloud Map
-```
-# Service discovery enabled but DNS not resolving
-nslookup myservice.namespace.local  # No results
-```
-**Solution**: 
-- Verify service discovery service is created
-- Check task has successfully started
-- Ensure service discovery namespace exists
-
-#### 15. Environment-Specific Configuration
-**Problem**: Hardcoded values that change between environments
-```python
-# Wrong - hardcoded
-api_url = "http://prod-api.example.com"
-
-# Correct - environment variable
-api_url = os.getenv("API_URL", "http://localhost:8080")
-```
-**Solution**: Always use environment variables for configuration that changes between environments.
-
-### Prevention Best Practices
-
-1. **Use Infrastructure as Code**: CloudFormation/CDK for consistent deployments
-2. **Test Locally First**: Docker Compose for local testing before ECS deployment
-3. **Monitor Logs**: Set up CloudWatch dashboards and alarms
-4. **Implement Retry Logic**: Handle transient failures gracefully
-5. **Document Dependencies**: List all required environment variables and ports
-6. **Use Least Privilege**: Grant minimum required IAM permissions
-7. **Version Everything**: Tag Docker images and CloudFormation templates
-8. **Automate Deployments**: Use CI/CD pipelines to prevent manual errors
-9. **Health Checks**: Implement proper health endpoints for monitoring
-10. **Gradual Rollouts**: Use ECS deployment configurations for safe updates
-
-### Quick Debugging Commands
-
-```bash
-# Check ECS service status
-aws ecs describe-services --cluster my-cluster --services my-service
-
-# View recent logs
-aws logs tail /ecs/my-service --follow
-
-# List tasks and their status
-aws ecs list-tasks --cluster my-cluster --service-name my-service
-
-# Describe task failure reasons
-aws ecs describe-tasks --cluster my-cluster --tasks <task-arn>
-
-# Test service discovery DNS
-nslookup myservice.namespace.local
-
-# Check security group rules
-aws ec2 describe-security-groups --group-ids <sg-id>
-
-# Verify task definition environment variables
-aws ecs describe-task-definition --task-definition my-task
-```
