@@ -4,12 +4,14 @@ This repository demonstrates the future of software development: AI-powered appl
 
 ## Overview
 
-This repository contains four example projects that showcase the evolution of AI application development on AWS. Each project demonstrates running AI Services on ECS and Bedrock, highlighting different levels of sophistication in the new era of model-driven development.
+This repository contains four example projects that showcase the evolution of AI application development on AWS. Each project demonstrates running AI Services on ECS and Bedrock, highlighting different levels of sophistication in the new era of model-driven development. 
+
+**All projects use MCP (Model Context Protocol) servers as distributed services**, demonstrating how tool capabilities can be decoupled from agent logic and deployed as independent microservices. This architecture enables true scalability and reusability - the same MCP servers work seamlessly with both LangGraph and AWS Strands implementations, showcasing the power of standardized tool protocols in distributed AI systems.
 
 *   **[Agent ECS Template](./agent-ecs-template)**: A foundational template using **direct `boto3` calls** to AWS Bedrock. It's a great starting point for understanding the basics of AI service integration in a client-server architecture.
 *   **[Agriculture Agent ECS](./agriculture-agent-ecs)**: A practical, real-world example using **`LangGraph`** to orchestrate a multi-tool agent system with advanced state management. It showcases MCP servers for distributed tool handling and demonstrates LangGraph's checkpointer system for durable state persistence.
-*   **[Spring AI Agent ECS](./spring-ai-agent-ecs)**: A Java-based implementation using the **`Spring AI`** framework, showing how to build AI agents in a robust, enterprise-grade environment.
 *   **[Strands Weather Agent](./strands-weather-agent)**: A powerful demonstration of model-driven development using **`AWS Strands`**. This project showcases how agents can autonomously orchestrate complex workflows with minimal code, representing the declarative approach to AI development.
+*   **[Spring AI Agent ECS](./spring-ai-agent-ecs)**: A Java-based implementation using the **`Spring AI`** framework. This is adapted with slight modifications from [jamesward's Sample-Model-Context-Protocol-Demos](https://github.com/jamesward/Sample-Model-Context-Protocol-Demos/tree/main/modules/spring-ai-agent-ecs) to add additional local Docker development and AWS deployment capabilities.
 
 ## The Evolution of AI Orchestration
 
@@ -90,9 +92,9 @@ response = agent.structured_output(WeatherAnalysis, "Analyze weather for Chicago
 
 Each subproject contains detailed documentation and deployment instructions specific to its use case.
 
-## MCP (Model Context Protocol) Servers
+## MCP (Model Context Protocol) Servers for Local Development
 
-Each project in this repository includes a `.mcp.json` configuration file that sets up various MCP servers for enhanced AI development capabilities. These servers extend AI capabilities by providing tools and resources that AI models can use during development with Claude Code or Amazon Q Developer.
+Each project in this repository includes a `.mcp.json` configuration file that sets up MCP servers to help with local AI development. These servers extend AI capabilities by providing tools and resources that AI models can use during development with Claude Code or Amazon Q Developer.
 
 For detailed setup instructions and available MCP servers, see the [MCP Servers Setup Guide](./MCP_SERVERS_SETUP.md).
 

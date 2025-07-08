@@ -2,6 +2,7 @@
 
 # FastMCP Server Shutdown Script
 # This script stops all running FastMCP servers
+# Usage: ./stop_servers.sh [--force]
 
 # Colors for output
 GREEN='\033[0;32m'
@@ -13,6 +14,53 @@ NC='\033[0m' # No Color
 SCRIPT_DIR="$( cd "$( dirname "${BASH_SOURCE[0]}" )" && pwd )"
 PROJECT_ROOT="$( cd "$SCRIPT_DIR/.." && pwd )"
 
+# Parse command line arguments
+FORCE_MODE=false
+for arg in "$@"; do
+    case $arg in
+        --force)
+            FORCE_MODE=true
+            shift
+            ;;
+        -h|--help)
+            echo "Usage: $0 [--force]"
+            echo "  --force  Immediately kill all processes on MCP ports without checking PID files"
+            echo "  -h, --help  Show this help message"
+            exit 0
+            ;;
+        *)
+            echo "Unknown option: $arg"
+            echo "Use --help for usage information"
+            exit 1
+            ;;
+    esac
+done
+
+# Force mode: kill all processes on MCP ports
+if [ "$FORCE_MODE" = true ]; then
+    echo -e "${RED}Force stopping all processes on MCP ports...${NC}"
+    echo ""
+    
+    # Kill processes on each port
+    for port in 7778 7779 7780; do
+        if lsof -t -i :$port > /dev/null 2>&1; then
+            echo -e "Killing processes on port $port..."
+            lsof -t -i :$port | xargs kill -9 2>/dev/null
+            echo -e "${GREEN}✅ Port $port cleared${NC}"
+        else
+            echo -e "${YELLOW}⚠️  No process found on port $port${NC}"
+        fi
+    done
+    
+    # Clean up PID files
+    rm -f "$PROJECT_ROOT"/logs/*.pid 2>/dev/null
+    
+    echo ""
+    echo -e "${GREEN}Force stop completed.${NC}"
+    exit 0
+fi
+
+# Normal mode
 echo -e "${YELLOW}Stopping FastMCP servers...${NC}"
 echo ""
 
