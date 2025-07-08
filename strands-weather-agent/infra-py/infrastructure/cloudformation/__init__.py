@@ -1,3 +1,0 @@
-"""
-CloudFormation stack management.
-"""

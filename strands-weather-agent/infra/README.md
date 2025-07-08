@@ -1,282 +1,326 @@
-# AWS Deployment Guide for Strands Weather Agent
+# AWS Strands Weather Agent - Infrastructure
 
-This guide provides detailed information for deploying the Strands Weather Agent to AWS ECS using CloudFormation infrastructure.
+Deploy a sophisticated AI weather agent to AWS ECS with just a few commands. This demo showcases AWS Strands for agent orchestration, FastMCP for tool servers, and optional Langfuse telemetry integration.
 
-## Infrastructure Overview
-
-The deployment creates AWS infrastructure using CloudFormation templates:
-
-### Base Infrastructure (`base.cfn`)
-- **Networking**: VPC with 2 public subnets across availability zones
-- **Load Balancing**: Application Load Balancer with health checks
-- **ECS Cluster**: Fargate-based cluster with Container Insights
-- **Service Discovery**: Private DNS namespace (weather.local)
-- **Security**: Security groups and IAM roles with least-privilege
-
-### Services Infrastructure (`services.cfn`)
-- **ECS Services**: 4 services (1 agent + 3 MCP servers)
-- **Task Definitions**: Resource limits and environment configuration
-- **Service Connect**: Internal service mesh for communication
-- **CloudWatch Logs**: Log groups with 7-day retention
-- **Auto-scaling**: Optional scaling policies based on CPU/memory
-
-## AWS Infrastructure Details
-
-### 1. Networking
-- VPC with public/private subnets across 2 AZs
-- Internet Gateway for outbound connectivity
-- Security groups for ALB and services
-
-### 2. ECS Cluster
-- Fargate launch type (serverless containers)
-- Container Insights enabled
-- Auto-scaling policies
-
-### 3. Services
-- 4 ECS services (agent + 3 MCP servers)
-- Service discovery for internal communication
-- Health checks for reliability
-
-### 4. Load Balancing
-- Application Load Balancer for external access
-- Target group with health checks
-- Auto-assigned DNS name
-
-### 5. Storage
-- ECR repositories for Docker images
-- CloudWatch Log Groups for each service
-
-### 6. Security
-- IAM roles with least-privilege access
-- No hardcoded credentials
-- VPC isolation for services
-
-## Deployment Script (deploy.py)
-
-The `deploy.py` script provides a comprehensive deployment solution with the following features:
+## Quick Start
 
 ### Prerequisites
-- Python 3.8+
-- boto3 library (`pip install boto3`)
-- AWS CLI configured with appropriate credentials
-- AWS Account with Bedrock access enabled
 
-### Configuration Files
+- Python 3.11+
+- AWS CLI configured with credentials
+- Docker installed and running
+- AWS account with Bedrock access enabled
 
-1. **`.env`** - Local configuration (required)
-   ```bash
-   BEDROCK_MODEL_ID=amazon.nova-lite-v1:0
-   BEDROCK_REGION=us-east-1
-   BEDROCK_TEMPERATURE=0
-   LOG_LEVEL=INFO
-   ```
+### Installation
 
-2. **`cloud.env`** - Production configuration (optional, for telemetry)
-   ```bash
-   # Copy from .env.example and add:
-   LANGFUSE_PUBLIC_KEY=your_public_key
-   LANGFUSE_SECRET_KEY=your_secret_key
-   LANGFUSE_HOST=https://us.cloud.langfuse.com
-   TELEMETRY_TAGS=production,aws-strands
-   ```
-
-### Deployment Commands
-
-#### Full Deployment
 ```bash
-# Deploy everything with default settings
-python3 infra/deploy.py all
+# Clone the repository
+git clone <your-repo>
+cd strands-weather-agent
 
-# Deploy without telemetry
-python3 infra/deploy.py all --disable-telemetry
+# Install dependencies
+pip install -r infra/requirements.txt
 
-# Deploy to specific region
-python3 infra/deploy.py all --region us-west-2
+# Setup AWS, validate environment, and update cloud.env
+# This also creates ECR repositories if needed
+python infra/commands/setup.py
+
+# The configuration is automatically written to cloud.env
+# Edit cloud.env to customize if needed
 ```
 
-#### Step-by-Step Deployment
+### Deploy Everything
+
 ```bash
-# 1. Check AWS configuration and Bedrock access
-python3 infra/deploy.py aws-checks
+# Deploy complete infrastructure
+python infra/deploy.py all
 
-# 2. Setup ECR repositories
-python3 infra/deploy.py setup-ecr
-
-# 3. Build and push Docker images
-python3 infra/deploy.py build-push
-
-# 4. Deploy base infrastructure (VPC, ALB, ECS Cluster)
-python3 infra/deploy.py base
-
-# 5. Deploy services (ECS tasks and services)
-python3 infra/deploy.py services
-```
-
-#### Monitoring and Updates
-```bash
 # Check deployment status
-python3 infra/deploy.py status
+python infra/status.py
 
-# Update services after code changes (rebuilds images)
-python3 infra/deploy.py update-services
-
-# View CloudWatch logs (after deployment)
-aws logs tail /aws/ecs/strands-weather-agent --follow
+# Test the deployed services
+python infra/tests/test_services.py
 ```
 
-#### Cleanup
-```bash
-# Remove services only (keeps infrastructure)
-python3 infra/deploy.py cleanup-services
+## Main Commands
 
-# Remove base infrastructure
-python3 infra/deploy.py cleanup-base
+### `deploy.py` - Deploy Infrastructure
 
-# Remove everything (prompts for confirmation)
-python3 infra/deploy.py cleanup-all
-```
-
-## Testing the Deployment
-
-After deployment, test your services:
+Deploy and manage your AWS infrastructure:
 
 ```bash
-# Run comprehensive service tests
-python3 infra/test_services.py
+# Deploy everything (recommended for first time)
+python deploy.py all
 
-# The test script will:
-# - Check health endpoints
-# - Test weather queries
-# - Verify MCP server connectivity
-# - Test multi-turn conversations
-# - Display performance metrics
+# Deploy only base infrastructure (VPC, ECS cluster, Load Balancer)
+python deploy.py base
+
+# Build and push Docker images
+python deploy.py build
+
+# Deploy services (requires base infrastructure)
+python deploy.py services
+
+# Update running services with new code
+python deploy.py update-services
 ```
 
-## Langfuse Telemetry Integration
+### `status.py` - Check Status
 
-The deployment supports optional Langfuse telemetry for observability:
+View detailed status of your deployment:
 
-1. **Setup**: Create `cloud.env` with Langfuse credentials
-2. **Deploy**: The script automatically detects and configures telemetry
-3. **Storage**: Credentials are securely stored in AWS Parameter Store
-4. **Runtime**: Services retrieve credentials at startup
+```bash
+# Check all components
+python status.py
 
-### Telemetry Features
-- Token usage tracking
-- Latency monitoring
-- Session management
-- Cost analysis
-- Performance metrics
+# Example output:
+# ✓ Base Infrastructure: DEPLOYED
+# ✓ Services: RUNNING
+# ✓ Health Check: PASSING
+# ✓ Recent Errors: NONE
+```
 
-## Infrastructure Scripts Reference
+### `cleanup.py` - Clean Up Resources
 
-| Script | Purpose | Usage |
-|--------|---------|-------|
-| `deploy.py` | Main deployment script | `python3 deploy.py [command] [options]` |
-| `build-push.sh` | Build and push Docker images | Called by deploy.py |
-| `test_services.py` | Test deployed services | `python3 test_services.py` |
-| `base.cfn` | Base infrastructure template | CloudFormation template |
-| `services.cfn` | Services template | CloudFormation template |
+Remove AWS resources when done:
 
-## Environment Variables
+```bash
+# Remove everything (with confirmation)
+python cleanup.py all
 
-### Required
-- `BEDROCK_MODEL_ID`: AWS Bedrock model to use
-- `BEDROCK_REGION`: AWS region for Bedrock (default: us-east-1)
+# Remove only CloudFormation stacks
+python cleanup.py stacks
 
-### Optional
-- `BEDROCK_TEMPERATURE`: Model temperature (default: 0)
-- `LOG_LEVEL`: Logging level (default: INFO)
-- `AWS_REGION`: AWS region for deployment (default: us-east-1)
+# Force cleanup without confirmation
+python cleanup.py all --force
+```
 
-### Telemetry (Optional, in cloud.env)
-- `LANGFUSE_PUBLIC_KEY`: Langfuse public API key
-- `LANGFUSE_SECRET_KEY`: Langfuse secret API key
-- `LANGFUSE_HOST`: Langfuse API endpoint
-- `TELEMETRY_TAGS`: Comma-separated tags for filtering
+## Configuration
+
+### Environment Variables (.env)
+
+```bash
+# Required
+BEDROCK_MODEL_ID=us.anthropic.claude-3-5-sonnet-20241022-v2:0
+
+# Optional
+AWS_REGION=us-east-1
+BASE_STACK_NAME=strands-weather-agent-base
+SERVICES_STACK_NAME=strands-weather-agent-services
+
+# Langfuse Telemetry (optional)
+LANGFUSE_PUBLIC_KEY=your-public-key
+LANGFUSE_SECRET_KEY=your-secret-key
+LANGFUSE_HOST=https://us.cloud.langfuse.com
+ENABLE_TELEMETRY=true
+```
+
+### Supported Bedrock Models
+
+Use inference profiles (us. prefix) for cross-region redundancy:
+
+- `us.anthropic.claude-3-5-sonnet-20241022-v2:0` (Recommended)
+- `us.anthropic.claude-3-5-haiku-20241022-v1:0` (Fast & economical)
+- `us.meta.llama3-1-70b-instruct-v1:0` (Open source)
+
+## Architecture
+
+The deployment creates:
+
+1. **Base Infrastructure**
+   - VPC with public/private subnets
+   - ECS cluster with Fargate
+   - Application Load Balancer
+   - CloudWatch log groups
+
+2. **Services**
+   - Weather Agent API (port 7777)
+   - Forecast MCP Server (internal)
+   - Historical MCP Server (internal)
+   - Agricultural MCP Server (internal)
+
+3. **Networking**
+   - Service Connect for internal communication
+   - Public ALB for API access
+   - Security groups with least privilege
+
+## Additional Commands
+
+Located in the `commands/` directory:
+
+```bash
+# Initial AWS setup, validation, and configuration
+# This command now includes all validation checks
+python commands/setup.py
+
+# Skip validation if you want to regenerate bedrock.env only
+python commands/setup.py --skip-validation
+
+# Create ECR repositories
+python commands/setup_ecr.py
+
+# Build and push Docker images separately
+python commands/build_push.py
+
+# View CloudWatch logs from deployed services
+python commands/logs.py --tail --service main
+
+# Export logs to file
+python commands/logs.py --export logs.txt --since 1h --filter ERROR
+```
+
+## Testing
+
+### Service Integration Tests
+
+```bash
+# Test deployed services (after deployment)
+python tests/test_services.py
+
+# Run with verbose output
+python tests/test_services.py --verbose
+
+# Test with custom API URL (for local testing)
+python tests/test_services.py --api-url http://localhost:7777
+
+# Additional options
+python tests/test_services.py --fail-fast      # Stop on first failure
+python tests/test_services.py --skip-langfuse  # Skip telemetry tests
+python tests/test_services.py --region us-east-1  # Override AWS region
+```
+
+### Test Configuration
+
+Tests use the same `.env` file as the main infrastructure. Additional test-specific settings:
+
+```bash
+# Test behavior
+TEST_VERBOSE=true           # Enable verbose output by default
+TEST_FAIL_FAST=true        # Stop on first failure
+TEST_SKIP_LANGFUSE=true    # Skip Langfuse tests
+
+# Timeouts
+TEST_HEALTH_TIMEOUT=10      # Health check timeout (seconds)
+TEST_QUERY_TIMEOUT=30       # Query timeout (seconds)
+TEST_STARTUP_WAIT=60        # Service startup wait (seconds)
+
+# Override API URL for local testing
+API_URL=http://localhost:7777
+```
+
+## Demonstrations
+
+Run interactive demos to see key features in action:
+
+```bash
+# Interactive demo menu
+python demos.py
+
+# Run specific demo directly
+python demos.py --telemetry
+python demos.py --multi-turn
+
+# Override API URL for demos
+python demos.py --api-url http://custom-url
+```
+
+Available demos:
+- **Telemetry Demo**: Showcases Langfuse telemetry integration and metrics
+- **Multi-turn Demo**: Demonstrates stateful conversations with session persistence
 
 ## Troubleshooting
 
 ### Common Issues
 
-1. **Bedrock Access Denied**
-   - Run `python3 infra/deploy.py aws-checks` to verify access
-   - Enable the model in AWS Bedrock console
-   - Check IAM permissions
+1. **Bedrock Model Access**
+   ```bash
+   # Check available models and validate setup
+   python commands/setup.py
+   
+   # Test model access during setup
+   python commands/setup.py --test-model
+   
+   # Request model access if needed
+   # Visit: https://console.aws.amazon.com/bedrock/home#/modelaccess
+   ```
 
-2. **ECR Push Failures**
-   - Ensure Docker is running
-   - Check AWS credentials
-   - Verify ECR repository exists
+2. **Service Health Issues**
+   ```bash
+   # Check service status
+   python status.py
+   
+   # Test deployed services with detailed output
+   python tests/integration/test_services.py
+   
+   # View and tail ECS service logs
+   python commands/logs.py --tail --service main
+   
+   # View logs with filtering
+   python commands/logs.py --filter ERROR --since 1h
+   ```
 
-3. **Stack Creation Failures**
-   - Check CloudFormation events for specific errors
-   - Verify AWS quotas (VPCs, EIPs, etc.)
-   - Ensure region supports all services
+3. **Build Failures**
+   ```bash
+   # Ensure ECR repositories exist
+   python commands/setup_ecr.py
+   
+   # Build and push images with proper authentication
+   python commands/build_push.py
+   ```
 
-4. **Service Health Check Failures**
-   - Check CloudWatch logs: `aws logs tail /aws/ecs/strands-weather-agent-main --follow`
-   - Verify security group rules
-   - Check task resource allocation
+## Project Structure
 
-### Debug Commands
-
-```bash
-# Check ECS service status
-aws ecs describe-services --cluster strands-weather-agent --services strands-weather-agent-main
-
-# List running tasks
-aws ecs list-tasks --cluster strands-weather-agent
-
-# Describe task for failure reasons
-aws ecs describe-tasks --cluster strands-weather-agent --tasks <task-arn>
-
-# Check ALB target health
-aws elbv2 describe-target-health --target-group-arn <arn>
+```
+infra/
+├── deploy.py              # Main deployment script
+├── status.py              # Status checker
+├── cleanup.py             # Resource cleanup
+├── demos.py               # Interactive demo menu
+├── requirements.txt       # Python dependencies
+├── .env.example          # Example configuration
+│
+├── infrastructure/       # Core modules
+│   ├── config.py        # Configuration management
+│   ├── aws/            # AWS service integrations
+│   ├── docker/         # Docker operations
+│   └── utils/          # Utilities
+│
+├── commands/           # Additional tools
+│   ├── setup.py        # AWS setup, validation, and configuration
+│   ├── logs.py         # CloudWatch logs viewer
+│   └── ...            # Other command scripts
+│
+├── tests/             # Test scripts
+│   ├── test_services.py    # Service integration tests
+│   ├── config.py          # Test configuration
+│   └── utils.py           # Shared test utilities
+│
+└── demos/             # Demonstration scripts
+    ├── demo_telemetry.py   # Telemetry showcase
+    └── multi-turn-demo.py  # Multi-turn conversations
 ```
 
-## Best Practices
+## Cost Considerations
 
-1. **Security**
-   - Use `cloud.env` for production secrets
-   - Rotate Langfuse API keys regularly
-   - Review IAM roles and permissions
-   - Enable VPC Flow Logs for monitoring
+This demo uses:
+- Fargate Spot for cost optimization
+- Minimal resource allocations
+- No NAT Gateway (public subnets only)
 
-2. **Cost Optimization**
-   - Monitor ECS task sizes and adjust as needed
-   - Use CloudWatch metrics to right-size resources
-   - Consider Fargate Spot for non-critical workloads
-   - Set up billing alerts
+Estimated cost: ~$50-100/month if running continuously
 
-3. **Reliability**
-   - Test deployments in staging first
-   - Use blue-green deployments for updates
-   - Monitor CloudWatch alarms
-   - Implement proper health checks
+## Security Notes
 
-4. **Performance**
-   - Adjust task CPU/memory based on load
-   - Use CloudWatch Container Insights
-   - Monitor ALB metrics
-   - Consider caching strategies
-
-## Rain CLI (Optional)
-
-The deployment script supports the [Rain CLI](https://github.com/aws-cloudformation/rain) for enhanced CloudFormation deployments:
-
-```bash
-# Install Rain CLI
-brew install rain
-
-# The deploy.py script will automatically use Rain if available
-# Rain provides better error messages and deployment progress
-```
+For production use, consider:
+- Private subnets with NAT Gateway
+- Secrets Manager for credentials
+- WAF for API protection
+- VPC endpoints for AWS services
 
 ## Support
 
 For issues or questions:
-1. Check CloudWatch logs for detailed error messages
-2. Review the troubleshooting section above
-3. Verify all prerequisites are met
-4. Check AWS service limits and quotas
+1. Check `python status.py` output
+2. Review CloudWatch logs
+3. See troubleshooting guide above
+4. Open an issue on GitHub

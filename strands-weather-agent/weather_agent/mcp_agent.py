@@ -154,8 +154,27 @@ class MCPWeatherAgent:
         # Store last query metrics for display
         self.last_metrics = None
         
-        logger.info(f"Initialized MCPWeatherAgent with model: {self.model_id}")
-        logger.info(f"MCP servers configured: {len(self.mcp_clients)}")
+        # Log comprehensive initialization info
+        logger.info("="*60)
+        logger.info("🤖 MCPWeatherAgent Initialization Complete")
+        logger.info("="*60)
+        logger.info(f"Model: {self.model_id}")
+        logger.info(f"Region: {self.region}")
+        logger.info(f"Temperature: {self.temperature}")
+        logger.info(f"MCP Servers: {len(self.mcp_clients)} configured")
+        logger.info(f"Debug Mode: {'✅ ENABLED' if self.debug_logging else '❌ DISABLED'}")
+        logger.info(f"Prompt Type: {self.prompt_type}")
+        
+        # Log telemetry status from module-level variable
+        global TELEMETRY_ENABLED
+        if TELEMETRY_ENABLED:
+            logger.info(f"Telemetry: ✅ ENABLED via OpenTelemetry")
+            logger.info(f"  - Service: {os.getenv('OTEL_SERVICE_NAME', 'weather-agent')}")
+            logger.info(f"  - Version: {os.getenv('SERVICE_VERSION', '2.0.0')}")
+            logger.info(f"  - Environment: {os.getenv('DEPLOYMENT_ENVIRONMENT', 'demo')}")
+        else:
+            logger.info(f"Telemetry: ❌ DISABLED")
+        logger.info("="*60)
     
     def _validate_environment(self):
         """

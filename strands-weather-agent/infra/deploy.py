@@ -1,7 +1,7 @@
 #!/usr/bin/env python3
 """
-Simple AWS Deployment Script for Strands Weather Agent Demo
-Demonstrates deploying an AI agent with Langfuse telemetry to AWS ECS
+AWS Deployment Script for Strands Weather Agent Demo.
+Demonstrates deploying an AI agent with Langfuse telemetry to AWS ECS.
 """
 
 import argparse
@@ -11,570 +11,608 @@ import subprocess
 import json
 import time
 from pathlib import Path
+from typing import Dict, Optional, Any
+
 import boto3
 from botocore.exceptions import ClientError
-from dotenv import load_dotenv
+from rich.console import Console
+from rich.table import Table
+
+from infrastructure import get_config
+from infrastructure.utils.logging import log_info, log_warn, log_error, print_section
+from infrastructure.utils.validation import check_aws_cli, check_aws_credentials
+from infrastructure.utils.console import spinner, print_success, print_error, with_progress
+from infrastructure.aws.ecr import ECRManager
+from infrastructure.aws.ecs import ECSUtils
 
 
-class SimpleDeployment:
-    """Simple deployment manager for AWS Strands demo"""
+console = Console()
+
+
+class Deployment:
+    """Deployment manager for AWS Strands demo using centralized config."""
     
-    def __init__(self, region="us-east-1"):
-        self.region = region
-        self.base_stack = "strands-weather-agent-base"
-        self.services_stack = "strands-weather-agent-services"
+    def __init__(self, verbose: bool = False):
+        """Initialize deployment with configuration."""
+        # Use centralized configuration
+        self.config = get_config()
+        self.region = self.config.aws.region
+        self.base_stack = self.config.stacks.base_stack_name
+        self.services_stack = self.config.stacks.services_stack_name
+        self.verbose = verbose
         
         # AWS clients
-        self.cfn = boto3.client("cloudformation", region_name=region)
-        self.ssm = boto3.client("ssm", region_name=region)
-        self.ecr = boto3.client("ecr", region_name=region)
+        self.cfn = boto3.client("cloudformation", region_name=self.region)
+        self.ssm = boto3.client("ssm", region_name=self.region)
+        self.ecr = boto3.client("ecr", region_name=self.region)
+        self.ecs = boto3.client("ecs", region_name=self.region)
+        self.sts = boto3.client("sts", region_name=self.region)
         
-    def run_command(self, cmd, capture=False):
-        """Run a shell command"""
-        print(f"Running: {cmd}")
-        if capture:
-            result = subprocess.run(cmd, shell=True, capture_output=True, text=True)
-            return result.stdout.strip()
-        else:
-            return subprocess.run(cmd, shell=True).returncode == 0
+        # Managers
+        self.ecr_manager = ECRManager(self.region)
+        self.ecs_utils = ECSUtils(self.region)
+        
+        # Get account ID
+        self.account_id = self._get_account_id()
     
-    def setup_ecr(self):
-        """Create ECR repositories for Docker images"""
-        print("\n📦 Setting up ECR repositories...")
-        repos = ["main", "forecast", "historical", "agricultural"]
-        
-        for repo in repos:
-            repo_name = f"strands-weather-agent-{repo}"
-            try:
-                self.ecr.create_repository(repositoryName=repo_name)
-                print(f"✅ Created repository: {repo_name}")
-            except self.ecr.exceptions.RepositoryAlreadyExistsException:
-                print(f"✅ Repository exists: {repo_name}")
-        
-        # Authenticate Docker with ECR
-        print("\n🔐 Authenticating Docker with ECR...")
-        try:
-            # Get account ID using STS
-            sts = boto3.client('sts', region_name=self.region)
-            account_id = sts.get_caller_identity()['Account']
-            registry_url = f"{account_id}.dkr.ecr.{self.region}.amazonaws.com"
-            
-            # Get auth token
-            auth_response = self.ecr.get_authorization_token()
-            print(f"✅ ECR authentication configured for {registry_url}")
-        except Exception as e:
-            print(f"⚠️  ECR authentication note: {e}")
+    def _get_account_id(self) -> str:
+        """Get AWS account ID."""
+        response = self.sts.get_caller_identity()
+        return response['Account']
     
-    def build_and_push(self):
-        """Build and push Docker images"""
-        print("\n🐳 Building and pushing Docker images...")
-        script_path = Path(__file__).parent / "build-push.sh"
-        if script_path.exists():
-            self.run_command(f"bash {script_path}")
-        else:
-            print("⚠️  build-push.sh not found, skipping...")
-    
-    def setup_langfuse_credentials(self):
-        """Store Langfuse credentials in Parameter Store if cloud.env exists"""
-        cloud_env_path = Path(__file__).parent.parent / "cloud.env"
+    def validate_prerequisites(self) -> bool:
+        """Validate deployment prerequisites."""
+        log_info("Validating deployment prerequisites...")
         
-        if not cloud_env_path.exists():
-            print("⚠️  cloud.env not found - telemetry will be disabled")
+        # Check AWS CLI
+        if not check_aws_cli():
             return False
+        
+        # Check AWS credentials
+        if not check_aws_credentials():
+            return False
+        
+        # Check Bedrock model access
+        model_id = self.config.bedrock.model_id
+        try:
+            with spinner(f"Checking Bedrock model access for {model_id}..."):
+                bedrock = boto3.client('bedrock', region_name=self.region)
+                response = bedrock.list_foundation_models()
+                
+                # Check if model is available
+                model_available = any(
+                    model['modelId'] == model_id 
+                    for model in response.get('modelSummaries', [])
+                )
+                
+                if not model_available:
+                    log_error(f"Bedrock model {model_id} is not available in region {self.region}")
+                    log_warn("Please request access or update BEDROCK_MODEL_ID in your .env file")
+                    return False
+        except Exception as e:
+            log_error(f"Failed to check Bedrock access: {e}")
+            return False
+        
+        log_info("✓ All prerequisites validated")
+        return True
+    
+    def run_python_script(self, script_path: str, args: list = None) -> bool:
+        """Run a Python script with arguments."""
+        cmd = [sys.executable, str(script_path)]
+        if args:
+            cmd.extend(args)
+        
+        log_info(f"Running: {' '.join(cmd)}")
+        # Use subprocess.run without capture to show real-time output
+        result = subprocess.run(cmd, text=True)
+        return result.returncode == 0
+    
+    def deploy_base_infrastructure(self) -> bool:
+        """Deploy base infrastructure stack."""
+        print_section("Deploying Base Infrastructure")
+        
+        template_path = Path(__file__).parent / "infrastructure" / "cloudformation" / "templates" / "base.cfn"
+        
+        if not template_path.exists():
+            log_error(f"CloudFormation template not found: {template_path}")
+            return False
+        
+        params = []
+        
+        try:
+            with spinner(f"Deploying stack {self.base_stack}..."):
+                with open(template_path, 'r') as f:
+                    template_body = f.read()
+                
+                # Check if stack exists
+                try:
+                    self.cfn.describe_stacks(StackName=self.base_stack)
+                    # Update existing stack
+                    self.cfn.update_stack(
+                        StackName=self.base_stack,
+                        TemplateBody=template_body,
+                        Parameters=params,
+                        Capabilities=['CAPABILITY_IAM', 'CAPABILITY_NAMED_IAM']
+                    )
+                    log_info(f"Updating stack {self.base_stack}...")
+                except ClientError as e:
+                    if 'does not exist' in str(e):
+                        # Create new stack
+                        self.cfn.create_stack(
+                            StackName=self.base_stack,
+                            TemplateBody=template_body,
+                            Parameters=params,
+                            Capabilities=['CAPABILITY_IAM', 'CAPABILITY_NAMED_IAM']
+                        )
+                        log_info(f"Creating stack {self.base_stack}...")
+                    elif 'No updates are to be performed' in str(e):
+                        # Stack is already up to date
+                        log_info(f"Stack {self.base_stack} is already up to date")
+                        print_success("Base infrastructure is already deployed and up to date!")
+                        return True
+                    else:
+                        raise
+                
+                # Wait for stack to complete
+                waiter = self.cfn.get_waiter('stack_create_complete')
+                log_info("Waiting for stack to complete (this may take 5-10 minutes)...")
+                waiter.wait(StackName=self.base_stack)
+                
+            print_success("Base infrastructure deployed successfully!")
+            return True
             
-        print("\n🔐 Setting up Langfuse credentials...")
-        load_dotenv(cloud_env_path)
-        
-        public_key = os.getenv("LANGFUSE_PUBLIC_KEY")
-        secret_key = os.getenv("LANGFUSE_SECRET_KEY")
-        
-        if public_key and secret_key:
-            try:
-                self.ssm.put_parameter(
-                    Name="/strands-weather-agent/langfuse/public-key",
-                    Value=public_key,
-                    Type="SecureString",
-                    Overwrite=True
-                )
-                self.ssm.put_parameter(
-                    Name="/strands-weather-agent/langfuse/secret-key",
-                    Value=secret_key,
-                    Type="SecureString",
-                    Overwrite=True
-                )
-                print("✅ Langfuse credentials stored securely")
-                return True
-            except Exception as e:
-                print(f"❌ Failed to store credentials: {e}")
-        
-        return False
+        except Exception as e:
+            print_error(f"Failed to deploy base infrastructure: {e}")
+            return False
     
-    def deploy_stack(self, template_file, stack_name, parameters=None):
-        """Deploy a CloudFormation stack using rain or AWS CLI"""
-        print(f"\n☁️  Deploying {stack_name}...")
+    def build_and_push_images(self, verbose: bool = False) -> bool:
+        """Build and push Docker images to ECR."""
+        print_section("Building and Pushing Docker Images")
         
-        # Check if rain is available
-        if subprocess.run("which rain", shell=True, capture_output=True).returncode == 0:
-            # Use rain for deployment
-            cmd = f"rain deploy {template_file} {stack_name} --yes"
-            if parameters:
-                params_str = ",".join([f"{k}={v}" for k, v in parameters.items()])
-                cmd += f" --params {params_str}"
-            self.run_command(cmd)
-        else:
-            print("Rain CLI not found, using AWS CLI...")
-            # Fallback to AWS CLI
-            cmd = f"aws cloudformation deploy --template-file {template_file} --stack-name {stack_name}"
-            if parameters:
-                params_str = " ".join([f"ParameterKey={k},ParameterValue={v}" for k, v in parameters.items()])
-                cmd += f" --parameter-overrides {params_str}"
-            cmd += f" --capabilities CAPABILITY_IAM CAPABILITY_NAMED_IAM --region {self.region}"
-            self.run_command(cmd)
+        script_path = Path(__file__).parent / "commands" / "build_push.py"
+        
+        if not script_path.exists():
+            log_error("build_push.py script not found")
+            return False
+        
+        args = ['--verbose'] if verbose else []
+        return self.run_python_script(script_path, args)
     
-    def deploy_base(self):
-        """Deploy base infrastructure (VPC, ALB, ECS Cluster)"""
-        template = Path(__file__).parent / "base.cfn"
-        self.deploy_stack(template, self.base_stack)
+    def store_langfuse_credentials(self) -> bool:
+        """Store Langfuse credentials in AWS Parameter Store."""
+        pk = os.environ.get('LANGFUSE_PUBLIC_KEY')
+        sk = os.environ.get('LANGFUSE_SECRET_KEY')
+        
+        if not pk or not sk:
+            log_info("No Langfuse credentials found, skipping Parameter Store setup")
+            return True
+        
+        try:
+            log_info("Storing Langfuse credentials in Parameter Store...")
+            
+            # Store public key
+            self.ssm.put_parameter(
+                Name='/strands-weather-agent/langfuse/public-key',
+                Value=pk,
+                Type='SecureString',
+                Overwrite=True,
+                Description='Langfuse public key for telemetry'
+            )
+            
+            # Store secret key
+            self.ssm.put_parameter(
+                Name='/strands-weather-agent/langfuse/secret-key',
+                Value=sk,
+                Type='SecureString',
+                Overwrite=True,
+                Description='Langfuse secret key for telemetry'
+            )
+            
+            log_info("✓ Langfuse credentials stored in Parameter Store")
+            return True
+            
+        except Exception as e:
+            log_error(f"Failed to store Langfuse credentials: {e}")
+            return False
     
-    def deploy_services(self, enable_telemetry=True):
-        """Deploy ECS services with optional telemetry"""
-        template = Path(__file__).parent / "services.cfn"
+    def deploy_services(self) -> bool:
+        """Deploy services stack."""
+        print_section("Deploying Services")
         
-        # Load cloud.env first if it exists (for AWS deployments)
-        cloud_env_path = Path(__file__).parent.parent / "cloud.env"
-        if cloud_env_path.exists():
-            print(f"📄 Loading configuration from cloud.env...")
-            load_dotenv(cloud_env_path, override=True)
-        else:
-            # Fall back to regular .env
-            load_dotenv()
+        # Store Langfuse credentials in Parameter Store if configured
+        if os.environ.get('LANGFUSE_PUBLIC_KEY'):
+            if not self.store_langfuse_credentials():
+                return False
         
-        # Get Bedrock configuration (now from cloud.env if available)
-        bedrock_model_id = os.getenv("BEDROCK_MODEL_ID", "amazon.nova-lite-v1:0")
-        bedrock_region = os.getenv("BEDROCK_REGION", self.region)
+        template_path = Path(__file__).parent / "infrastructure" / "cloudformation" / "templates" / "services.cfn"
         
-        print(f"🤖 Using Bedrock model: {bedrock_model_id}")
-        print(f"🌍 Bedrock region: {bedrock_region}")
+        if not template_path.exists():
+            log_error(f"CloudFormation template not found: {template_path}")
+            return False
         
-        params = {
-            "BaseStackName": self.base_stack,
-            "BedrockModelId": bedrock_model_id,
-            "BedrockRegion": bedrock_region,
-            "BedrockTemperature": os.getenv("BEDROCK_TEMPERATURE", "0"),
-            "LogLevel": os.getenv("LOG_LEVEL", "INFO"),
-            "EnableTelemetry": "true" if enable_telemetry else "false"
-        }
-        
-        # Load image tags from .image-tags file if it exists
+        # Read image tags from .image-tags file
         image_tags_file = Path(__file__).parent / ".image-tags"
-        if image_tags_file.exists():
-            print(f"📦 Loading image tags from {image_tags_file}")
-            with open(image_tags_file) as f:
-                for line in f:
-                    line = line.strip()
-                    if line and '=' in line:
-                        key, value = line.split('=', 1)
-                        if key == "MAIN_IMAGE_TAG":
-                            params["MainImageTag"] = value
-                            print(f"  Main image: {value}")
-                        elif key == "FORECAST_IMAGE_TAG":
-                            params["ForecastImageTag"] = value
-                            print(f"  Forecast image: {value}")
-                        elif key == "HISTORICAL_IMAGE_TAG":
-                            params["HistoricalImageTag"] = value
-                            print(f"  Historical image: {value}")
-                        elif key == "AGRICULTURAL_IMAGE_TAG":
-                            params["AgriculturalImageTag"] = value
-                            print(f"  Agricultural image: {value}")
+        if not image_tags_file.exists():
+            log_error(".image-tags file not found. Run build_push.py first.")
+            return False
+        
+        # Parse image tags
+        image_tags = {}
+        with open(image_tags_file, 'r') as f:
+            for line in f:
+                if '=' in line:
+                    key, value = line.strip().split('=', 1)
+                    image_tags[key] = value
+        
+        # Get base stack outputs
+        try:
+            response = self.cfn.describe_stacks(StackName=self.base_stack)
+            outputs = {o['OutputKey']: o['OutputValue'] for o in response['Stacks'][0]['Outputs']}
+        except Exception as e:
+            log_error(f"Failed to get base stack outputs: {e}")
+            return False
+        
+        # Prepare parameters
+        params = [
+            {"ParameterKey": "BaseStackName", "ParameterValue": self.base_stack},
+            {"ParameterKey": "BedrockModelId", "ParameterValue": self.config.bedrock.model_id},
+            {"ParameterKey": "BedrockRegion", "ParameterValue": self.config.bedrock.region},
+            {"ParameterKey": "BedrockTemperature", "ParameterValue": str(self.config.bedrock.temperature)},
+            {"ParameterKey": "LogLevel", "ParameterValue": self.config.deployment.log_level},
+            {"ParameterKey": "MainImageTag", "ParameterValue": image_tags.get('MAIN_IMAGE_TAG', 'latest')},
+            {"ParameterKey": "ForecastImageTag", "ParameterValue": image_tags.get('FORECAST_IMAGE_TAG', 'latest')},
+            {"ParameterKey": "HistoricalImageTag", "ParameterValue": image_tags.get('HISTORICAL_IMAGE_TAG', 'latest')},
+            {"ParameterKey": "AgriculturalImageTag", "ParameterValue": image_tags.get('AGRICULTURAL_IMAGE_TAG', 'latest')}
+        ]
+        
+        # Add telemetry parameters
+        if os.environ.get('LANGFUSE_PUBLIC_KEY'):
+            params.extend([
+                {"ParameterKey": "LangfusePublicKey", "ParameterValue": os.environ['LANGFUSE_PUBLIC_KEY']},
+                {"ParameterKey": "LangfuseSecretKey", "ParameterValue": os.environ['LANGFUSE_SECRET_KEY']},
+                {"ParameterKey": "LangfuseHost", "ParameterValue": os.environ.get('LANGFUSE_HOST', 'https://us.cloud.langfuse.com')},
+                {"ParameterKey": "EnableTelemetry", "ParameterValue": "true"}
+            ])
         else:
-            print("⚠️ No .image-tags file found, using 'latest' tags")
-            params.update({
-                "MainImageTag": "latest",
-                "ForecastImageTag": "latest",
-                "HistoricalImageTag": "latest",
-                "AgriculturalImageTag": "latest"
-            })
+            # Even if telemetry is not configured, we need to set EnableTelemetry to false
+            params.append({"ParameterKey": "EnableTelemetry", "ParameterValue": "false"})
         
-        # Add Langfuse parameters if telemetry is enabled
-        if enable_telemetry:
-            langfuse_host = os.getenv("LANGFUSE_HOST")
-            if langfuse_host:
-                params["LangfuseHost"] = langfuse_host
-                params["TelemetryTags"] = os.getenv("TELEMETRY_TAGS", "production,aws-strands,weather-agent")
-                print(f"📊 Telemetry enabled with host: {langfuse_host}")
-                # Note: Public and Secret keys are handled via Parameter Store
-        
-        self.deploy_stack(template, self.services_stack, params)
+        try:
+            with spinner(f"Deploying stack {self.services_stack}..."):
+                with open(template_path, 'r') as f:
+                    template_body = f.read()
+                
+                # Check if stack exists
+                try:
+                    self.cfn.describe_stacks(StackName=self.services_stack)
+                    # Update existing stack
+                    self.cfn.update_stack(
+                        StackName=self.services_stack,
+                        TemplateBody=template_body,
+                        Parameters=params,
+                        Capabilities=['CAPABILITY_IAM', 'CAPABILITY_NAMED_IAM']
+                    )
+                    log_info(f"Updating stack {self.services_stack}...")
+                except ClientError as e:
+                    if 'does not exist' in str(e):
+                        # Create new stack
+                        self.cfn.create_stack(
+                            StackName=self.services_stack,
+                            TemplateBody=template_body,
+                            Parameters=params,
+                            Capabilities=['CAPABILITY_IAM', 'CAPABILITY_NAMED_IAM']
+                        )
+                        log_info(f"Creating stack {self.services_stack}...")
+                    elif 'No updates are to be performed' in str(e):
+                        # Stack is already up to date
+                        log_info(f"Stack {self.services_stack} is already up to date")
+                        print_success("Services are already deployed and up to date!")
+                        return True
+                    else:
+                        raise
+                
+                # Wait for stack to complete
+                waiter = self.cfn.get_waiter('stack_create_complete')
+                log_info("Waiting for services to deploy (this may take 10-15 minutes)...")
+                waiter.wait(StackName=self.services_stack)
+                
+            print_success("Services deployed successfully!")
+            
+            # Wait for services to stabilize
+            self._wait_for_services_stable()
+            
+            return True
+            
+        except Exception as e:
+            print_error(f"Failed to deploy services: {e}")
+            return False
     
-    def update_services(self, enable_telemetry=True):
-        """Update services (redeploy)"""
-        print("\n🔄 Updating services...")
+    def _wait_for_services_stable(self):
+        """Wait for ECS services to become stable."""
+        log_info("Waiting for services to stabilize...")
         
-        # Load cloud.env to ensure we have the latest configuration
-        cloud_env_path = Path(__file__).parent.parent / "cloud.env"
-        if cloud_env_path.exists():
-            print(f"📄 Loading configuration from cloud.env...")
-            load_dotenv(cloud_env_path, override=True)
+        # Get cluster name from base stack
+        response = self.cfn.describe_stacks(StackName=self.base_stack)
+        outputs = {o['OutputKey']: o['OutputValue'] for o in response['Stacks'][0]['Outputs']}
+        cluster_name = outputs.get('ClusterName')
         
-        # Build and push new images first
-        print("\n📦 Building and pushing updated Docker images...")
-        self.build_and_push()
+        if not cluster_name:
+            log_warn("Could not determine cluster name")
+            return
         
-        # Then deploy the services with new images
-        self.deploy_services(enable_telemetry)
+        # Get service names from services stack
+        response = self.cfn.describe_stacks(StackName=self.services_stack)
+        outputs = {o['OutputKey']: o['OutputValue'] for o in response['Stacks'][0]['Outputs']}
         
-        # Force ECS to use the new images by updating services
-        print("\n🔄 Forcing ECS services to use new images...")
+        services = [
+            outputs.get('MainServiceName'),
+            outputs.get('ForecastServiceName'),
+            outputs.get('HistoricalServiceName'),
+            outputs.get('AgriculturalServiceName')
+        ]
+        
+        # Wait for each service
+        for service in services:
+            if service:
+                service_name = service.split('/')[-1]  # Extract service name from ARN
+                with spinner(f"Waiting for {service_name} to stabilize..."):
+                    self.ecs_utils.wait_for_service_stable(
+                        service_name,
+                        'main' if 'weather-agent' in service_name else 'mcp',
+                        300,  # timeout
+                        cluster_name
+                    )
+    
+    def update_services(self) -> bool:
+        """Update services with new container images."""
+        print_section("Updating Services")
+        
+        # First build and push new images
+        if not self.build_and_push_images(verbose=self.verbose):
+            return False
+        
+        # Then update the services stack
+        if not self.deploy_services():
+            return False
+        
+        # Force ECS to use the new images
         self._force_ecs_update()
+        return True
     
     def _force_ecs_update(self):
-        """Force ECS services to pull new images by updating service"""
+        """Force ECS services to pull new images by updating service."""
         try:
-            ecs = boto3.client("ecs", region_name=self.region)
-            
             # Get cluster name - it's always "strands-weather-agent"
             cluster_name = "strands-weather-agent"
             
             # List services in the cluster
-            response = ecs.list_services(cluster=cluster_name)
+            response = self.ecs.list_services(cluster=cluster_name)
             service_arns = response.get('serviceArns', [])
             
             for service_arn in service_arns:
                 service_name = service_arn.split('/')[-1]
-                print(f"  Updating service: {service_name}")
+                log_info(f"Updating service: {service_name}")
                 
                 # Force new deployment
-                ecs.update_service(
+                self.ecs.update_service(
                     cluster=cluster_name,
                     service=service_name,
                     forceNewDeployment=True
                 )
             
             if service_arns:
-                print(f"✅ Forced update for {len(service_arns)} services")
+                log_info(f"Forced update for {len(service_arns)} services")
             else:
-                print("⚠️  No services found to update")
+                log_warn("No services found to update")
                 
         except Exception as e:
-            print(f"⚠️  Could not force ECS update: {e}")
+            log_warn(f"Could not force ECS update: {e}")
             # Non-critical error, continue
     
-    def cleanup_services(self):
-        """Remove services stack only"""
-        print(f"\n🗑️  Removing services stack: {self.services_stack}...")
+    def cleanup_services(self) -> bool:
+        """Remove services stack only."""
+        print_section("Removing Services Stack")
+        
         try:
             self.cfn.describe_stacks(StackName=self.services_stack)
             
             # Delete the stack
-            self.cfn.delete_stack(StackName=self.services_stack)
-            print("⏳ Waiting for stack deletion...")
+            with spinner(f"Deleting stack {self.services_stack}..."):
+                self.cfn.delete_stack(StackName=self.services_stack)
+            
+            log_info("Waiting for stack deletion...")
             
             # Wait for deletion
             waiter = self.cfn.get_waiter('stack_delete_complete')
             waiter.wait(StackName=self.services_stack)
-            print("✅ Services stack removed")
+            
+            print_success("Services stack removed successfully!")
+            return True
+            
         except ClientError as e:
             if 'does not exist' in str(e):
-                print("⚠️  Services stack not found")
+                log_warn("Services stack not found")
+                return True
             else:
-                print(f"❌ Error: {e}")
+                print_error(f"Failed to remove services stack: {e}")
+                return False
     
-    def cleanup_base(self):
-        """Remove base infrastructure stack"""
-        print(f"\n🗑️  Removing base stack: {self.base_stack}...")
+    def cleanup_base(self) -> bool:
+        """Remove base infrastructure stack."""
+        print_section("Removing Base Infrastructure Stack")
+        
         try:
             self.cfn.describe_stacks(StackName=self.base_stack)
             
             # Delete the stack
-            self.cfn.delete_stack(StackName=self.base_stack)
-            print("⏳ Waiting for stack deletion...")
+            with spinner(f"Deleting stack {self.base_stack}..."):
+                self.cfn.delete_stack(StackName=self.base_stack)
+            
+            log_info("Waiting for stack deletion...")
             
             # Wait for deletion
             waiter = self.cfn.get_waiter('stack_delete_complete')
             waiter.wait(StackName=self.base_stack)
-            print("✅ Base stack removed")
+            
+            print_success("Base infrastructure stack removed successfully!")
+            return True
+            
         except ClientError as e:
             if 'does not exist' in str(e):
-                print("⚠️  Base stack not found")
+                log_warn("Base stack not found")
+                return True
             else:
-                print(f"❌ Error: {e}")
+                print_error(f"Failed to remove base stack: {e}")
+                return False
     
-    def cleanup_all(self):
-        """Remove all infrastructure"""
-        print("\n⚠️  WARNING: This will remove all infrastructure!")
-        response = input("Are you sure? (yes/no): ")
+    def cleanup_all(self) -> bool:
+        """Remove all infrastructure."""
+        print_section("Remove All Infrastructure")
+        
+        console.print("\n⚠️  WARNING: This will remove all infrastructure!", style="yellow bold")
+        response = console.input("Are you sure? (yes/no): ")
+        
         if response.lower() == "yes":
-            self.cleanup_services()
-            self.cleanup_base()
-            print("\n✅ All infrastructure removed")
+            # Remove services first
+            if not self.cleanup_services():
+                return False
+            
+            # Then remove base infrastructure
+            if not self.cleanup_base():
+                return False
+            
+            print_success("All infrastructure removed successfully!")
+            return True
         else:
-            print("❌ Cleanup cancelled")
+            log_info("Cleanup cancelled")
+            return True
     
-    def aws_checks(self):
-        """Run AWS configuration checks"""
-        print("\n🔍 Running AWS configuration checks...")
+    def deploy_all(self) -> bool:
+        """Deploy complete infrastructure."""
+        print_section("Full Deployment")
         
-        # Check AWS identity
-        try:
-            sts = boto3.client('sts', region_name=self.region)
-            identity = sts.get_caller_identity()
-            print(f"✅ AWS Account: {identity['Account']}")
-            print(f"✅ AWS User/Role: {identity['Arn']}")
-        except Exception as e:
-            print(f"❌ AWS credentials error: {e}")
+        # Validate prerequisites
+        if not self.validate_prerequisites():
             return False
         
-        # Check Bedrock access
-        print("\n🤖 Checking AWS Bedrock access...")
-        try:
-            bedrock = boto3.client('bedrock', region_name=self.region)
-            models = bedrock.list_foundation_models()
-            available_models = len(models.get('modelSummaries', []))
-            print(f"✅ Bedrock access confirmed - {available_models} models available")
-            
-            # Check specific model
-            model_id = os.getenv("BEDROCK_MODEL_ID", "amazon.nova-lite-v1:0")
-            print(f"🔍 Checking model: {model_id}")
-            
-            # Try to get model info
-            try:
-                bedrock_runtime = boto3.client('bedrock-runtime', region_name=self.region)
-                print(f"✅ Model {model_id} is accessible")
-            except Exception as e:
-                print(f"⚠️  Model {model_id} check: {e}")
-                
-        except Exception as e:
-            print(f"❌ Bedrock access error: {e}")
-            print("   Make sure you have enabled Bedrock in this region")
+        # Deploy base infrastructure
+        if not self.deploy_base_infrastructure():
             return False
         
-        # Check ECR access
-        print("\n📦 Checking ECR access...")
-        try:
-            repos = self.ecr.describe_repositories()
-            print(f"✅ ECR access confirmed")
-        except Exception as e:
-            print(f"⚠️  ECR access: {e}")
+        # Build and push images
+        if not self.build_and_push_images(verbose=self.verbose):
+            return False
+        
+        # Deploy services
+        if not self.deploy_services():
+            return False
+        
+        # Show deployment info
+        self._show_deployment_info()
         
         return True
     
-    def build_push(self):
-        """Build and push Docker images as a separate command"""
-        print("\n🐳 Building and pushing Docker images...")
-        script_path = Path(__file__).parent / "build-push.sh"
-        if script_path.exists():
-            result = self.run_command(f"bash {script_path}")
-            if result:
-                print("✅ Images built and pushed successfully")
-            else:
-                print("❌ Build/push failed")
-                sys.exit(1)
-        else:
-            print("❌ build-push.sh not found")
-            sys.exit(1)
+    def _show_deployment_info(self):
+        """Show deployment information."""
+        print_section("Deployment Complete!")
+        
+        # Get load balancer URL
+        response = self.cfn.describe_stacks(StackName=self.base_stack)
+        outputs = {o['OutputKey']: o['OutputValue'] for o in response['Stacks'][0]['Outputs']}
+        lb_url = outputs.get('ALBDNSName')
+        
+        if lb_url:
+            console.print(f"\n🎉 Your Weather Agent API is available at:")
+            console.print(f"   [cyan]http://{lb_url}[/cyan]")
+            console.print(f"\nTest it with:")
+            console.print(f'   curl -X POST "http://{lb_url}/query" \\')
+            console.print(f'       -H "Content-Type: application/json" \\')
+            console.print(f'       -d \'{{\"question\": \"What is the weather in Chicago?\"}}\'')
+            console.print(f"\nCheck status with:")
+            console.print(f"   python status.py")
     
-    def get_status(self):
-        """Show deployment status"""
-        print("\n📊 Deployment Status")
-        print("=" * 50)
+    def run_command(self, command: str) -> bool:
+        """Run a deployment command."""
+        commands = {
+            'all': self.deploy_all,
+            'base': self.deploy_base_infrastructure,
+            'build': lambda: self.build_and_push_images(verbose=self.verbose),
+            'services': self.deploy_services,
+            'update-services': self.update_services,
+            'cleanup-services': self.cleanup_services,
+            'cleanup-base': self.cleanup_base,
+            'cleanup-all': self.cleanup_all
+        }
         
-        # Check base stack
-        try:
-            base_stack = self.cfn.describe_stacks(StackName=self.base_stack)["Stacks"][0]
-            status = base_stack['StackStatus']
-            print(f"✅ Base Stack: {status}")
-            
-            # Get ALB URL
-            alb_dns = None
-            for output in base_stack.get("Outputs", []):
-                if output["OutputKey"] == "ALBDNSName":
-                    alb_dns = output['OutputValue']
-                    print(f"\n🌐 Application URL: http://{alb_dns}")
-                    print(f"📚 API Docs: http://{alb_dns}/docs")
-                    break
-        except ClientError as e:
-            if 'does not exist' in str(e):
-                print("❌ Base Stack: Not deployed")
-            else:
-                print(f"❌ Base Stack: Error - {e}")
+        if command not in commands:
+            log_error(f"Unknown command: {command}")
+            log_info(f"Available commands: {', '.join(commands.keys())}")
+            return False
         
-        # Check services stack
-        try:
-            services_stack = self.cfn.describe_stacks(StackName=self.services_stack)["Stacks"][0]
-            status = services_stack['StackStatus']
-            print(f"✅ Services Stack: {status}")
-            
-            # Check parameters
-            telemetry_enabled = False
-            model_id = None
-            for param in services_stack.get("Parameters", []):
-                if param["ParameterKey"] == "EnableTelemetry":
-                    telemetry_enabled = param["ParameterValue"] == "true"
-                elif param["ParameterKey"] == "BedrockModelId":
-                    model_id = param["ParameterValue"]
-            
-            if telemetry_enabled:
-                print("✅ Langfuse Telemetry: Enabled")
-            else:
-                print("⚠️  Langfuse Telemetry: Disabled")
-            
-            if model_id:
-                print(f"🤖 Bedrock Model: {model_id}")
-            
-            # List ECS services
-            try:
-                ecs = boto3.client("ecs", region_name=self.region)
-                services = ecs.list_services(cluster="strands-weather-agent")
-                if services['serviceArns']:
-                    print("\n📦 ECS Services:")
-                    for arn in services['serviceArns']:
-                        service_name = arn.split('/')[-1]
-                        print(f"   - {service_name}")
-            except Exception as e:
-                print(f"⚠️  Could not list ECS services: {e}")
-                
-        except ClientError as e:
-            if 'does not exist' in str(e):
-                print("❌ Services Stack: Not deployed")
-            else:
-                print(f"❌ Services Stack: Error - {e}")
-        
-        print("\n💡 Tips:")
-        print("   - Test the deployment: python3 infra/test_services.py")
-        print("   - View logs: aws logs tail /aws/ecs/strands-weather-agent --follow")
-        print("   - Update with code changes: python3 infra/deploy.py update-services")
-    
-    def deploy_all(self, disable_telemetry=False):
-        """Deploy everything"""
-        print("🚀 Starting full deployment...")
-        
-        # Setup ECR
-        self.setup_ecr()
-        
-        # Build and push images
-        self.build_and_push()
-        
-        # Setup Langfuse if not disabled
-        enable_telemetry = not disable_telemetry
-        if enable_telemetry:
-            enable_telemetry = self.setup_langfuse_credentials()
-        
-        # Deploy stacks
-        self.deploy_base()
-        self.deploy_services(enable_telemetry)
-        
-        # Show final status
-        self.get_status()
-        
-        print("\n✨ Deployment complete! Test with:")
-        print("   python3 infra/test_services.py")
-
-
-def show_help():
-    """Show detailed help message"""
-    print("Strands Weather Agent Infrastructure Deployment Script")
-    print("=" * 55)
-    print("\nUsage: python3 infra/deploy.py [command] [options]")
-    print("\nCommands:")
-    print("  aws-checks       Check AWS configuration and Bedrock access")
-    print("  setup-ecr        Setup ECR repositories and Docker authentication")
-    print("  build-push       Build and push Docker images to ECR")
-    print("  all              Deploy all infrastructure (base + services)")
-    print("  base             Deploy only base infrastructure")
-    print("  services         Deploy only services (requires base)")
-    print("  update-services  Build new images and redeploy services")
-    print("  status           Show current deployment status")
-    print("  cleanup-services Remove services stack only")
-    print("  cleanup-base     Remove base infrastructure stack")
-    print("  cleanup-all      Remove all infrastructure")
-    print("  help             Show this help message")
-    print("\nOptions:")
-    print("  --disable-telemetry  Disable Langfuse telemetry")
-    print("  --region REGION      AWS region (default: us-east-1)")
-    print("\nEnvironment Variables:")
-    print("  AWS_REGION          AWS region (default: us-east-1)")
-    print("  BEDROCK_MODEL_ID    Bedrock model to use (default: amazon.nova-lite-v1:0)")
-    print("  BEDROCK_REGION      Bedrock region (default: us-east-1)")
-    print("  BEDROCK_TEMPERATURE Model temperature (default: 0)")
-    print("  LOG_LEVEL           Logging level (default: INFO)")
-    print("\nExamples:")
-    print("  python3 infra/deploy.py aws-checks                    # Check AWS setup")
-    print("  python3 infra/deploy.py setup-ecr                     # Setup ECR repositories")
-    print("  python3 infra/deploy.py build-push                    # Build and push images")
-    print("  python3 infra/deploy.py all                           # Full deployment")
-    print("  python3 infra/deploy.py all --disable-telemetry       # Deploy without telemetry")
-    print("  python3 infra/deploy.py update-services               # Build & redeploy services")
-    print("  python3 infra/deploy.py status                        # Check deployment status")
-    print("  python3 infra/deploy.py cleanup-services              # Remove services only")
-    print("  python3 infra/deploy.py cleanup-base                  # Remove base infrastructure")
-    print("  python3 infra/deploy.py cleanup-all                   # Remove all infrastructure")
-    print("\n📖 For more info: https://github.com/aws-samples/strands-weather-agent")
+        return commands[command]()
 
 
 def main():
-    # Show help if no arguments provided
-    if len(sys.argv) == 1:
-        show_help()
-        sys.exit(0)
-    
+    """Main entry point."""
     parser = argparse.ArgumentParser(
         description="Deploy Strands Weather Agent to AWS ECS",
-        add_help=False  # We handle help ourselves
+        formatter_class=argparse.RawDescriptionHelpFormatter,
+        epilog="""
+Commands:
+  all               - Deploy complete infrastructure (base + build + services)
+  base              - Deploy base infrastructure (VPC, ECS cluster, ALB)
+  build             - Build and push Docker images to ECR
+  services          - Deploy ECS services (requires base and build)
+  update-services   - Update services with new images (build + redeploy)
+  cleanup-services  - Remove services stack only
+  cleanup-base      - Remove base infrastructure stack
+  cleanup-all       - Remove all infrastructure (with confirmation)
+
+Examples:
+  %(prog)s all                    # Full deployment
+  %(prog)s base                   # Deploy infrastructure only
+  %(prog)s build                  # Build and push images only
+  %(prog)s services               # Deploy services only
+  %(prog)s update-services        # Update with new code changes
+  %(prog)s cleanup-services       # Remove services only
+  %(prog)s cleanup-base           # Remove base infrastructure
+  %(prog)s cleanup-all            # Remove everything
+  %(prog)s all --region us-east-1 # Deploy to specific region
+"""
     )
     parser.add_argument(
-        "command",
-        choices=[
-            "all", "base", "services", "status", "setup-ecr",
-            "aws-checks", "build-push", "update-services",
-            "cleanup-services", "cleanup-base", "cleanup-all", "help"
-        ],
-        help="Deployment command"
+        'command',
+        choices=['all', 'base', 'build', 'services', 'update-services', 
+                 'cleanup-services', 'cleanup-base', 'cleanup-all'],
+        help='Deployment command to run'
     )
     parser.add_argument(
-        "--disable-telemetry",
-        action="store_true",
-        help="Disable Langfuse telemetry"
+        '--region',
+        help='AWS region (overrides config)',
+        default=None
     )
     parser.add_argument(
-        "--region",
-        default=os.getenv("AWS_REGION", "us-east-1"),
-        help="AWS region"
+        '--verbose', '-v',
+        action='store_true',
+        help='Show verbose build output'
     )
+    
+    # Show help if no arguments provided
+    if len(sys.argv) == 1:
+        parser.print_help()
+        sys.exit(0)
     
     args = parser.parse_args()
     
-    # Handle help command
-    if args.command == "help":
-        show_help()
-        sys.exit(0)
+    # Override region if provided
+    if args.region:
+        os.environ['AWS_REGION'] = args.region
     
-    # Create deployment manager
-    deployment = SimpleDeployment(args.region)
+    deployment = Deployment(verbose=args.verbose)
+    success = deployment.run_command(args.command)
     
-    # Execute command
-    if args.command == "all":
-        deployment.deploy_all(args.disable_telemetry)
-    elif args.command == "base":
-        deployment.deploy_base()
-    elif args.command == "services":
-        deployment.deploy_services(not args.disable_telemetry)
-    elif args.command == "update-services":
-        deployment.update_services(not args.disable_telemetry)
-    elif args.command == "status":
-        deployment.get_status()
-    elif args.command == "setup-ecr":
-        deployment.setup_ecr()
-    elif args.command == "aws-checks":
-        deployment.aws_checks()
-    elif args.command == "build-push":
-        deployment.build_push()
-    elif args.command == "cleanup-services":
-        deployment.cleanup_services()
-    elif args.command == "cleanup-base":
-        deployment.cleanup_base()
-    elif args.command == "cleanup-all":
-        deployment.cleanup_all()
+    sys.exit(0 if success else 1)
 
 
-if __name__ == "__main__":
+if __name__ == '__main__':
     main()

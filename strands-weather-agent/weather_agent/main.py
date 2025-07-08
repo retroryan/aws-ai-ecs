@@ -115,6 +115,35 @@ async def lifespan(app: FastAPI):
     
     print("🚀 Starting AWS Strands Weather Agent API...")
     
+    # Log telemetry status with enhanced debugging
+    telemetry_enabled = os.getenv("ENABLE_TELEMETRY", "true").lower() == "true"
+    if telemetry_enabled:
+        # Check if Langfuse credentials are configured
+        pk = os.getenv("LANGFUSE_PUBLIC_KEY")
+        sk = os.getenv("LANGFUSE_SECRET_KEY")
+        host = os.getenv("LANGFUSE_HOST", "https://us.cloud.langfuse.com")
+        
+        if pk and sk:
+            print(f"📊 Telemetry: ✅ ENABLED")
+            print(f"   - Langfuse Host: {host}")
+            print(f"   - Service: {os.getenv('OTEL_SERVICE_NAME', 'weather-agent')}")
+            print(f"   - Environment: {os.getenv('DEPLOYMENT_ENVIRONMENT', 'demo')}")
+            
+            # Enhanced debugging information
+            if debug_mode:
+                print(f"   - Public Key (first/last 8): {pk[:8]}...{pk[-8:]}" if len(pk) > 16 else f"   - Public Key: {pk}")
+                print(f"   - Secret Key (first/last 8): {sk[:8]}...{sk[-8:]}" if len(sk) > 16 else f"   - Secret Key: {sk}")
+                print(f"   - OTEL Endpoint: {os.getenv('OTEL_EXPORTER_OTLP_TRACES_ENDPOINT', 'NOT SET')}")
+                print(f"   - OTEL Headers (length): {len(os.getenv('OTEL_EXPORTER_OTLP_TRACES_HEADERS', ''))}")
+        else:
+            print(f"📊 Telemetry: ⚠️  CONFIGURED but missing Langfuse credentials")
+            print(f"   - LANGFUSE_PUBLIC_KEY: {'SET' if pk else 'NOT SET'}")
+            print(f"   - LANGFUSE_SECRET_KEY: {'SET' if sk else 'NOT SET'}")
+            print(f"   - LANGFUSE_HOST: {host}")
+            print(f"   - Set LANGFUSE_PUBLIC_KEY and LANGFUSE_SECRET_KEY to enable")
+    else:
+        print(f"📊 Telemetry: ❌ DISABLED (ENABLE_TELEMETRY=false)")
+    
     # Import and initialize global metrics tracker
     try:
         from .metrics_display import SessionMetrics

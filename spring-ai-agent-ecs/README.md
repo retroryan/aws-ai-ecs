@@ -1,8 +1,11 @@
 # Sample: MCP Agent with Spring AI and Bedrock
 
-Provides a sample Spring AI MCP Server that runs on ECS; which is used by a Spring AI Agent using Bedrock; which also runs on ECS and is exposed publicly via a Load Balancer.
+**⚠️ EXPERIMENTAL**: This project demonstrates Spring AI's MCP (Model Context Protocol) integration with AWS Bedrock. It's based on [James Ward's spring-ai-agent-ecs](https://github.com/jamesward/Sample-Model-Context-Protocol-Demos/tree/main/modules/spring-ai-agent-ecs) and modified for potential integration with strands-weather-agent.
 
-This is forked and modified from (James Ward spring-ai-agent-ecs)[https://github.com/jamesward/Sample-Model-Context-Protocol-Demos/tree/main/modules/spring-ai-agent-ecs] and the goal is to have it provide a separate mcp server for integration with the strands-weather-agent. There is currently an issue because Spring AI seems to only use sse but AWS Strands uses streaming http - I think?
+**Known Issue**: Spring AI uses Server-Sent Events (SSE) while AWS Strands uses streaming HTTP, which may cause integration challenges.
+
+## What It Does
+A Spring Boot application that provides agriculture experts accessible through an AI agent, demonstrating client-server MCP architecture on AWS ECS.
 
 ```mermaid
 flowchart LR
@@ -137,47 +140,19 @@ curl -X POST --location "http://localhost:8080/inquire" \
 
 ### API Endpoints
 
-The application provides endpoints for interacting with agriculture experts through an AI agent:
-
 #### Chat with the AI Agent (Client Service - Port 8080)
-Query the AI agent that can access all agriculture expert tools:
+Query the AI agent that can access agriculture expert tools:
 ```bash
-curl -X POST --location "http://localhost:8080/inquire" \
+curl -X POST http://localhost:8080/inquire \
     -H "Content-Type: application/json" \
-    -d '{"question": "Find experts with Soil Analysis skills and get a recommendation from one of them"}'
+    -d '{"question": "Find experts with Soil Analysis skills and get a recommendation"}'
 ```
 
-#### Available MCP Tools (accessed through the AI agent)
-The following tools are available through the AI agent:
+#### Available MCP Tools
 - `getSkills()` - Get all available agriculture skills
-- `getAgricultureExpertsWithSkill(skill)` - Find experts with a specific skill (returns expert ID, name, and skills)
-- `getRecommendationFromExpert(expertId)` - Get personalized recommendations from a specific expert based on their skills
-- `getRecommendationBySpecialty(specialty)` - Get recommendations directly from experts with a specific specialty without needing their ID
-
-**Note:** Recommendations are now skill-based! Each expert provides recommendations tailored to their specific areas of expertise. For example, a "Soil Analysis" expert will provide soil-related recommendations, while a "Pest Management" expert will focus on pest control strategies.
-
-Example conversation flows:
-```bash
-# 1. Ask for experts with a specific skill (response will include expert IDs)
-curl -X POST --location "http://localhost:8080/inquire" \
-    -H "Content-Type: application/json" \
-    -d '{"question": "Show me experts with Precision Agriculture skills"}'
-
-# 2. Get a skill-specific recommendation from an expert by ID
-curl -X POST --location "http://localhost:8080/inquire" \
-    -H "Content-Type: application/json" \
-    -d '{"question": "Get a recommendation from expert expert-042"}'
-
-# 3. Get recommendations directly by specialty (NEW!)
-curl -X POST --location "http://localhost:8080/inquire" \
-    -H "Content-Type: application/json" \
-    -d '{"question": "Give me some recommendations from a Pest Management expert"}'
-
-# 4. Combined query: find experts and get tailored recommendations
-curl -X POST --location "http://localhost:8080/inquire" \
-    -H "Content-Type: application/json" \
-    -d '{"question": "Find 3 experts with Sustainable Farming skills and get a recommendation from the first one"}'
-```
+- `getAgricultureExpertsWithSkill(skill)` - Find experts with a specific skill
+- `getRecommendationFromExpert(expertId)` - Get expert recommendations based on their skills
+- `getRecommendationBySpecialty(specialty)` - Get recommendations by specialty without expert ID
 
 ## Run on AWS
 
@@ -298,37 +273,13 @@ If you prefer to run scripts individually:
 
 ### Testing the Deployment
 
-Once deployed, test with `curl` (replace YOUR_LB_HOST with your load balancer URL):
-
-#### Test the AI Agent with Agriculture Experts
+Once deployed, test with:
 ```bash
-# Get agriculture experts with specific skills
-curl -X POST --location "http://YOUR_LB_HOST/inquire" \
+# Use the automated test script
+./infra/test_services.sh
+
+# Or manually (replace YOUR_LB_HOST with your load balancer URL)
+curl -X POST http://YOUR_LB_HOST/inquire \
     -H "Content-Type: application/json" \
     -d '{"question": "Get agriculture experts that have skills related to Sustainable Farming"}'
-
-# Find experts and get recommendations in one query
-curl -X POST --location "http://YOUR_LB_HOST/inquire" \
-    -H "Content-Type: application/json" \
-    -d '{"question": "Find experts with Crop Science skills and get a recommendation from one of them"}'
-
-# Get all available skills
-curl -X POST --location "http://YOUR_LB_HOST/inquire" \
-    -H "Content-Type: application/json" \
-    -d '{"question": "What skills do our agriculture experts have?"}'
-
-# Get specific expert recommendations (now skill-based!)
-curl -X POST --location "http://YOUR_LB_HOST/inquire" \
-    -H "Content-Type: application/json" \
-    -d '{"question": "Get a recommendation from expert expert-001"}'
-
-# Find experts by skill and get tailored recommendations
-curl -X POST --location "http://YOUR_LB_HOST/inquire" \
-    -H "Content-Type: application/json" \
-    -d '{"question": "Find an expert specializing in Irrigation Systems and get their recommendation"}'
-
-# Get recommendations directly by specialty (NEW!)
-curl -X POST --location "http://YOUR_LB_HOST/inquire" \
-    -H "Content-Type: application/json" \
-    -d '{"question": "Give me some recommendations from a Drought Management expert"}'
 ```

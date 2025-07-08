@@ -5,16 +5,22 @@ set -e
 
 # Parse command line arguments
 DEBUG_MODE=""
+CLOUD_MODE=""
 while [[ $# -gt 0 ]]; do
     case $1 in
         --debug|-d)
             DEBUG_MODE="true"
             shift
             ;;
+        --cloud|-c)
+            CLOUD_MODE="true"
+            shift
+            ;;
         --help|-h)
             echo "Usage: $0 [OPTIONS]"
             echo "Options:"
             echo "  --debug, -d      Enable debug logging"
+            echo "  --cloud, -c      Use cloud.env configuration for cloud Langfuse"
             echo "  --help, -h       Show this help message"
             exit 0
             ;;
@@ -29,22 +35,39 @@ done
 # Build startup message
 STARTUP_MSG="Starting Strands Weather Agent services"
 if [ "$DEBUG_MODE" = "true" ]; then
-    STARTUP_MSG="$STARTUP_MSG with DEBUG logging enabled..."
-else
-    STARTUP_MSG="$STARTUP_MSG..."
+    STARTUP_MSG="$STARTUP_MSG with DEBUG logging enabled"
 fi
+if [ "$CLOUD_MODE" = "true" ]; then
+    STARTUP_MSG="$STARTUP_MSG using cloud.env configuration"
+fi
+STARTUP_MSG="$STARTUP_MSG..."
 echo "$STARTUP_MSG"
 
 # Navigate to project root
 cd "$(dirname "$0")/.."
 
-# Load environment variables from .env if it exists
-if [ -f .env ]; then
-    # Use set -a to export all variables, handle quotes and spaces properly
-    set -a
-    source .env
-    set +a
-    echo "✓ Environment variables loaded from .env"
+# Load environment variables based on mode
+if [ "$CLOUD_MODE" = "true" ]; then
+    # Use cloud.env for cloud configuration
+    if [ -f cloud.env ]; then
+        # Use set -a to export all variables, handle quotes and spaces properly
+        set -a
+        source cloud.env
+        set +a
+        echo "✓ Environment variables loaded from cloud.env (cloud mode)"
+    else
+        echo "❌ cloud.env file not found"
+        exit 1
+    fi
+else
+    # Default: use local .env
+    if [ -f .env ]; then
+        # Use set -a to export all variables, handle quotes and spaces properly
+        set -a
+        source .env
+        set +a
+        echo "✓ Environment variables loaded from .env (local mode)"
+    fi
 fi
 
 # Export AWS credentials for Docker Compose
@@ -118,14 +141,23 @@ fi
 # Always use Langfuse configuration for telemetry
 echo "✓ Starting services with Langfuse telemetry enabled"
 
-# Check if Langfuse network exists, create if needed
-if ! docker network ls | grep -q "langfuse_default"; then
-    echo "ℹ️  Langfuse network not found, creating it..."
-    docker network create langfuse_default || echo "ℹ️  Could not create langfuse_default network (may not be needed)"
+# Check if Langfuse network exists, create if needed (only for local mode)
+if [ "$CLOUD_MODE" != "true" ]; then
+    if ! docker network ls | grep -q "langfuse_default"; then
+        echo "ℹ️  Langfuse network not found, creating it..."
+        docker network create langfuse_default || echo "ℹ️  Could not create langfuse_default network (may not be needed)"
+    fi
 fi
 
-# Always use the Langfuse compose configuration
-docker compose -f docker-compose.yml -f docker-compose.langfuse.yml up --build -d
+# Use appropriate compose configuration based on mode
+if [ "$CLOUD_MODE" = "true" ]; then
+    # For cloud mode, we don't need the Langfuse network configuration
+    echo "✓ Starting services in cloud mode (no local Langfuse network)"
+    docker compose up --build -d
+else
+    # For local mode, use the Langfuse compose configuration
+    docker compose -f docker-compose.yml -f docker-compose.langfuse.yml up --build -d
+fi
 
 echo ""
 echo "Services started!"
@@ -134,7 +166,14 @@ echo "✓ Weather Agent API: http://localhost:7777"
 # Show Langfuse info
 if [ -n "${LANGFUSE_PUBLIC_KEY}" ] && [ -n "${LANGFUSE_SECRET_KEY}" ]; then
     echo "✓ Langfuse telemetry configured"
-    if docker network ls | grep -q "langfuse_default"; then
+    if [ "$CLOUD_MODE" = "true" ]; then
+        echo "✓ Using cloud Langfuse instance at: ${LANGFUSE_HOST}"
+        echo ""
+        echo "📊 Telemetry Configuration:"
+        echo "   - Environment: cloud"
+        echo "   - Host: ${LANGFUSE_HOST}"
+        echo "   - Public Key: ${LANGFUSE_PUBLIC_KEY:0:20}..."
+    elif docker network ls | grep -q "langfuse_default"; then
         echo "✓ Connected to local Langfuse instance"
         echo ""
         echo "View metrics and traces at: http://localhost:3000"

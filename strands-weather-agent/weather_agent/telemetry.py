@@ -40,15 +40,50 @@ def setup_telemetry(service_name: str = "weather-agent",
         os.environ["OTEL_RESOURCE_ATTRIBUTES"] = f"service.version={version},deployment.environment={environment}"
         
         # CRITICAL: Use signal-specific endpoint for traces
-        os.environ["OTEL_EXPORTER_OTLP_TRACES_ENDPOINT"] = f"{host}/api/public/otel/v1/traces"
+        endpoint = f"{host}/api/public/otel/v1/traces"
+        os.environ["OTEL_EXPORTER_OTLP_TRACES_ENDPOINT"] = endpoint
         os.environ["OTEL_EXPORTER_OTLP_TRACES_HEADERS"] = f"Authorization=Basic {auth}"
         os.environ["OTEL_EXPORTER_OTLP_TRACES_PROTOCOL"] = "http/protobuf"
         
         # Initialize telemetry
         telemetry = StrandsTelemetry()
         telemetry.setup_otlp_exporter()
-        logger.info(f"Langfuse telemetry enabled for {service_name} v{version} ({environment})")
+        
+        # Log detailed connection information with enhanced debugging
+        logger.info("="*60)
+        logger.info("📊 LANGFUSE TELEMETRY CONFIGURATION")
+        logger.info("="*60)
+        logger.info(f"Service Name: {service_name}")
+        logger.info(f"Version: {version}")
+        logger.info(f"Environment: {environment}")
+        logger.info(f"Langfuse Host: {host}")
+        logger.info(f"OTEL Endpoint: {endpoint}")
+        logger.info(f"Public Key: {pk[:8]}...{pk[-8:]}" if len(pk) > 20 else f"Public Key: {pk}")
+        logger.info(f"Secret Key: {sk[:8]}...{sk[-8:]}" if len(sk) > 20 else f"Secret Key: {sk}")
+        logger.info(f"Auth Header (first 20 chars): {auth[:20]}...")
+        logger.info(f"Protocol: http/protobuf")
+        logger.info("Status: ✅ ENABLED")
+        logger.info("="*60)
+        
+        # Additional debug logging for troubleshooting
+        logger.debug(f"Full OTEL_EXPORTER_OTLP_TRACES_ENDPOINT: {os.environ.get('OTEL_EXPORTER_OTLP_TRACES_ENDPOINT')}")
+        logger.debug(f"Full OTEL_EXPORTER_OTLP_TRACES_HEADERS: {os.environ.get('OTEL_EXPORTER_OTLP_TRACES_HEADERS')[:50]}...")
+        logger.debug(f"Full OTEL_SERVICE_NAME: {os.environ.get('OTEL_SERVICE_NAME')}")
+        logger.debug(f"Full OTEL_RESOURCE_ATTRIBUTES: {os.environ.get('OTEL_RESOURCE_ATTRIBUTES')}")
+        
         return True
     
-    logger.info("Langfuse telemetry not configured (credentials not found)")
+    # Log detailed information about missing configuration
+    logger.info("="*60)
+    logger.info("📊 LANGFUSE TELEMETRY CONFIGURATION")
+    logger.info("="*60)
+    logger.info(f"Service Name: {service_name}")
+    logger.info(f"Version: {version}")
+    logger.info(f"Environment: {environment}")
+    logger.info(f"Langfuse Host: {host}")
+    logger.info(f"Public Key: {pk[:8]}...{pk[-8:]}" if pk else "NOT SET")
+    logger.info(f"Secret Key: {sk[:8]}...{sk[-8:]}" if sk else "NOT SET")
+    logger.info(f"Status: ❌ DISABLED ({'missing credentials' if not pk or not sk else 'configuration error'})")
+    logger.info("="*60)
+    
     return False
