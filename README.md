@@ -1,15 +1,15 @@
-# AI AGENT DEMOS - The New Era of Software Development with AI Services on AWS ECS + Bedrock
+# AI AGENT DEMOS - The New Era of Software Development with AI Services on AWS ECS + Bedrock using AWS Strands and LangGraph
 
-This repository demonstrates the future of software development: AI-powered applications running seamlessly on AWS ECS with Bedrock integration. Each project showcases how modern AI services can be containerized and deployed at scale, representing a paradigm shift in how we build intelligent applications.
+This repository demonstrates the future of software development: AI-powered applications running on AWS ECS with Bedrock integration. It features complete projects built with [AWS Strands](https://github.com/strands-agents/strands) and [LangGraph](https://github.com/langchain-ai/langgraph), both implementing MCP Servers as separate containerized services to showcase true distributed systems architecture for AI agent development. Each project demonstrates how modern AI services can be containerized and deployed at scale, highlighting different approaches to building intelligent, distributed applications.
 
 ## Overview
 
 This repository contains four example projects that showcase the evolution of AI application development on AWS. Each project demonstrates running AI Services on ECS and Bedrock, highlighting different levels of sophistication in the new era of model-driven development.
 
 *   **[Agent ECS Template](./agent-ecs-template)**: A foundational template using **direct `boto3` calls** to AWS Bedrock. It's a great starting point for understanding the basics of AI service integration in a client-server architecture.
-*   **[Agriculture Agent ECS](./agriculture-agent-ecs)**: A practical, real-world example using **`LangGraph`** to orchestrate a multi-tool agent system. It introduces MCP servers for distributed tool handling.
+*   **[Agriculture Agent ECS](./agriculture-agent-ecs)**: A practical, real-world example using **`LangGraph`** to orchestrate a multi-tool agent system with advanced state management. It showcases MCP servers for distributed tool handling and demonstrates LangGraph's checkpointer system for durable state persistence.
 *   **[Spring AI Agent ECS](./spring-ai-agent-ecs)**: A Java-based implementation using the **`Spring AI`** framework, showing how to build AI agents in a robust, enterprise-grade environment.
-*   **[Strands Weather Agent](./strands-weather-agent)** ⭐ (Most Important Demo): The pinnacle demonstration of model-driven development using **`AWS Strands`**. This project represents a paradigm shift where the agent, not the developer, orchestrates complex workflows with minimal code.
+*   **[Strands Weather Agent](./strands-weather-agent)**: A powerful demonstration of model-driven development using **`AWS Strands`**. This project showcases how agents can autonomously orchestrate complex workflows with minimal code, representing the declarative approach to AI development.
 
 ## The Evolution of AI Orchestration
 
@@ -21,32 +21,49 @@ This repository showcases the transition from traditional programming to model-d
     *   **Best for**: Simple, single-turn applications or learning the fundamentals of Bedrock.
 
 2.  **Graph-Based Orchestration: `LangGraph`** (`agriculture-agent-ecs`)
-    *   **What it is**: A framework for building stateful, multi-actor applications by defining workflows as a graph.
-    *   **Developer Effort**: Medium. Reduces boilerplate but still requires the developer to explicitly define the workflow, nodes, and edges.
-    *   **Best for**: Complex, multi-step processes where the flow is well-defined and needs to be explicitly managed.
+    *   **What it is**: A framework for building stateful, multi-actor applications with advanced state persistence capabilities.
+    *   **Developer Effort**: Medium. Provides powerful checkpointer system for saving conversation state to databases (PostgreSQL, SQLite), time-travel debugging, and cross-thread memory via the Store interface.
+    *   **Best for**: Applications requiring durable state persistence, human-in-the-loop workflows, and sharing user context across multiple conversations.
 
 3.  **Agent Framework: `Spring AI`** (`spring-ai-agent-ecs`)
     *   **What it is**: A comprehensive framework for building AI applications in Java, abstracting away low-level details.
     *   **Developer Effort**: Medium. Simplifies integration with models and tools within the Spring ecosystem.
     *   **Best for**: Enterprise Java developers looking to incorporate AI capabilities into new or existing Spring applications.
 
-4.  **Model-Driven Orchestration: `AWS Strands`** (`strands-weather-agent`) ⭐
-    *   **What it is**: A framework where the **AI model itself drives the orchestration**. The developer declares the desired output, and the agent figures out how to achieve it.
+4.  **Model-Driven Orchestration: `AWS Strands`** (`strands-weather-agent`)
+    *   **What it is**: A declarative framework where the **AI model itself drives the orchestration**. The developer declares the desired output, and the agent figures out how to achieve it.
     *   **Developer Effort**: Low. Eliminates nearly all orchestration code. The developer focuses on defining tools and output schemas.
     *   **Best for**: Building sophisticated, autonomous agents that can dynamically plan and execute complex tasks with minimal human-written code.
 
-### Why Strands Represents the Paradigm Shift
+### Two Powerful Approaches to AI Agent Development
 
-Traditional development required hundreds of lines of code to coordinate API calls, handle responses, and manage state. With Strands, you simply declare your desired output structure, and the agent orchestrates all the necessary steps internally. This is the new era of software development—where developers focus on business logic while AI handles the implementation details.
+Both **LangGraph** and **AWS Strands** represent significant advances in AI agent development, each with unique strengths:
 
-**Example: The Power of Model-Driven Development**
+**LangGraph: Stateful Intelligence with Persistence**
+- Excels at applications requiring durable state management and human oversight
+- Checkpointer system enables saving/loading conversation state from databases
+- Time-travel debugging through checkpoint history
+- Cross-thread memory sharing via the Store interface
+- Ideal for production systems needing audit trails and state recovery
+
+**AWS Strands: Declarative Autonomous Agents**
+- Minimizes orchestration code through model-driven development
+- Agents autonomously plan and execute complex workflows
+- Developers focus on defining tools and output schemas
+- Ideal for rapid prototyping and autonomous task execution
+
+**Example: Different Approaches, Same Power**
 ```python
-# Traditional: 200+ lines of orchestration code
-# vs.
-# Strands: Complete weather analysis in 4 lines
+# LangGraph: Explicit state management with persistence
+graph = StateGraph(AgentState)
+graph.add_node("weather", weather_node)
+graph.add_node("analysis", analysis_node)
+checkpointer = PostgresSaver(connection_string)
+app = graph.compile(checkpointer=checkpointer)
+
+# Strands: Declarative approach with minimal code
 agent = Agent(name="weather-assistant", foundation_model_config={"model_id": model_id})
 response = agent.structured_output(WeatherAnalysis, "Analyze weather for Chicago farming")
-# The agent automatically orchestrates tool calls, data gathering, and response formatting
 ```
 
 ## Key Features
