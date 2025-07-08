@@ -43,17 +43,23 @@ The agent automatically:
 5. **Declarative Design**: Focus on desired outcomes rather than process steps
 6. **Model Intelligence**: Trust the model's existing knowledge and capabilities
 
-This declarative approach offers a different way to build AI applications, prioritizing simplicity and rapid development. For a deep dive into these concepts, see our [Comprehensive Guide to Structured Output](GUIDE_STRUCTURED_OUTPUT_STRANDS.md).
+This declarative approach offers a different way to build AI applications, prioritizing simplicity and rapid development.
 
 ## Overview
 
-This project demonstrates how to build model-agnostic AI agent systems using **AWS Strands** for orchestration, **FastMCP** for distributed tool servers, and **AWS Bedrock** for foundation models. It showcases a streamlined multi-service architecture: **User → Agent → MCP Servers → Weather APIs**.
+This project demonstrates how to build model-agnostic AI agent systems using **AWS Strands** for orchestration, **FastMCP** for distributed tool servers, and **AWS Bedrock** for foundation models. It showcases a true distributed architecture where MCP servers run as separate containerized services, communicating via streaming HTTP protocol.
+
+### Key Architecture Highlights:
+- **Distributed MCP Servers**: Three separate MCP servers (forecast, historical, agricultural) deployed as independent services on different ports
+- **Streaming HTTP Communication**: MCP servers expose tools via HTTP endpoints using the Model Context Protocol with Server-Sent Events (SSE) for streaming responses
+- **Dynamic Tool Discovery**: AWS Strands automatically discovers available tools from each MCP server at runtime
+- **Service Mesh Pattern**: Each MCP server is a microservice handling specific domain logic, enabling horizontal scaling
 
 This demonstration showcases:
 - **True Model Agnosticism**: Switch between Claude, Llama, Cohere, and Amazon Nova models via environment variable
 - **Zero Code Changes Required**: Model selection happens entirely through configuration
-- **Docker Containerized**: Ready for local development and AWS ECS deployment
-- **Distributed Architecture**: Multiple MCP servers for different data domains
+- **Docker Containerized**: Each component (agent + 3 MCP servers) runs in its own container
+- **Remote Service Architecture**: MCP servers are accessed as remote HTTP services, not local libraries
 - **Real Weather Data**: Integration with Open-Meteo API for live weather information (no API key required)
 - **Different Code Approach**: Declarative style compared to explicit orchestration frameworks
 - **Deep Observability**: AWS Strands debug logging for insights into agent orchestration internals
@@ -95,14 +101,28 @@ agent = Agent(
 
 **Recommended Model**: Use `BEDROCK_MODEL_ID="anthropic.claude-3-haiku-20240307-v1:0"` for the best tool calling demonstration. This model excels at function/tool calling while being cost-effective.
 
+### Start Langfuse Locally
+```bash
+git clone https://github.com/langfuse/langfuse
+cd langfuse
+docker-compose up -d
+```
+Langfuse will be available at http://localhost:3000
+
+Login to Langfuse and create a new project. Generate API keys from the project settings, then configure your environment:
+
+```bash
+cp .env.example .env
+# Edit .env and add your Langfuse API keys
+```
+
 ### Local Development: Docker (FastAPI Web Server)
 
 Run the weather agent as a web API server with all services containerized:
 
 ```bash
 # 1. Configure AWS Bedrock model
-cp .env.example .env
-# Edit .env and set BEDROCK_MODEL_ID="anthropic.claude-3-haiku-20240307-v1:0"
+./scripts/aws-setup.sh
 
 # 2. Start all services with AWS credentials
 ./scripts/start_docker.sh
@@ -112,11 +132,14 @@ cp .env.example .env
 # 3. Test the services
 ./scripts/test_docker.sh
 
-# 4. Stop services when done
+# 4. Multi-turn conversation testing
+./scripts/multi-turn-test.sh
+
+# 5. Stop services when done
 ./scripts/stop_docker.sh
 ```
 
-The system includes **automatic observability** with Langfuse when configured. See the [Final Metrics Guide](FINAL_METRICS.md) for details.
+The system includes **automatic observability** with Langfuse when configured.
 
 ### Local Development: Direct Python Execution (Interactive Chatbot)
 
@@ -149,32 +172,32 @@ python chatbot.py --multi-turn-demo --debug  # Shows context retention
 cd .. && ./scripts/stop_servers.sh
 ```
 
-### API Examples (Docker/Web Server Mode)
-
-Use the provided test scripts to verify the deployment:
-
-```bash
-# Basic service testing
-./scripts/test_docker.sh
-
-# Multi-turn conversation testing
-./scripts/multi-turn-test.sh
-```
 
 ### AWS ECS Deployment
 
-Deploy to AWS ECS using the Python deployment scripts:
+#### 1. Deploy Langfuse to AWS (Optional but Recommended)
+
+For use Langfuse observability in AWS, first deploy Langfuse to your AWS cloud:
+- See https://github.com/retroryan/langfuse-samples/tree/main/langfuse-aws for an easy deployment guide
+- After deployment, login to Langfuse and create a new project
+- Generate API keys from the project settings
+
+#### 2. Configure Environment
 
 ```bash
-# Setup AWS, validate environment, and update cloud.env
-# This also creates ECR repositories if needed
-python infra/commands/setup.py
+# Copy and configure cloud environment
+cp cloud.env.example cloud.env
 
-# The configuration is automatically written to cloud.env
-# Edit cloud.env to customize if needed
+# Edit cloud.env to add:
+# - Your Langfuse API keys (LANGFUSE_PUBLIC_KEY, LANGFUSE_SECRET_KEY, LANGFUSE_HOST)
+# - Copy your BEDROCK_MODEL_ID from .env
+# - Any other custom settings
+
+# Setup AWS and validate environment
+python infra/commands/setup.py
 ```
 
-### Deploy Everything
+#### 3. Deploy Everything
 
 ```bash
 # Deploy complete infrastructure
@@ -229,13 +252,40 @@ graph TB
     style OM fill:#e3f2fd,stroke:#1976d2,stroke-width:2px
 ```
 
+### How AWS Strands Orchestrates MCP Servers
+
+1. **MCP Server Registration**: During initialization, AWS Strands connects to each MCP server via streaming HTTP:
+   ```python
+   mcp_servers = [
+       {"name": "forecast-server", "url": "http://forecast-server:7778/mcp/"},
+       {"name": "historical-server", "url": "http://historical-server:7779/mcp/"},
+       {"name": "agricultural-server", "url": "http://agricultural-server:7780/mcp/"}
+   ]
+   ```
+
+2. **Automatic Tool Discovery**: Strands queries each MCP server's `/mcp/` endpoint to discover available tools:
+   - Forecast Server exposes: `get_weather_forecast`
+   - Historical Server exposes: `get_historical_weather`
+   - Agricultural Server exposes: `get_agricultural_conditions`, `get_crop_recommendations`
+
+3. **Dynamic Tool Selection**: When processing a query, the Strands agent:
+   - Analyzes the user's intent using the LLM
+   - Selects appropriate tools from the discovered tool registry
+   - Makes streaming HTTP calls to the relevant MCP servers
+   - Aggregates responses and formulates the final answer
+
+4. **Streaming Communication**: All MCP communication uses Server-Sent Events (SSE) for real-time streaming:
+   - Tool invocations stream progress updates
+   - Results stream back as they're generated
+   - Errors are gracefully handled with fallback strategies
+
 **Note**: All components run as containerized services in AWS ECS with auto-scaling, health monitoring, and CloudWatch logging.
 
 **Key Differences from LangGraph:**
-- **Native MCP Client**: No custom HTTP clients or tool wrappers
-- **Automatic Discovery**: Tools discovered at runtime from MCP servers
-- **Built-in Streaming**: Response streaming handled by Strands
-- **In-Memory Sessions**: Lighter weight than LangGraph's persistent checkpointers
+- **Native MCP Client**: Built-in support for MCP protocol over HTTP
+- **Remote Service Communication**: Tools run as separate services, not embedded functions
+- **Automatic Discovery**: Tools discovered at runtime from remote MCP servers
+- **Streaming by Default**: All communication uses streaming HTTP/SSE
 
 ### Component Details
 
@@ -312,12 +362,12 @@ Every query shows actual performance data:
    └─ Cycles: 2
 ```
 
-### Auto-Detection Magic
+### Auto-Detection
 
-No flags or configuration needed! The system automatically detects Langfuse:
-- ✅ If Langfuse is running and configured → Full telemetry enabled
-- ✅ If Langfuse is not available → Continues normally without telemetry
-- ✅ No errors, no delays, no configuration
+The system automatically detects if Langfuse is configured and running:
+- ✅ If Langfuse credentials are configured → Telemetry is automatically enabled
+- ✅ If Langfuse is not configured → Continues normally without telemetry
+- ✅ No errors, no delays, graceful fallback
 
 ### Langfuse Integration
 
@@ -328,7 +378,6 @@ When Langfuse credentials are configured:
 4. Session and user attribution
 5. Performance monitoring and analysis
 
-See the [Final Metrics Guide](FINAL_METRICS.md) for complete details on the metrics implementation.
 
 ## Example Queries
 
