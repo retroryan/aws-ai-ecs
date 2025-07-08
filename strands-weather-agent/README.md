@@ -21,11 +21,11 @@ response = agent.structured_output(WeatherResponse, "What's the weather in Chica
 ```
 
 The agent automatically:
-- ✅ Extracts "Chicago" from the query using LLM intelligence
-- ✅ Knows Chicago's coordinates (41.8781, -87.6298) from its training
-- ✅ Calls weather tools with those coordinates
-- ✅ Formats the response according to your schema
-- ✅ Validates all data types and constraints
+- Extracts "Chicago" from the query using LLM intelligence
+- Knows Chicago's coordinates (41.8781, -87.6298) from its training
+- Calls weather tools with those coordinates
+- Formats the response according to your schema
+- Validates all data types and constraints
 
 ### Key Differences in Approaches
 

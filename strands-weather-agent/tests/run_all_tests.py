@@ -1,6 +1,6 @@
 #!/usr/bin/env python3
 """
-Run all async tests for the LangGraph + FastMCP Weather Agent in sequence.
+Run all async tests for the AWS Strands + FastMCP Weather Agent in sequence.
 This handles the async nature of the tests and provides a summary.
 """
 
@@ -13,12 +13,12 @@ from typing import List, Tuple, Optional
 # Add parent directory to path
 sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 
-# Import all test modules
-from test_simple_coordinate import test_simple
-from test_coordinate_usage import test_coordinate_provision
+# Import remaining test modules
 from test_coordinates import test_coordinates_simple as test_coordinates
-from test_diverse_cities import test_diverse_city_coordinates
-from test_coordinate_handling import test_forecast_server
+from test_mcp_agent_strands import test_basic_query, test_structured_output
+from test_structured_output import test_structured_responses
+from test_pydantic_validation import test_model_validation
+from test_mcp_servers_pydantic import test_mcp_servers
 
 
 async def run_test(test_name: str, test_func) -> Tuple[str, bool, float, Optional[str]]:
@@ -45,18 +45,19 @@ async def run_test(test_name: str, test_func) -> Tuple[str, bool, float, Optiona
 
 async def run_all_tests():
     """Run all tests and provide a summary."""
-    print("🚀 Starting LangGraph + FastMCP Weather Agent Test Suite")
+    print("🚀 Starting AWS Strands + FastMCP Weather Agent Test Suite")
     print("=" * 70)
     print("\n⚠️  Note: This will start MCP servers as subprocesses")
     print("⚠️  Some tests may take time due to API calls and LLM interactions\n")
     
     # Define all tests to run
     tests = [
-        ("Simple Coordinate Test", test_simple),
-        ("Coordinate Provision Test", test_coordinate_provision),
-        ("Forecast Server Test", test_forecast_server),
-        ("Coordinates General Test", test_coordinates),
-        ("Diverse Cities Test", test_diverse_city_coordinates),
+        ("Coordinates Test", test_coordinates),
+        ("Basic Agent Query Test", test_basic_query),
+        ("Agent Structured Output Test", test_structured_output),
+        ("Structured Responses Test", test_structured_responses),
+        ("Pydantic Model Validation Test", test_model_validation),
+        ("MCP Servers Integration Test", test_mcp_servers),
     ]
     
     results: List[Tuple[str, bool, float, Optional[str]]] = []
