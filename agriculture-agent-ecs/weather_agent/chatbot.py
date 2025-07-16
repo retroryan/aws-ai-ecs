@@ -16,7 +16,6 @@ Usage:
     python chatbot.py --structured        # Enable structured output display
 """
 
-import asyncio
 import sys
 import json
 from typing import Optional
@@ -43,11 +42,11 @@ class SimpleWeatherChatbot:
         self.agent = MCPWeatherAgent()
         self.initialized = False
     
-    async def initialize(self):
+    def initialize(self):
         """Initialize MCP connections."""
         if not self.initialized:
             print("🔌 Initializing MCP connections...")
-            await self.agent.initialize()
+            self.agent.initialize()
             self.initialized = True
             print("✅ Ready to answer weather questions!\n")
     
@@ -178,25 +177,13 @@ class SimpleWeatherChatbot:
             if field in json_data and json_data[field]:
                 print(f"  {field}: {json_data[field][:100] if isinstance(json_data[field], str) else json_data[field]}")
     
-    async def chat(self, query: str, show_structured: bool = False) -> str:
+    def chat(self, query: str, show_structured: bool = False) -> str:
         """Process a user query with optional structured output display."""
         if not self.initialized:
-            await self.initialize()
+            self.initialize()
         
         try:
             if show_structured:
-                # Hook into the agent to capture intermediate messages
-                original_invoke = self.agent.agent.ainvoke
-                captured_messages = []
-                
-                async def capturing_invoke(messages, **kwargs):
-                    result = await original_invoke(messages, **kwargs)
-                    captured_messages.extend(result.get("messages", []))
-                    return result
-                
-                # Temporarily replace the invoke method
-                self.agent.agent.ainvoke = capturing_invoke
-                
                 # Determine format based on query content
                 response_format = "agriculture" if any(
                     word in query.lower() 
@@ -206,35 +193,40 @@ class SimpleWeatherChatbot:
                 print(f"\n💭 Processing query for {response_format} format...")
                 
                 # Get structured response
-                structured_response = await self.agent.query_structured(query, response_format=response_format)
+                structured_response = self.agent.query_structured(query, response_format=response_format)
                 
-                # Restore original method
-                self.agent.agent.ainvoke = original_invoke
+                # Get the conversation history from the checkpoint to log tool calls
+                thread_id = self.agent.conversation_id
+                config = {"configurable": {"thread_id": thread_id}}
+                checkpoint = self.agent.checkpointer.get(config)
                 
-                # Log the process
-                self.log_tool_calls(captured_messages)
-                self.log_tool_responses(captured_messages)
+                if checkpoint and checkpoint.get("channel_values", {}).get("messages"):
+                    messages = checkpoint["channel_values"]["messages"]
+                    # Log the process
+                    self.log_tool_calls(messages)
+                    self.log_tool_responses(messages)
+                
                 self.log_structured_output(structured_response)
                 
                 # Return the summary
                 return structured_response.summary
             else:
                 # Regular text response
-                response = await self.agent.query(query)
+                response = self.agent.query(query)
                 return response
                 
-        except asyncio.TimeoutError:
+        except TimeoutError:
             return "Sorry, the request timed out. Please try again."
         except Exception as e:
             return f"An error occurred: {str(e)}"
     
-    async def cleanup(self):
+    def cleanup(self):
         """Clean up MCP connections."""
         if self.initialized:
-            await self.agent.cleanup()
+            self.agent.cleanup()
 
 
-async def interactive_mode(show_structured: bool = False):
+def interactive_mode(show_structured: bool = False):
     """Run the chatbot in interactive mode."""
     chatbot = SimpleWeatherChatbot()
     
@@ -299,7 +291,7 @@ async def interactive_mode(show_structured: bool = False):
     structured_enabled = show_structured
     
     try:
-        await chatbot.initialize()
+        chatbot.initialize()
         
         if structured_enabled:
             print("\n🔧 Structured output display is ON by default")
@@ -324,7 +316,7 @@ async def interactive_mode(show_structured: bool = False):
                     continue
                 
                 print("\n💭 Thinking...")
-                response = await chatbot.chat(query, show_structured=structured_enabled)
+                response = chatbot.chat(query, show_structured=structured_enabled)
                 print(f"\n🤖 Assistant: {response}")
                 
             except KeyboardInterrupt:
@@ -332,10 +324,10 @@ async def interactive_mode(show_structured: bool = False):
                 break
                 
     finally:
-        await chatbot.cleanup()
+        chatbot.cleanup()
 
 
-async def demo_mode(show_structured: bool = False):
+def demo_mode(show_structured: bool = False):
     """Run a demo showing MCP and structured output in action."""
     chatbot = SimpleWeatherChatbot()
     
@@ -354,7 +346,7 @@ async def demo_mode(show_structured: bool = False):
         print("Connecting to MCP servers over streaming HTTP.\n")
     
     try:
-        await chatbot.initialize()
+        chatbot.initialize()
         
         # Demo queries
         if show_structured:
@@ -378,11 +370,12 @@ async def demo_mode(show_structured: bool = False):
                 print("🏗️  [Structured Output Enabled]")
             print("-" * 50)
             
-            response = await chatbot.chat(query, show_structured=show_structured)
+            response = chatbot.chat(query, show_structured=show_structured)
             print(f"\nResponse: {response}")
             
             if i < len(queries):
-                await asyncio.sleep(1)  # Brief pause between queries
+                import time
+                time.sleep(1)  # Brief pause between queries
         
         print(f"\n{'='*50}")
         print("✅ Demo complete!")
@@ -395,10 +388,10 @@ async def demo_mode(show_structured: bool = False):
             print("• Both text and structured formats are available")
         
     finally:
-        await chatbot.cleanup()
+        chatbot.cleanup()
 
 
-async def main():
+def main():
     """Main entry point."""
     import argparse
     
@@ -412,21 +405,26 @@ async def main():
     
     if args.multi_turn_demo:
         from weather_agent.demo_scenarios import run_mcp_multi_turn_demo
-        await run_mcp_multi_turn_demo(structured=args.structured)
+        # Convert async demo to sync
+        import asyncio
+        loop = asyncio.new_event_loop()
+        asyncio.set_event_loop(loop)
+        loop.run_until_complete(run_mcp_multi_turn_demo(structured=args.structured))
+        loop.close()
     elif args.demo:
-        await demo_mode(show_structured=args.structured)
+        demo_mode(show_structured=args.structured)
     elif args.query:
         # Single query mode
         chatbot = SimpleWeatherChatbot()
         try:
-            await chatbot.initialize()
-            response = await chatbot.chat(args.query, show_structured=args.structured)
+            chatbot.initialize()
+            response = chatbot.chat(args.query, show_structured=args.structured)
             print(f"\n🤖 Assistant: {response}")
         finally:
-            await chatbot.cleanup()
+            chatbot.cleanup()
     else:
-        await interactive_mode(show_structured=args.structured)
+        interactive_mode(show_structured=args.structured)
 
 
 if __name__ == "__main__":
-    asyncio.run(main())
+    main()

@@ -20,7 +20,7 @@ import os
 import asyncio
 import logging
 import uvicorn
-from weather_agent.mcp_agent import MCPWeatherAgent
+from weather_agent.async_mcp_agent import AsyncMCPWeatherAgent
 
 logging.basicConfig(level=os.getenv('LOG_LEVEL', 'INFO'))
 logger = logging.getLogger(__name__)
@@ -51,7 +51,7 @@ async def startup_event():
             os.environ['AGRICULTURAL_URL'] = os.getenv('MCP_AGRICULTURAL_URL')
         
         logger.info("Initializing Weather Agent...")
-        agent = MCPWeatherAgent()
+        agent = AsyncMCPWeatherAgent()
         await agent.initialize()
         logger.info("Weather Agent initialized successfully")
     except Exception as e:

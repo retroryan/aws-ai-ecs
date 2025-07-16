@@ -9,7 +9,6 @@ This module demonstrates how to use MCP servers with LangGraph:
 - Implements structured output using LangGraph Option 1 approach in this document https://langchain-ai.github.io/langgraph/how-tos/react-agent-structured-output/
 """
 
-import asyncio
 import os
 import json
 from typing import Optional, Dict, Any, Union
@@ -24,6 +23,7 @@ import uuid
 from pydantic import BaseModel, Field
 from datetime import datetime
 from typing import List
+import time
 
 # Load environment variables
 from pathlib import Path
@@ -65,11 +65,11 @@ class MCPWeatherAgent:
         if not model_id:
             print("❌ ERROR: BEDROCK_MODEL_ID environment variable is required")
             print("   Please set BEDROCK_MODEL_ID to one of:")
-            print("   - anthropic.claude-3-5-sonnet-20240620-v1:0")
-            print("   - anthropic.claude-3-haiku-20240307-v1:0")
+            print("   - us.anthropic.claude-3-5-sonnet-20241022-v2:0")
+            print("   - us.anthropic.claude-3-haiku-20240307-v1:0")
             print("   - meta.llama3-70b-instruct-v1:0")
             print("   - cohere.command-r-plus-v1:0")
-            print("\nExample: export BEDROCK_MODEL_ID=anthropic.claude-3-5-sonnet-20240620-v1:0")
+            print("\nExample: export BEDROCK_MODEL_ID=us.anthropic.claude-3-5-sonnet-20241022-v2:0")
             import sys
             sys.exit(1)
         
@@ -123,7 +123,7 @@ class MCPWeatherAgent:
             )
         )
         
-    async def initialize(self):
+    def initialize(self):
         """Initialize MCP connections and create the LangGraph agent."""
         # Configure MCP servers with HTTP endpoints
         # Use environment variables with fallback to local development URLs
@@ -144,7 +144,39 @@ class MCPWeatherAgent:
         
         # Create MCP client and discover tools
         self.mcp_client = MultiServerMCPClient(server_config)
-        self.tools = await self.mcp_client.get_tools()
+        # Convert async get_tools to sync
+        import asyncio
+        loop = asyncio.new_event_loop()
+        asyncio.set_event_loop(loop)
+        async_tools = loop.run_until_complete(self.mcp_client.get_tools())
+        loop.close()
+        
+        # Wrap async tools to work synchronously
+        from langchain_core.tools import Tool
+        self.tools = []
+        for async_tool in async_tools:
+            def make_sync_func(tool):
+                def sync_func(**kwargs):
+                    # Create new event loop for each invocation
+                    loop = asyncio.new_event_loop()
+                    asyncio.set_event_loop(loop)
+                    try:
+                        result = loop.run_until_complete(tool.ainvoke(kwargs))
+                        return result
+                    finally:
+                        loop.close()
+                return sync_func
+            
+            # Create a synchronous version of the tool
+            # Use StructuredTool to preserve the input structure
+            from langchain_core.tools import StructuredTool
+            sync_tool = StructuredTool(
+                name=async_tool.name,
+                description=async_tool.description,
+                func=make_sync_func(async_tool),
+                args_schema=async_tool.args_schema
+            )
+            self.tools.append(sync_tool)
         
         print(f"✅ Connected to {len(server_config)} MCP servers")
         print(f"🔧 Available tools: {len(self.tools)}")
@@ -158,7 +190,7 @@ class MCPWeatherAgent:
             checkpointer=self.checkpointer
         )
     
-    async def query(self, user_query: str, thread_id: str = None) -> str:
+    def query(self, user_query: str, thread_id: str = None) -> str:
         """
         Process a query using the LangGraph agent with conversation memory.
         
@@ -187,16 +219,21 @@ class MCPWeatherAgent:
             messages = {"messages": [HumanMessage(content=user_query)]}
             
             # Check if this is the first message in the thread
-            checkpoint = await self.checkpointer.aget(config)
+            checkpoint = self.checkpointer.get(config)
             if checkpoint is None or not checkpoint.get("channel_values", {}).get("messages"):
                 # First message in thread - include system message
                 messages["messages"].insert(0, self.system_message)
             
-            # Run the agent with checkpointer config
-            result = await asyncio.wait_for(
-                self.agent.ainvoke(messages, config=config),
-                timeout=120.0
-            )
+            # Run the agent with checkpointer config (sync version with timeout)
+            start_time = time.time()
+            timeout = 120.0
+            
+            # Use synchronous invoke
+            result = self.agent.invoke(messages, config=config)
+            
+            # Check if we exceeded timeout
+            if time.time() - start_time > timeout:
+                raise TimeoutError("Query timed out after 120 seconds")
             
             # Log which tools were used
             tool_calls = []
@@ -212,15 +249,15 @@ class MCPWeatherAgent:
             final_message = result["messages"][-1]
             return final_message.content
             
-        except asyncio.TimeoutError:
-            raise asyncio.TimeoutError("Query timed out after 120 seconds")
+        except TimeoutError:
+            raise TimeoutError("Query timed out after 120 seconds")
         except Exception as e:
             print(f"\n❌ Error during query: {e}")
             import traceback
             traceback.print_exc()
             return f"An error occurred: {str(e)}"
     
-    async def query_structured(
+    def query_structured(
         self, 
         user_query: str, 
         response_format: str = "forecast", 
@@ -246,57 +283,147 @@ class MCPWeatherAgent:
             raise RuntimeError("Agent not initialized. Call initialize() first.")
         
         # First get the raw response from the agent
-        raw_response = await self.query(user_query, thread_id)
+        raw_response = self.query(user_query, thread_id)
         
-        # Create structured output parser based on format
+        # Use the thread_id to get the conversation history
+        thread_id = thread_id or self.conversation_id
+        config = {"configurable": {"thread_id": thread_id}}
+        checkpoint = self.checkpointer.get(config)
+        
+        # Extract tool responses from the checkpoint
+        tool_data = {}
+        if checkpoint and checkpoint.get("channel_values", {}).get("messages"):
+            messages = checkpoint["channel_values"]["messages"]
+            
+            # Find all tool response messages
+            for msg in messages:
+                if hasattr(msg, 'type') and msg.type == 'tool' and hasattr(msg, 'name') and hasattr(msg, 'content'):
+                    # Extract JSON data from tool response
+                    content_str = str(msg.content)
+                    json_start = content_str.find('{')
+                    if json_start != -1:
+                        try:
+                            # Find the matching closing brace
+                            brace_count = 0
+                            json_end = -1
+                            for i, char in enumerate(content_str[json_start:]):
+                                if char == '{':
+                                    brace_count += 1
+                                elif char == '}':
+                                    brace_count -= 1
+                                    if brace_count == 0:
+                                        json_end = json_start + i + 1
+                                        break
+                            
+                            if json_end > 0:
+                                json_data = json.loads(content_str[json_start:json_end])
+                                tool_data[msg.name] = json_data
+                        except:
+                            pass
+        
+        # Transform based on format
         if response_format == "agriculture":
-            parser = PydanticOutputParser(pydantic_object=AgricultureAssessment)
-            system_prompt = """
-            Based on the weather data provided, create a structured agricultural assessment.
-            Extract key information about soil conditions, temperatures, moisture, and provide
-            farming recommendations. Focus on planting conditions and agricultural decision-making.
+            # Create agricultural assessment
+            ag_data = tool_data.get("get_agricultural_conditions", {})
             
-            {format_instructions}
+            # Extract recommendations from raw response or tool data
+            recommendations = []
+            if "recommendations" in ag_data:
+                recommendations = ag_data["recommendations"]
+            elif "crop_recommendations" in ag_data:
+                recommendations = ag_data["crop_recommendations"]
+            else:
+                # Parse from the raw response text
+                if "recommend" in raw_response.lower():
+                    # Simple extraction of recommendations
+                    lines = raw_response.split('\n')
+                    for line in lines:
+                        if "•" in line or "-" in line or line.strip().startswith(('1.', '2.', '3.')):
+                            rec = line.strip().lstrip('•-123456789. ')
+                            if rec and len(rec) > 10:
+                                recommendations.append(rec)
             
-            Weather data to analyze:
-            {weather_data}
-            """
+            return AgricultureAssessment(
+                location=ag_data.get("location", user_query),
+                assessment_date=ag_data.get("assessment_date", datetime.now().isoformat()),
+                temperature=ag_data.get("temperature"),
+                soil_temperature=ag_data.get("soil_temperature_0_to_10cm"),
+                soil_moisture=ag_data.get("soil_moisture_0_to_10cm"),
+                precipitation=ag_data.get("precipitation"),
+                evapotranspiration=ag_data.get("evapotranspiration"),
+                planting_conditions=ag_data.get("conditions", "Good" if "good" in raw_response.lower() else "Variable"),
+                frost_risk=ag_data.get("frost_risk", "low" if "frost" not in raw_response.lower() else "moderate"),
+                growing_degree_days=ag_data.get("growing_degree_days"),
+                recommendations=recommendations[:5] if recommendations else ["Monitor conditions regularly"],
+                data_source="Open-Meteo Agricultural API",
+                summary=raw_response
+            )
         else:
-            parser = PydanticOutputParser(pydantic_object=OpenMeteoResponse)
-            system_prompt = """
-            Based on the weather data provided, create a structured weather forecast response.
-            Extract current conditions, daily forecasts, and location information.
-            Consolidate all Open-Meteo data into the structured format.
+            # Create weather forecast response
+            forecast_data = tool_data.get("get_weather_forecast", {})
             
-            IMPORTANT: If coordinates are not available or are null, omit the coordinates field entirely 
-            rather than including null values.
+            # Extract location from tool data or query
+            location = forecast_data.get("location", user_query)
+            if isinstance(location, dict):
+                location = location.get("name", user_query)
             
-            {format_instructions}
+            # Build current conditions
+            current = None
+            if "current" in forecast_data:
+                curr = forecast_data["current"]
+                current = WeatherCondition(
+                    temperature=curr.get("temperature_2m"),
+                    feels_like=curr.get("apparent_temperature"),
+                    humidity=curr.get("relative_humidity_2m"),
+                    wind_speed=curr.get("wind_speed_10m"),
+                    wind_direction=curr.get("wind_direction_10m"),
+                    precipitation=curr.get("precipitation"),
+                    conditions=curr.get("weather_code", "Clear")
+                )
             
-            Weather data to analyze:
-            {weather_data}
-            """
+            # Build daily forecast
+            daily_forecast = []
+            if "daily" in forecast_data:
+                daily = forecast_data["daily"]
+                times = daily.get("time", [])
+                max_temps = daily.get("temperature_2m_max", [])
+                min_temps = daily.get("temperature_2m_min", [])
+                precip = daily.get("precipitation_sum", [])
+                
+                for i in range(min(5, len(times))):  # Up to 5 days
+                    daily_forecast.append(DailyForecast(
+                        date=times[i] if i < len(times) else None,
+                        max_temperature=max_temps[i] if i < len(max_temps) else None,
+                        min_temperature=min_temps[i] if i < len(min_temps) else None,
+                        precipitation=precip[i] if i < len(precip) else None,
+                        conditions="Variable"
+                    ))
+            
+            return OpenMeteoResponse(
+                location=str(location),
+                coordinates=forecast_data.get("coordinates"),
+                timezone=forecast_data.get("timezone"),
+                current_conditions=current,
+                daily_forecast=daily_forecast,
+                data_source="Open-Meteo Weather API",
+                summary=raw_response
+            )
         
-        # Create prompt template
-        prompt = PromptTemplate(
-            template=system_prompt,
-            input_variables=["weather_data"],
-            partial_variables={"format_instructions": parser.get_format_instructions()}
-        )
-        
-        # Create LLM chain for structured parsing
-        llm_chain = prompt | self.llm | parser
-        
+        # Fallback if parsing fails
         try:
-            # Parse the raw response into structured format
-            structured_response = await llm_chain.ainvoke({"weather_data": raw_response})
-            
-            print(f"\n📊 Generated structured {response_format} response")
-            return structured_response
-            
+            if response_format == "agriculture":
+                return AgricultureAssessment(
+                    location="Unknown",
+                    planting_conditions="Unable to assess",
+                    summary=raw_response
+                )
+            else:
+                return OpenMeteoResponse(
+                    location="Unknown",
+                    summary=raw_response
+                )
         except Exception as e:
-            print(f"\n⚠️ Error parsing structured output: {e}")
-            # Fallback: return minimal structured response
+            # Final fallback
             if response_format == "agriculture":
                 return AgricultureAssessment(
                     location="Unknown",
@@ -320,15 +447,15 @@ class MCPWeatherAgent:
         self.conversation_id = str(uuid.uuid4())
         print(f"🆕 Started new conversation: {self.conversation_id}")
     
-    async def cleanup(self):
+    def cleanup(self):
         """Clean up MCP connections (HTTP connections are closed automatically)."""
         # The MultiServerMCPClient handles HTTP connection cleanup
         pass
 
 
 # Convenience function
-async def create_mcp_weather_agent():
+def create_mcp_weather_agent():
     """Create and initialize an MCP weather agent."""
     agent = MCPWeatherAgent()
-    await agent.initialize()
+    agent.initialize()
     return agent
