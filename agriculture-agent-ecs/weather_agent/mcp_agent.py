@@ -11,7 +11,7 @@ This module demonstrates how to use MCP servers with LangGraph:
 
 import os
 import json
-from typing import Optional, Dict, Any, Union
+from typing import Optional, Dict, Any, Union, List
 from langgraph.prebuilt import create_react_agent
 from langgraph.checkpoint.memory import MemorySaver
 from langchain.chat_models import init_chat_model
@@ -22,7 +22,6 @@ from langchain_core.prompts import PromptTemplate
 import uuid
 from pydantic import BaseModel, Field
 from datetime import datetime
-from typing import List
 import time
 
 # Load environment variables
@@ -41,6 +40,14 @@ from .models import (
     DailyForecast,
     OpenMeteoResponse,
     AgricultureAssessment
+)
+
+# Import tool response models
+from .tool_responses import (
+    ConversationState,
+    ToolResponse,
+    ToolCallInfo,
+    create_tool_response
 )
 
 
@@ -257,6 +264,105 @@ class MCPWeatherAgent:
             traceback.print_exc()
             return f"An error occurred: {str(e)}"
     
+    def extract_tool_responses(self, config: dict) -> List[ToolResponse]:
+        """
+        Extract and parse tool responses from conversation state.
+        
+        LangGraph serializes tool responses as JSON strings in ToolMessage.content,
+        so we parse these to create structured Pydantic models.
+        
+        Args:
+            config: Checkpointer configuration with thread_id
+            
+        Returns:
+            List of parsed ToolResponse objects
+        """
+        tool_responses = []
+        checkpoint = self.checkpointer.get(config)
+        
+        if checkpoint and checkpoint.get("channel_values", {}).get("messages"):
+            messages = checkpoint["channel_values"]["messages"]
+            
+            for msg in messages:
+                # Check if it's a ToolMessage
+                if hasattr(msg, 'type') and msg.type == 'tool' and hasattr(msg, 'name'):
+                    # Create appropriate tool response model
+                    tool_response = create_tool_response(msg.name, msg.content)
+                    tool_responses.append(tool_response)
+        
+        return tool_responses
+    
+    def extract_tool_calls(self, config: dict) -> List[ToolCallInfo]:
+        """
+        Extract tool calls made by the agent from conversation state.
+        
+        Args:
+            config: Checkpointer configuration with thread_id
+            
+        Returns:
+            List of ToolCallInfo objects
+        """
+        tool_calls = []
+        checkpoint = self.checkpointer.get(config)
+        
+        if checkpoint and checkpoint.get("channel_values", {}).get("messages"):
+            messages = checkpoint["channel_values"]["messages"]
+            
+            for msg in messages:
+                if hasattr(msg, 'tool_calls') and msg.tool_calls:
+                    for call in msg.tool_calls:
+                        tool_call = ToolCallInfo(
+                            tool_name=call.get('name', 'unknown'),
+                            arguments=call.get('args', {}),
+                            call_id=call.get('id')
+                        )
+                        tool_calls.append(tool_call)
+        
+        return tool_calls
+    
+    def get_conversation_state(self, thread_id: str = None) -> ConversationState:
+        """
+        Get a clean representation of the current conversation state.
+        
+        Returns a ConversationState object with parsed tool responses and calls.
+        
+        Args:
+            thread_id: Optional thread ID. Uses instance conversation_id if not provided.
+            
+        Returns:
+            ConversationState object with all conversation data
+        """
+        thread_id = thread_id or self.conversation_id
+        config = {"configurable": {"thread_id": thread_id}}
+        
+        # Extract tool responses and calls
+        tool_responses = self.extract_tool_responses(config)
+        tool_calls = self.extract_tool_calls(config)
+        
+        # Get messages in a clean format
+        messages = []
+        checkpoint = self.checkpointer.get(config)
+        if checkpoint and checkpoint.get("channel_values", {}).get("messages"):
+            for msg in checkpoint["channel_values"]["messages"]:
+                message_data = {
+                    "type": getattr(msg, 'type', 'unknown'),
+                    "content": msg.content if hasattr(msg, 'content') else str(msg),
+                }
+                # Add role for human/ai messages
+                if hasattr(msg, 'role'):
+                    message_data["role"] = msg.role
+                # Add tool name for tool messages
+                if hasattr(msg, 'name'):
+                    message_data["name"] = msg.name
+                messages.append(message_data)
+        
+        return ConversationState(
+            thread_id=thread_id,
+            messages=messages,
+            tool_calls=tool_calls,
+            tool_responses=tool_responses
+        )
+    
     def query_structured(
         self, 
         user_query: str, 
@@ -285,46 +391,30 @@ class MCPWeatherAgent:
         # First get the raw response from the agent
         raw_response = self.query(user_query, thread_id)
         
-        # Use the thread_id to get the conversation history
-        thread_id = thread_id or self.conversation_id
-        config = {"configurable": {"thread_id": thread_id}}
-        checkpoint = self.checkpointer.get(config)
+        # Get the conversation state with parsed tool responses
+        conversation_state = self.get_conversation_state(thread_id)
         
-        # Extract tool responses from the checkpoint
+        # Build a tool_data dict for backward compatibility
         tool_data = {}
-        if checkpoint and checkpoint.get("channel_values", {}).get("messages"):
-            messages = checkpoint["channel_values"]["messages"]
-            
-            # Find all tool response messages
-            for msg in messages:
-                if hasattr(msg, 'type') and msg.type == 'tool' and hasattr(msg, 'name') and hasattr(msg, 'content'):
-                    # Extract JSON data from tool response
-                    content_str = str(msg.content)
-                    json_start = content_str.find('{')
-                    if json_start != -1:
-                        try:
-                            # Find the matching closing brace
-                            brace_count = 0
-                            json_end = -1
-                            for i, char in enumerate(content_str[json_start:]):
-                                if char == '{':
-                                    brace_count += 1
-                                elif char == '}':
-                                    brace_count -= 1
-                                    if brace_count == 0:
-                                        json_end = json_start + i + 1
-                                        break
-                            
-                            if json_end > 0:
-                                json_data = json.loads(content_str[json_start:json_end])
-                                tool_data[msg.name] = json_data
-                        except:
-                            pass
+        for tool_response in conversation_state.tool_responses:
+            if tool_response.success and tool_response.raw_response:
+                tool_data[tool_response.tool_name] = tool_response.raw_response
         
         # Transform based on format
         if response_format == "agriculture":
             # Create agricultural assessment
             ag_data = tool_data.get("get_agricultural_conditions", {})
+            
+            # Extract location properly
+            location = ag_data.get("location")
+            if not location:
+                # Look for the location in tool calls
+                for tool_call in conversation_state.tool_calls:
+                    if tool_call.tool_name == "get_agricultural_conditions" and "location" in tool_call.arguments:
+                        location = tool_call.arguments["location"]
+                        break
+            if not location:
+                location = "Unknown Location"
             
             # Extract recommendations from raw response or tool data
             recommendations = []
@@ -344,7 +434,7 @@ class MCPWeatherAgent:
                                 recommendations.append(rec)
             
             return AgricultureAssessment(
-                location=ag_data.get("location", user_query),
+                location=location,
                 assessment_date=ag_data.get("assessment_date", datetime.now().isoformat()),
                 temperature=ag_data.get("temperature"),
                 soil_temperature=ag_data.get("soil_temperature_0_to_10cm"),
@@ -362,10 +452,20 @@ class MCPWeatherAgent:
             # Create weather forecast response
             forecast_data = tool_data.get("get_weather_forecast", {})
             
-            # Extract location from tool data or query
-            location = forecast_data.get("location", user_query)
-            if isinstance(location, dict):
-                location = location.get("name", user_query)
+            # Extract location from tool data
+            location = forecast_data.get("location")
+            # If location is not in the response, try to extract from the tool call args
+            if not location:
+                # Look for the location in tool calls
+                for tool_call in conversation_state.tool_calls:
+                    if tool_call.tool_name == "get_weather_forecast" and "location" in tool_call.arguments:
+                        location = tool_call.arguments["location"]
+                        break
+            # Fallback to a generic location if still not found
+            if not location:
+                location = "Unknown Location"
+            elif isinstance(location, dict):
+                location = location.get("name", str(location))
             
             # Build current conditions
             current = None

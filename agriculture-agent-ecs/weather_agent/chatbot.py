@@ -33,6 +33,11 @@ else:
 
 from weather_agent.mcp_agent import MCPWeatherAgent
 from weather_agent.models import OpenMeteoResponse, AgricultureAssessment
+from weather_agent.tool_responses import (
+    ConversationState, 
+    WeatherForecastResponse, 
+    AgriculturalConditionsResponse
+)
 
 
 class SimpleWeatherChatbot:
@@ -50,92 +55,52 @@ class SimpleWeatherChatbot:
             self.initialized = True
             print("✅ Ready to answer weather questions!\n")
     
-    def log_tool_calls(self, messages):
-        """Extract and log tool calls from agent messages."""
-        tool_calls_found = []
-        
-        for msg in messages:
-            if hasattr(msg, 'tool_calls') and msg.tool_calls:
-                for call in msg.tool_calls:
-                    tool_calls_found.append({
-                        'name': call['name'],
-                        'args': call.get('args', {})
-                    })
-        
-        if tool_calls_found:
-            print("\n📞 Tool Calls Made:")
-            for i, call in enumerate(tool_calls_found, 1):
-                print(f"\n{i}. {call['name']}")
-                if call['args']:
-                    args_json = json.dumps(call['args'], indent=2)
-                    print(f"   Arguments: {args_json}")
+    def log_tool_calls(self, conversation_state: ConversationState):
+        """Log tool calls from conversation state."""
+        if not conversation_state.tool_calls:
+            return
+            
+        print("\n📞 Tool Calls Made:")
+        for i, tool_call in enumerate(conversation_state.tool_calls, 1):
+            print(f"\n{i}. {tool_call.tool_name}")
+            if tool_call.arguments:
+                args_json = json.dumps(tool_call.arguments, indent=2)
+                print(f"   Arguments: {args_json}")
     
-    def log_tool_responses(self, messages):
-        """Extract and log tool responses showing raw JSON data."""
-        tool_responses = []
+    def log_tool_responses(self, conversation_state: ConversationState):
+        """Log tool responses using clean Pydantic models."""
+        if not conversation_state.tool_responses:
+            return
         
-        for msg in messages:
-            # Check if it's specifically a ToolMessage (has type 'tool')
-            if hasattr(msg, 'type') and msg.type == 'tool' and hasattr(msg, 'name') and hasattr(msg, 'content'):
-                # This is a tool response message
-                # Extract the JSON part from the content
-                content_str = str(msg.content)
-                json_start = content_str.find('{')
-                
-                if json_start != -1:
-                    try:
-                        # Extract and parse the JSON portion
-                        json_str = content_str[json_start:]
-                        # Find the matching closing brace
-                        brace_count = 0
-                        json_end = -1
-                        for i, char in enumerate(json_str):
-                            if char == '{':
-                                brace_count += 1
-                            elif char == '}':
-                                brace_count -= 1
-                                if brace_count == 0:
-                                    json_end = i + 1
-                                    break
-                        
-                        if json_end > 0:
-                            json_data = json.loads(json_str[:json_end])
-                            tool_responses.append({
-                                'tool': msg.name,
-                                'content': json_data,
-                                'full_content': content_str[:json_start]  # The text before JSON
-                            })
-                    except:
-                        # If JSON parsing fails, store the raw content
-                        tool_responses.append({
-                            'tool': msg.name,
-                            'content': content_str
-                        })
-                else:
-                    # No JSON found, store as is
-                    tool_responses.append({
-                        'tool': msg.name,
-                        'content': content_str
-                    })
-        
-        if tool_responses:
-            print("\n📊 Raw Tool Responses:")
-            for resp in tool_responses:
-                print(f"\n{resp['tool']} returned:")
-                if 'full_content' in resp:
-                    print(resp['full_content'].strip())
-                if isinstance(resp['content'], dict):
-                    # Truncate to 200 characters as requested
-                    preview = json.dumps(resp['content'], indent=2)
-                    if len(preview) > 200:
-                        preview = preview[:200] + "\n... (truncated)"
-                    print(preview)
-                elif isinstance(resp['content'], str):
-                    # For non-JSON content, also truncate
-                    preview = resp['content']
-                    if len(preview) > 200:
-                        preview = preview[:200] + "... (truncated)"
-                    print(preview)
+        print("\n📊 Raw Tool Responses:")
+        for response in conversation_state.tool_responses:
+            print(f"\n{response.tool_name} returned:")
+            
+            if not response.success:
+                print(f"❌ Error: {response.error}")
+                continue
+            
+            # Show key fields based on tool type
+            if isinstance(response, WeatherForecastResponse):
+                if response.location:
+                    loc_name = response.location.get('name', 'Unknown') if isinstance(response.location, dict) else str(response.location)
+                    print(f"📍 Location: {loc_name}")
+                if response.current:
+                    temp = response.current.get('temperature_2m')
+                    if temp is not None:
+                        print(f"🌡️  Current: {temp}°C")
+            elif isinstance(response, AgriculturalConditionsResponse):
+                if response.location:
+                    print(f"📍 Location: {response.location}")
+                if response.conditions:
+                    print(f"🌱 Conditions: {response.conditions}")
+            
+            # Show truncated raw response
+            if response.raw_response:
+                preview = json.dumps(response.raw_response, indent=2)
+                if len(preview) > 200:
+                    preview = preview[:200] + "\n... (truncated)"
+                print(preview)
     
     def log_structured_output(self, structured_data):
         """Log the final structured output model."""
@@ -195,16 +160,12 @@ class SimpleWeatherChatbot:
                 # Get structured response
                 structured_response = self.agent.query_structured(query, response_format=response_format)
                 
-                # Get the conversation history from the checkpoint to log tool calls
-                thread_id = self.agent.conversation_id
-                config = {"configurable": {"thread_id": thread_id}}
-                checkpoint = self.agent.checkpointer.get(config)
+                # Get the conversation state with clean extracted data
+                conversation_state = self.agent.get_conversation_state()
                 
-                if checkpoint and checkpoint.get("channel_values", {}).get("messages"):
-                    messages = checkpoint["channel_values"]["messages"]
-                    # Log the process
-                    self.log_tool_calls(messages)
-                    self.log_tool_responses(messages)
+                # Log the process using clean models
+                self.log_tool_calls(conversation_state)
+                self.log_tool_responses(conversation_state)
                 
                 self.log_structured_output(structured_response)
                 

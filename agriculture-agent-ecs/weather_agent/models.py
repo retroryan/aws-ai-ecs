@@ -5,7 +5,7 @@ This module contains all Pydantic models used throughout the weather agent,
 including structured output models for LangGraph and query classification.
 """
 
-from typing import Optional, List, Any, Dict
+from typing import Optional, List, Any, Dict, Union
 from pydantic import BaseModel, Field
 from enum import Enum
 
@@ -14,18 +14,20 @@ from enum import Enum
 class WeatherCondition(BaseModel):
     """Current weather condition."""
     temperature: Optional[float] = Field(None, description="Temperature in Celsius")
+    feels_like: Optional[float] = Field(None, description="Feels like temperature in Celsius")
     humidity: Optional[int] = Field(None, description="Relative humidity percentage")
     precipitation: Optional[float] = Field(None, description="Current precipitation in mm")
     wind_speed: Optional[float] = Field(None, description="Wind speed in km/h")
-    conditions: Optional[str] = Field(None, description="Weather description")
+    wind_direction: Optional[float] = Field(None, description="Wind direction in degrees")
+    conditions: Optional[Union[str, int]] = Field(None, description="Weather description or code")
 
 
 class DailyForecast(BaseModel):
     """Daily weather forecast."""
-    date: str = Field(..., description="Date in YYYY-MM-DD format")
-    temperature_max: Optional[float] = Field(None, description="Maximum temperature in Celsius")
-    temperature_min: Optional[float] = Field(None, description="Minimum temperature in Celsius")
-    precipitation_sum: Optional[float] = Field(None, description="Total precipitation in mm")
+    date: Optional[str] = Field(None, description="Date in YYYY-MM-DD format")
+    max_temperature: Optional[float] = Field(None, description="Maximum temperature in Celsius")
+    min_temperature: Optional[float] = Field(None, description="Minimum temperature in Celsius") 
+    precipitation: Optional[float] = Field(None, description="Total precipitation in mm")
     conditions: Optional[str] = Field(None, description="Weather conditions summary")
 
 
