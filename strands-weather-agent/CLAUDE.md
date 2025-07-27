@@ -9,12 +9,12 @@ This project demonstrates how to build a model-agnostic AI agent system using AW
 ## Critical Configuration: MCP Server Health Checks
 
 ### Understanding MCP Server Health Checks
-MCP servers using FastMCP don't provide traditional REST health endpoints at the root path. The `/mcp/` endpoint requires specific headers and a session ID, making it unsuitable for simple health checks.
+The MCP server using FastMCP doesn't provide traditional REST health endpoints at the root path. The `/mcp/` endpoint requires specific headers and a session ID, making it unsuitable for simple health checks.
 
 ### Health Check Strategy
 
 #### For Local Development (Docker Compose)
-The MCP servers implement custom health endpoints for Docker Compose only:
+The MCP server implements a custom health endpoint for Docker Compose only:
 
 ```python
 from fastmcp import FastMCP
@@ -42,9 +42,9 @@ healthcheck:
 3. Have built-in retry logic in the main service to handle connection timing
 
 ### Current Implementation Status
-- ✅ All MCP servers have `/health` endpoints implemented (for Docker only)
+- ✅ The MCP server has a `/health` endpoint implemented (for Docker only)
 - ✅ Docker Compose has health checks configured
-- ✅ ECS task definitions correctly have NO health checks for MCP servers
+- ✅ ECS task definitions correctly have NO health checks for the MCP server
 - ✅ Main service has proper health check configuration and retry logic
 
 ## Architecture Overview
@@ -85,10 +85,11 @@ healthcheck:
 
 ### System Components
 
-1. **MCP Servers** (Running on separate ports):
-   - **Forecast Server** (port 7778): Weather forecast data
-   - **Historical Server** (port 7779): Historical weather information
-   - **Agricultural Server** (port 7780): Agricultural conditions and recommendations
+1. **MCP Server** (Running on port 7778):
+   - **Unified Weather Server**: Provides all weather-related tools:
+     - `get_weather_forecast`: Weather forecast data
+     - `get_historical_weather`: Historical weather information
+     - `get_agricultural_conditions`: Agricultural conditions and recommendations
 
 2. **Weather Agent**: 
    - Built with AWS Strands' native Agent class
@@ -112,9 +113,10 @@ healthcheck:
 - `weather_agent/mcp_agent.py`: AWS Strands agent implementation with pure async and Langfuse v3 integration
 - `weather_agent/langfuse_telemetry.py`: Langfuse v3 observability integration with deterministic trace IDs
 - `mcp_servers/`: FastMCP server implementations
-  - `forecast_server.py`: Weather forecast tools
-  - `historical_server.py`: Historical weather tools
-  - `agricultural_server.py`: Agricultural data tools
+  - `weather_server.py`: Unified server with all weather tools:
+    - Weather forecast tools
+    - Historical weather tools
+    - Agricultural data tools
 - `models/`: Pydantic models for structured responses
 - `strands-metrics-guide/`: Validation and monitoring scripts
   - `run_and_validate_metrics.py`: End-to-end metrics validation with v3 features
@@ -194,7 +196,7 @@ This command:
 
 ### Running Locally (Without Docker)
 
-1. Start all MCP servers:
+1. Start the MCP server:
 ```bash
 ./scripts/start_servers.sh
 ```
@@ -260,9 +262,7 @@ Key points:
 
 1. **Port Configuration**:
    - Weather Agent API: Port 7777
-   - Forecast Server: Port 7778
-   - Historical Server: Port 7779
-   - Agricultural Server: Port 7780
+   - Unified Weather Server: Port 7778
 
 2. **Environment Variables in docker-compose.yml**:
    ```yaml
@@ -278,7 +278,7 @@ Key points:
    ```
 
 3. **Service Dependencies**:
-   - Weather Agent depends on all MCP servers being healthy
+   - Weather Agent depends on the MCP server being healthy
    - Health checks ensure proper startup order
    - Retry logic handles temporary startup delays
 
@@ -289,7 +289,7 @@ Key points:
 
 ## MCP Server Health Checks
 
-FastMCP servers require special handling for health checks in Docker:
+The FastMCP server requires special handling for health checks in Docker:
 
 1. **MCP Protocol Endpoints**: The `/mcp/` endpoint requires a session ID and uses Server-Sent Events (SSE), making it unsuitable for simple health checks.
 
@@ -297,7 +297,7 @@ FastMCP servers require special handling for health checks in Docker:
    ```python
    @server.custom_route("/health", methods=["GET"])
    async def health_check(request: Request) -> JSONResponse:
-       return JSONResponse({"status": "healthy", "service": "forecast-server"})
+       return JSONResponse({"status": "healthy", "service": "weather-server"})
    ```
 
 3. **Docker Health Checks**: The docker-compose.yml uses these endpoints:
@@ -319,7 +319,7 @@ FastMCP servers require special handling for health checks in Docker:
 
 1. **User Query**: User submits a natural language query about weather or agriculture
 2. **Agent Processing**: Strands agent analyzes the query and determines which tools to use
-3. **Tool Discovery**: Agent discovers available tools from MCP servers via HTTP
+3. **Tool Discovery**: Agent discovers available tools from the MCP server via HTTP
 4. **Tool Execution**: Agent calls appropriate MCP server tools with extracted parameters
 5. **Response Processing**: Strands handles response formatting automatically
 6. **User Response**: Agent formulates a natural language response with the data
@@ -341,9 +341,7 @@ FastMCP servers require special handling for health checks in Docker:
 │   ├── mcp_agent.py       # Main agent logic
 │   └── query_classifier.py # Query intent classification
 ├── mcp_servers/           # FastMCP server implementations
-│   ├── forecast_server.py
-│   ├── historical_server.py
-│   └── agricultural_server.py
+│   └── weather_server.py
 ├── models/                # Data models
 │   ├── requests.py
 │   └── responses.py
@@ -411,7 +409,7 @@ Key environment variables (configured in `.env`):
 - `TELEMETRY_TAGS`: Comma-separated tags for filtering
 
 ### MCP Server Configuration
-- MCP server ports are configured in the server files (7778, 7779, 7780)
+- MCP server port is configured in the server file (7778)
 
 ### Supported Bedrock Models
 
@@ -504,13 +502,11 @@ To add new capabilities:
 
 #### 1. Start MCP Servers
 ```bash
-# Start all three MCP servers (forecast, historical, agricultural)
+# Start the unified weather MCP server
 ./scripts/start_servers.sh
 
-# Verify servers are running
-curl http://localhost:7778/health  # Forecast server
-curl http://localhost:7779/health  # Historical server  
-curl http://localhost:7780/health  # Agricultural server
+# Verify server is running
+curl http://localhost:7778/health  # Weather server
 ```
 
 #### 2. Test Basic Agent Functionality
@@ -600,18 +596,8 @@ python -m weather_agent.structured_output_demo
 
 #### Test Individual MCP Servers
 ```bash
-# Test forecast server
+# Test unified weather server
 curl -X POST http://localhost:7778/mcp/ \
-  -H "Content-Type: application/json" \
-  -d '{"jsonrpc": "2.0", "method": "tools/list", "id": 1}'
-
-# Test historical server  
-curl -X POST http://localhost:7779/mcp/ \
-  -H "Content-Type: application/json" \
-  -d '{"jsonrpc": "2.0", "method": "tools/list", "id": 1}'
-
-# Test agricultural server
-curl -X POST http://localhost:7780/mcp/ \
   -H "Content-Type: application/json" \
   -d '{"jsonrpc": "2.0", "method": "tools/list", "id": 1}'
 ```
@@ -639,14 +625,14 @@ asyncio.run(test())
 
 1. **MCP Servers Won't Start**:
    ```bash
-   # Check if ports are in use
-   lsof -i :7778,7779,7780
+   # Check if port is in use
+   lsof -i :7778
    
-   # Kill processes using the ports
-   lsof -ti:7778,7779,7780 | xargs kill -9
+   # Kill process using the port
+   lsof -ti:7778 | xargs kill -9
    
-   # Restart servers
-   ./scripts/start_servers.sh
+   # Restart server
+   ./scripts/start_server.sh
    ```
 
 2. **AWS Credentials Issues**:

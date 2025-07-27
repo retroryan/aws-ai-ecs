@@ -1,4 +1,4 @@
-# Agricultural MCP Server
+# Unified Weather MCP Server
 FROM python:3.11-slim
 
 WORKDIR /app
@@ -21,10 +21,10 @@ RUN useradd -m -u 1000 appuser && chown -R appuser:appuser /app
 USER appuser
 
 # Expose MCP server port
-EXPOSE 7780
+EXPOSE 7778
 
 # Health check - Custom /health endpoint added via @server.custom_route
 # Health is checked by docker-compose using the /health endpoint
 
-# Run the server
-CMD ["python", "mcp_servers/agricultural_server.py"]
+# Run the unified server
+CMD ["python", "mcp_servers/weather_server.py"]

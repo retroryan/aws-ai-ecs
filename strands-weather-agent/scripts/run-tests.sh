@@ -20,7 +20,7 @@ echo ""
 # Function to cleanup on exit
 cleanup() {
     echo -e "\n${YELLOW}Cleaning up...${NC}"
-    "$SCRIPT_DIR/stop_servers.sh"
+    "$SCRIPT_DIR/stop_server.sh"
 }
 
 # Set trap to cleanup on exit
@@ -28,15 +28,15 @@ trap cleanup EXIT
 
 # Step 1: Check if servers are already running
 echo -e "${YELLOW}Checking for existing servers...${NC}"
-if [ -f "$PROJECT_ROOT/logs/forecast.pid" ] || [ -f "$PROJECT_ROOT/logs/historical.pid" ] || [ -f "$PROJECT_ROOT/logs/agricultural.pid" ]; then
+if [ -f "$PROJECT_ROOT/logs/weather.pid" ]; then
     echo -e "${YELLOW}Found existing server processes. Stopping them...${NC}"
-    "$SCRIPT_DIR/stop_servers.sh"
+    "$SCRIPT_DIR/stop_server.sh"
     sleep 2
 fi
 
 # Step 2: Start MCP servers
 echo -e "\n${GREEN}Starting MCP servers...${NC}"
-"$SCRIPT_DIR/start_servers.sh"
+"$SCRIPT_DIR/start_server.sh"
 
 # Wait for servers to be ready
 echo -e "\n${YELLOW}Waiting for servers to be ready...${NC}"
@@ -44,13 +44,11 @@ sleep 5
 
 # Test server health
 echo -e "\n${YELLOW}Testing server health...${NC}"
-for port in 7778 7779 7780; do
-    if curl -s -f "http://localhost:$port/health" > /dev/null; then
-        echo -e "${GREEN}✅ Server on port $port is healthy${NC}"
-    else
-        echo -e "${RED}❌ Server on port $port is not responding${NC}"
-    fi
-done
+if curl -s -f "http://localhost:7778/health" > /dev/null; then
+    echo -e "${GREEN}✅ Weather server on port 7778 is healthy${NC}"
+else
+    echo -e "${RED}❌ Weather server on port 7778 is not responding${NC}"
+fi
 
 # Step 3: Run tests from weather_agent directory
 echo -e "\n${GREEN}Running tests...${NC}"

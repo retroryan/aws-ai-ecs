@@ -190,7 +190,7 @@ class MCPWeatherAgent:
     
     def _create_mcp_clients(self) -> List[MCPClient]:
         """
-        Create MCP clients using Strands native support.
+        Create MCP client using Strands native support.
         
         This is the way to create MCP clients in Strands:
         - Use MCPClient wrapper with lambda factory
@@ -198,25 +198,20 @@ class MCPWeatherAgent:
         - Automatic session management by Strands
         
         Returns:
-            List of configured MCP clients
+            List containing the single MCP client
         """
-        # Get server URLs from environment with defaults
-        servers = {
-            "forecast": os.getenv("MCP_FORECAST_URL", "http://localhost:7778/mcp"),
-            "historical": os.getenv("MCP_HISTORICAL_URL", "http://localhost:7779/mcp"),
-            "agricultural": os.getenv("MCP_AGRICULTURAL_URL", "http://localhost:7780/mcp")
-        }
+        # Get server URL from environment with default
+        server_url = os.getenv("MCP_SERVER_URL", "http://localhost:7778/mcp")
         
         clients = []
-        for name, url in servers.items():
-            try:
-                # Create MCP client with streamable HTTP transport for HTTP-based servers
-                # The lambda is required to defer connection until context entry
-                client = MCPClient(lambda url=url: streamablehttp_client(url))
-                clients.append(client)
-                logger.info(f"Created MCP client for {name} server at {url}")
-            except Exception as e:
-                logger.warning(f"Failed to create {name} client: {e}")
+        try:
+            # Create MCP client with streamable HTTP transport for HTTP-based server
+            # The lambda is required to defer connection until context entry
+            client = MCPClient(lambda: streamablehttp_client(server_url))
+            clients.append(client)
+            logger.info(f"Created MCP client for unified weather server at {server_url}")
+        except Exception as e:
+            logger.warning(f"Failed to create weather server client: {e}")
         
         return clients
     
@@ -234,26 +229,17 @@ class MCPWeatherAgent:
             return self._connectivity_cache
         
         results = {}
-        # Dynamically determine server names based on what was configured
-        server_names = []
-        servers_config = {
-            "forecast": os.getenv("MCP_FORECAST_URL", "http://localhost:7778/mcp"),
-            "historical": os.getenv("MCP_HISTORICAL_URL", "http://localhost:7779/mcp"),
-            "agricultural": os.getenv("MCP_AGRICULTURAL_URL", "http://localhost:7780/mcp")
-        }
-        server_names = list(servers_config.keys())
         
-        for i, client in enumerate(self.mcp_clients):
-            name = server_names[i] if i < len(server_names) else f"server_{i}"
+        if self.mcp_clients:
             try:
                 # Test connection by listing tools
-                with client:
-                    tools = client.list_tools_sync()
-                    results[name] = True
-                    logger.info(f"✅ {name} server: {len(tools)} tools available")
+                with self.mcp_clients[0]:
+                    tools = self.mcp_clients[0].list_tools_sync()
+                    results["weather-server"] = True
+                    logger.info(f"✅ weather server: {len(tools)} tools available")
             except Exception as e:
-                results[name] = False
-                logger.error(f"❌ {name} server: {e}")
+                results["weather-server"] = False
+                logger.error(f"❌ weather server: {e}")
         
         # Update cache
         self._connectivity_cache = results

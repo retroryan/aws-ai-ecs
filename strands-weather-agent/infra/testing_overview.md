@@ -107,7 +107,7 @@ python tests/test_services.py
 ```bash
 # Start local services (in parent directory)
 cd ..
-./scripts/start_servers.sh
+./scripts/start_server.sh
 
 # Run tests against local services
 cd infra

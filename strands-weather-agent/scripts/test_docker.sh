@@ -76,7 +76,7 @@ echo "1. Checking Docker services status..."
 cd "$(dirname "$0")/.."
 
 # Check for running containers using docker directly (avoids env var warnings)
-running_containers=$(docker ps --filter "name=mcp-" --filter "name=weather-agent" -q | wc -l | tr -d ' ')
+running_containers=$(docker ps --filter "name=mcp-weather-server" --filter "name=weather-agent" -q | wc -l | tr -d ' ')
 
 if [ "$running_containers" -eq "0" ]; then
     echo -e "${RED}No services running!${NC}"
@@ -88,7 +88,7 @@ fi
 
 echo "Found $running_containers running containers"
 echo ""
-docker ps --filter "name=mcp-" --filter "name=weather-agent" --format "table {{.Names}}\t{{.Status}}"
+docker ps --filter "name=mcp-weather-server" --filter "name=weather-agent" --format "table {{.Names}}\t{{.Status}}"
 echo ""
 
 echo "2. Testing service endpoints..."
@@ -97,16 +97,8 @@ echo ""
 # Check each service
 services_ok=true
 
-# Check MCP servers (they have /health endpoints in our setup)
-if ! check_service "Forecast Server" "http://localhost:7778/health"; then
-    services_ok=false
-fi
-
-if ! check_service "Historical Server" "http://localhost:7779/health"; then
-    services_ok=false
-fi
-
-if ! check_service "Agricultural Server" "http://localhost:7780/health"; then
+# Check MCP server (it has /health endpoint in our setup)
+if ! check_service "Weather Server" "http://localhost:7778/health"; then
     services_ok=false
 fi
 

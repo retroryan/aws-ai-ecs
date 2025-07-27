@@ -30,7 +30,7 @@
 
 3. **Server connection errors**: Ensure MCP servers are running:
    ```bash
-   ./scripts/start_servers.sh
+   ./scripts/start_server.sh
    ps aux | grep python | grep server
    ```
 

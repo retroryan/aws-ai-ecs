@@ -1,8 +1,8 @@
 #!/bin/bash
 
 # FastMCP Server Shutdown Script
-# This script stops all running FastMCP servers
-# Usage: ./stop_servers.sh [--force]
+# This script stops the running weather MCP server
+# Usage: ./stop_server.sh [--force]
 
 # Colors for output
 GREEN='\033[0;32m'
@@ -24,7 +24,7 @@ for arg in "$@"; do
             ;;
         -h|--help)
             echo "Usage: $0 [--force]"
-            echo "  --force  Immediately kill all processes on MCP ports without checking PID files"
+            echo "  --force  Immediately kill all processes on MCP port without checking PID file"
             echo "  -h, --help  Show this help message"
             exit 0
             ;;
@@ -36,24 +36,22 @@ for arg in "$@"; do
     esac
 done
 
-# Force mode: kill all processes on MCP ports
+# Force mode: kill all processes on MCP port
 if [ "$FORCE_MODE" = true ]; then
-    echo -e "${RED}Force stopping all processes on MCP ports...${NC}"
+    echo -e "${RED}Force stopping all processes on MCP port...${NC}"
     echo ""
     
-    # Kill processes on each port
-    for port in 7778 7779 7780; do
-        if lsof -t -i :$port > /dev/null 2>&1; then
-            echo -e "Killing processes on port $port..."
-            lsof -t -i :$port | xargs kill -9 2>/dev/null
-            echo -e "${GREEN}✅ Port $port cleared${NC}"
-        else
-            echo -e "${YELLOW}⚠️  No process found on port $port${NC}"
-        fi
-    done
+    # Kill processes on port 7778
+    if lsof -t -i :7778 > /dev/null 2>&1; then
+        echo -e "Killing processes on port 7778..."
+        lsof -t -i :7778 | xargs kill -9 2>/dev/null
+        echo -e "${GREEN}✅ Port 7778 cleared${NC}"
+    else
+        echo -e "${YELLOW}⚠️  No process found on port 7778${NC}"
+    fi
     
-    # Clean up PID files
-    rm -f "$PROJECT_ROOT"/logs/*.pid 2>/dev/null
+    # Clean up PID file
+    rm -f "$PROJECT_ROOT"/logs/weather.pid 2>/dev/null
     
     echo ""
     echo -e "${GREEN}Force stop completed.${NC}"
@@ -61,16 +59,16 @@ if [ "$FORCE_MODE" = true ]; then
 fi
 
 # Normal mode
-echo -e "${YELLOW}Stopping FastMCP servers...${NC}"
+echo -e "${YELLOW}Stopping weather MCP server...${NC}"
 echo ""
 
-# Function to stop a server
+# Function to stop the server
 stop_server() {
-    local name=$1
+    local name="weather"
     local pid_file="$PROJECT_ROOT/logs/${name}.pid"
     
     if [ ! -f "$pid_file" ]; then
-        echo -e "${YELLOW}⚠️  ${name} server is not running (no PID file found)${NC}"
+        echo -e "${YELLOW}⚠️  Weather server is not running (no PID file found)${NC}"
         return
     fi
     
@@ -78,7 +76,7 @@ stop_server() {
     
     # Check if process exists
     if ps -p $pid > /dev/null 2>&1; then
-        echo -e "Stopping ${name} server (PID: $pid)..."
+        echo -e "Stopping weather server (PID: $pid)..."
         kill $pid 2>/dev/null
         
         # Wait for process to terminate
@@ -90,13 +88,13 @@ stop_server() {
         
         # Force kill if still running
         if ps -p $pid > /dev/null 2>&1; then
-            echo -e "${YELLOW}Force stopping ${name} server...${NC}"
+            echo -e "${YELLOW}Force stopping weather server...${NC}"
             kill -9 $pid 2>/dev/null
         fi
         
-        echo -e "${GREEN}✅ ${name} server stopped${NC}"
+        echo -e "${GREEN}✅ Weather server stopped${NC}"
     else
-        echo -e "${YELLOW}⚠️  ${name} server was not running (PID: $pid not found)${NC}"
+        echo -e "${YELLOW}⚠️  Weather server was not running (PID: $pid not found)${NC}"
     fi
     
     # Remove PID file
@@ -105,23 +103,21 @@ stop_server() {
 
 # Check if logs directory exists
 if [ ! -d "$PROJECT_ROOT/logs" ]; then
-    echo -e "${YELLOW}No logs directory found. No servers to stop.${NC}"
+    echo -e "${YELLOW}No logs directory found. No server to stop.${NC}"
     exit 0
 fi
 
-# Stop all servers
-stop_server "forecast"
-stop_server "historical"
-stop_server "agricultural"
+# Stop the server
+stop_server
 
 echo ""
-echo -e "${GREEN}All servers have been stopped.${NC}"
+echo -e "${GREEN}Server has been stopped.${NC}"
 
 # Optional: Clean up old log files
 echo ""
 read -p "Do you want to remove log files? (y/N) " -n 1 -r
 echo
 if [[ $REPLY =~ ^[Yy]$ ]]; then
-    rm -f "$PROJECT_ROOT"/logs/*.log
-    echo -e "${GREEN}Log files removed.${NC}"
+    rm -f "$PROJECT_ROOT"/logs/weather.log
+    echo -e "${GREEN}Log file removed.${NC}"
 fi

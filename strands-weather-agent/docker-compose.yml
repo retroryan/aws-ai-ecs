@@ -1,10 +1,10 @@
 services:
-  # Forecast MCP Server
-  forecast-server:
+  # Unified Weather MCP Server
+  weather-server:
     build:
       context: .
-      dockerfile: docker/Dockerfile.forecast
-    container_name: mcp-forecast-server
+      dockerfile: docker/Dockerfile.weather
+    container_name: mcp-weather-server
     ports:
       - "7778:7778"
     environment:
@@ -15,48 +15,6 @@ services:
     restart: unless-stopped
     healthcheck:
       test: ["CMD", "curl", "-f", "http://localhost:7778/health"]
-      interval: 30s
-      timeout: 3s
-      retries: 3
-      start_period: 5s
-
-  # Historical MCP Server  
-  historical-server:
-    build:
-      context: .
-      dockerfile: docker/Dockerfile.historical
-    container_name: mcp-historical-server
-    ports:
-      - "7779:7779"
-    environment:
-      - LOG_LEVEL=${LOG_LEVEL:-INFO}
-      - MCP_PORT=7779
-    networks:
-      - weather-network
-    restart: unless-stopped
-    healthcheck:
-      test: ["CMD", "curl", "-f", "http://localhost:7779/health"]
-      interval: 30s
-      timeout: 3s
-      retries: 3
-      start_period: 5s
-
-  # Agricultural MCP Server
-  agricultural-server:
-    build:
-      context: .
-      dockerfile: docker/Dockerfile.agricultural
-    container_name: mcp-agricultural-server
-    ports:
-      - "7780:7780"
-    environment:
-      - LOG_LEVEL=${LOG_LEVEL:-INFO}
-      - MCP_PORT=7780
-    networks:
-      - weather-network
-    restart: unless-stopped
-    healthcheck:
-      test: ["CMD", "curl", "-f", "http://localhost:7780/health"]
       interval: 30s
       timeout: 3s
       retries: 3
@@ -80,10 +38,8 @@ services:
       - AWS_SECRET_ACCESS_KEY=${AWS_SECRET_ACCESS_KEY}
       - AWS_SESSION_TOKEN=${AWS_SESSION_TOKEN}
       - AWS_DEFAULT_REGION=${AWS_DEFAULT_REGION:-us-east-1}
-      # MCP Server URLs (internal Docker network)
-      - MCP_FORECAST_URL=http://forecast-server:7778/mcp/
-      - MCP_HISTORICAL_URL=http://historical-server:7779/mcp/
-      - MCP_AGRICULTURAL_URL=http://agricultural-server:7780/mcp/
+      # MCP Server URL (internal Docker network)
+      - MCP_SERVER_URL=http://weather-server:7778/mcp/
       # API Configuration
       - API_PORT=7777
       # Logging
@@ -95,11 +51,7 @@ services:
       - LANGFUSE_SECRET_KEY=${LANGFUSE_SECRET_KEY}
       - LANGFUSE_HOST=${LANGFUSE_HOST}
     depends_on:
-      forecast-server:
-        condition: service_healthy
-      historical-server:
-        condition: service_healthy
-      agricultural-server:
+      weather-server:
         condition: service_healthy
     networks:
       - weather-network

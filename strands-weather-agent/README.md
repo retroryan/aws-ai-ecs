@@ -150,7 +150,7 @@ Run the weather agent as an interactive chatbot:
 ./scripts/aws-setup.sh
 
 # 2. Start MCP servers (runs in background)
-./scripts/start_servers.sh
+./scripts/start_server.sh
 
 # 3. Navigate to weather agent directory
 cd weather_agent
@@ -169,7 +169,7 @@ python chatbot.py --demo --debug     # Shows tool calls and streaming
 python chatbot.py --multi-turn-demo --debug  # Shows context retention
 
 # 6. Stop servers when done (from project root)
-cd .. && ./scripts/stop_servers.sh
+cd .. && ./scripts/stop_server.sh
 ```
 
 
@@ -444,10 +444,10 @@ This helps you understand:
 #### 1. Simple Interactive Chatbot
 ```bash
 # Start MCP servers and run chatbot
-./scripts/start_servers.sh
+./scripts/start_server.sh
 python -m weather_agent.main               # Interactive mode
 python -m weather_agent.main --demo        # Demo mode with examples
-./scripts/stop_servers.sh
+./scripts/stop_server.sh
 ```
 
 #### 2. Multi-Turn Conversation Demos 🎯 **NEW - Context Retention**
@@ -628,7 +628,7 @@ See the [Troubleshooting Guide](docs/troubleshooting.md).
 ```bash
 # Stop local services
 ./scripts/stop_docker.sh  # Docker
-./scripts/stop_servers.sh # Python servers
+./scripts/stop_server.sh # Python servers
 
 # Remove all Docker resources
 docker-compose down -v --remove-orphans
@@ -667,7 +667,7 @@ async def get_weather_alerts(location: str) -> dict:
     # Implementation here
     return {"alerts": []}
 
-# Add to scripts/start_servers.sh
+# Add to scripts/start_server.sh
 ```
 
 ## Making This Production-Ready
