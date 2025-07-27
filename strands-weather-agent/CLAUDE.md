@@ -315,14 +315,52 @@ The FastMCP server requires special handling for health checks in Docker:
      -d '{"jsonrpc": "2.0", "method": "mcp/list_tools", "id": 1}'
    ```
 
+## MCP Client Management Pattern
+
+### Following Official Strands SDK Patterns
+
+This project follows the official AWS Strands SDK patterns for MCP client management:
+
+```python
+# Helper function to create MCP clients
+def create_mcp_client() -> MCPClient:
+    server_url = os.getenv("MCP_SERVER_URL", "http://localhost:7778/mcp")
+    return MCPClient(lambda: streamablehttp_client(server_url))
+
+# Usage in request handlers - create client per request
+@app.post("/query")
+async def process_query(request: QueryRequest):
+    # Create MCP client for this request
+    with create_mcp_client() as mcp_client:
+        tools = mcp_client.list_tools_sync()
+        agent = MCPWeatherAgent(tools=tools)
+        response = await agent.query(request.query)
+    # Client is automatically closed when leaving the context
+    return response
+```
+
+**Key Principles:**
+1. **No Global MCP Clients**: Each request creates its own client
+2. **Use Context Managers**: Always use `with` statements for proper cleanup
+3. **Simple Helper Functions**: Create reusable functions for client creation
+4. **Demo Simplicity**: Prioritize clarity over performance optimization
+
+This pattern ensures:
+- Clean resource management
+- No long-lived connections
+- Simple, understandable code
+- Follows official Strands examples
+
 ## How It Works
 
 1. **User Query**: User submits a natural language query about weather or agriculture
-2. **Agent Processing**: Strands agent analyzes the query and determines which tools to use
-3. **Tool Discovery**: Agent discovers available tools from the MCP server via HTTP
-4. **Tool Execution**: Agent calls appropriate MCP server tools with extracted parameters
-5. **Response Processing**: Strands handles response formatting automatically
-6. **User Response**: Agent formulates a natural language response with the data
+2. **MCP Client Creation**: A new MCP client is created for the request using `with` statement
+3. **Tool Discovery**: Agent discovers available tools from the MCP server via the client
+4. **Agent Processing**: Strands agent analyzes the query and determines which tools to use
+5. **Tool Execution**: Agent calls appropriate MCP server tools with extracted parameters
+6. **Response Processing**: Strands handles response formatting automatically
+7. **Client Cleanup**: MCP client is automatically closed when request completes
+8. **User Response**: Agent formulates a natural language response with the data
 
 ## Example Queries
 
@@ -400,11 +438,11 @@ Key environment variables (configured in `.env`):
 - `WEATHER_AGENT_DEBUG`: Enable debug logging (true/false)
 
 ### Prompt Configuration
-- The system now uses only two prompts:
-  - `default`: The standard weather and agricultural assistant prompt (always used by default)
-  - `agriculture_structured`: An optional agricultural-focused prompt for structured output
+- The system now uses two prompts:
+  - `agriculture_structured`: The default prompt optimized for structured output and tool usage (used by default)
+  - `simple_prompt`: A simpler alternative prompt for basic weather queries
 - The `SYSTEM_PROMPT` environment variable is no longer used
-- To use the agriculture prompt, pass `prompt_type='agriculture_structured'` when creating the agent
+- To use the simple prompt, pass `prompt_type='simple_prompt'` when creating the agent
 
 ### Langfuse Telemetry Configuration
 - `LANGFUSE_PUBLIC_KEY`: Public key for Langfuse API
@@ -422,7 +460,8 @@ Key environment variables (configured in `.env`):
 
 **IMPORTANT**: AWS Bedrock now requires inference profiles for most models. Use the `us.` prefix for cross-region redundancy:
 
-- `us.anthropic.claude-3-5-sonnet-20241022-v2:0` (Latest, recommended - uses inference profile)
+- `us.anthropic.claude-sonnet-4-20250514-v1:0` (Latest, recommended - Claude Sonnet 4 with superior structured output)
+- `us.anthropic.claude-3-5-sonnet-20241022-v2:0` (Previous generation - uses inference profile)
 - `us.anthropic.claude-3-5-sonnet-20240620-v1:0` (Stable - uses inference profile)
 - `us.anthropic.claude-3-5-haiku-20241022-v1:0` (Fast & cost-effective - uses inference profile)
 - `us.meta.llama3-1-70b-instruct-v1:0` (Open source - uses inference profile)
@@ -431,6 +470,13 @@ Key environment variables (configured in `.env`):
 Note: The `us.` prefix indicates an inference profile that provides cross-region failover between us-east-1 and us-west-2. The `scripts/aws-setup.sh` script will automatically detect and use inference profiles when available.
 
 ## Recent Improvements and Updates
+
+### MCP Client Pattern Refactoring (Following Official Strands Patterns)
+- **Per-Request MCP Clients**: MCP clients are now created within each request handler using `with` statements
+- **No Global State**: Removed global `mcp_client` and `exit_stack` variables for cleaner architecture
+- **Simplified Lifespan**: The FastAPI lifespan now only manages `session_manager`, not MCP clients
+- **Helper Function Pattern**: Created `create_mcp_client()` helper function for consistent client creation
+- **Demo-Friendly Code**: Prioritizes clarity and simplicity over optimization, following official samples
 
 ### Langfuse v3 Integration
 - **Native v3 Support**: Already using Langfuse v3.1.2 with full feature support
@@ -444,7 +490,7 @@ Note: The `us.` prefix indicates an inference profile that provides cross-region
 - **Eliminated ThreadPoolExecutor**: The agent now uses pure async patterns throughout
 - **Streamable HTTP Clients**: MCP clients use `streamablehttp_client` for better async communication
 - **Async Streaming**: Uses `stream_async()` for processing queries with better performance
-- **Context Management**: Proper use of `ExitStack` to keep MCP clients open during execution
+- **Per-Request Context**: Each request creates its own MCP client context
 
 ### Enhanced Debug Logging
 - **Dual-Level Logging**: Console (INFO) and file (DEBUG) with separate handlers
@@ -465,6 +511,7 @@ Note: The `us.` prefix indicates an inference profile that provides cross-region
 - **Consolidated Structure**: Streamlined project organization
 - **Native Strands Integration**: Eliminated custom wrapper code
 - **Better Error Handling**: Specific exception types for different failures
+- **Official Pattern Compliance**: Follows AWS Strands SDK patterns for MCP client usage
 
 ## Extending the System
 

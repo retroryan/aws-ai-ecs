@@ -6,6 +6,33 @@
 
 set -e
 
+# Parse command line arguments
+LOCAL_MODE=""
+while [[ $# -gt 0 ]]; do
+    case $1 in
+        --local|-l)
+            LOCAL_MODE="true"
+            shift
+            ;;
+        --help|-h)
+            echo "Usage: $0 [OPTIONS]"
+            echo "Options:"
+            echo "  --local, -l      Test against local server (start_server.sh)"
+            echo "  --help, -h       Show this help message"
+            echo ""
+            echo "Examples:"
+            echo "  $0              # Test against Docker containers"
+            echo "  $0 --local      # Test against local server"
+            exit 0
+            ;;
+        *)
+            echo "Unknown option: $1"
+            echo "Use --help for usage information"
+            exit 1
+            ;;
+    esac
+done
+
 echo "🔄 Multi-Turn Conversation Test"
 echo "==============================="
 echo ""
@@ -18,8 +45,15 @@ BLUE='\033[0;34m'
 CYAN='\033[0;36m'
 NC='\033[0m' # No Color
 
-# API endpoint
-API_URL="${API_URL:-http://localhost:7777}"
+# API endpoint - different for local vs Docker
+if [ "$LOCAL_MODE" = "true" ]; then
+    API_URL="${API_URL:-http://localhost:8000}"
+    echo -e "${YELLOW}Testing against LOCAL server (http://localhost:8000)${NC}"
+else
+    API_URL="${API_URL:-http://localhost:7777}"
+    echo -e "${BLUE}Testing against DOCKER containers (http://localhost:7777)${NC}"
+fi
+echo ""
 
 # Check if jq is installed
 if ! command -v jq &> /dev/null; then

@@ -22,7 +22,7 @@ except ImportError:
     from mcp_agent import MCPWeatherAgent
     from models.structured_responses import WeatherQueryResponse, ValidationResult
     from session_manager import SessionManager, SessionData
-from contextlib import asynccontextmanager, ExitStack
+from contextlib import asynccontextmanager
 import logging
 from mcp.client.streamable_http import streamablehttp_client
 from strands.tools.mcp import MCPClient
@@ -31,13 +31,22 @@ from strands.tools.mcp import MCPClient
 logging.getLogger("strands").setLevel(logging.INFO)
 logger = logging.getLogger(__name__)
 
-# Global instances
-agent: Optional[MCPWeatherAgent] = None
+# Global instances - simplified for demo
 session_manager: Optional[SessionManager] = None
 debug_mode: bool = False
 global_metrics: Optional['SessionMetrics'] = None
-mcp_client: Optional[MCPClient] = None
-exit_stack: Optional[ExitStack] = None
+
+
+def create_mcp_client() -> MCPClient:
+    """
+    Helper function to create an MCP client.
+    Follows the official Strands pattern of creating MCP clients per use.
+    
+    Returns:
+        MCPClient instance - must be used with 'with' statement
+    """
+    server_url = os.getenv("MCP_SERVER_URL", "http://localhost:7778/mcp")
+    return MCPClient(lambda: streamablehttp_client(server_url))
 
 
 def configure_debug_logging(enable_debug: bool = False):
@@ -108,8 +117,8 @@ def configure_debug_logging(enable_debug: bool = False):
 
 @asynccontextmanager
 async def lifespan(app: FastAPI):
-    """Initialize the agent and session manager on startup and cleanup on shutdown."""
-    global agent, session_manager, debug_mode, global_metrics, mcp_client, exit_stack
+    """Initialize session manager on startup and cleanup on shutdown."""
+    global session_manager, debug_mode, global_metrics
     
     # Check debug mode from environment variable
     debug_mode = os.getenv("WEATHER_AGENT_DEBUG", "false").lower() == "true"
@@ -156,57 +165,15 @@ async def lifespan(app: FastAPI):
     
     global_metrics = SessionMetrics()
     
-    # Create MCP client
-    server_url = os.getenv("MCP_SERVER_URL", "http://localhost:7778/mcp")
-    mcp_client = MCPClient(lambda: streamablehttp_client(server_url))
+    # Initialize session manager
+    default_ttl = int(os.getenv("SESSION_DEFAULT_TTL_MINUTES", "60"))
+    session_manager = SessionManager(default_ttl_minutes=default_ttl)
     
-    # Create ExitStack to manage MCP client context for app lifetime
-    exit_stack = ExitStack()
-    
-    # Add retry logic for MCP server connectivity
-    max_retries = 5
-    retry_delay = 10  # seconds
-    
-    for attempt in range(max_retries):
-        try:
-            # Enter MCP context once for the entire app lifetime
-            exit_stack.enter_context(mcp_client)
-            
-            # Get tools from MCP server
-            tools = mcp_client.list_tools_sync()
-            logger.info(f"✅ Loaded {len(tools)} tools from MCP server")
-            
-            # Initialize agent with tools
-            agent = MCPWeatherAgent(
-                tools=tools,
-                debug_logging=debug_mode
-            )
-            
-            # Initialize session manager
-            default_ttl = int(os.getenv("SESSION_DEFAULT_TTL_MINUTES", "60"))
-            session_manager = SessionManager(default_ttl_minutes=default_ttl)
-            
-            logger.info("✅ AWS Strands Weather Agent API ready!")
-            yield
-            break
-        except Exception as e:
-            exit_stack.close()  # Clean up on error
-            if "list_tools_sync" in str(e) and attempt < max_retries - 1:
-                logger.warning(f"MCP server not ready, attempt {attempt + 1}/{max_retries}. Retrying in {retry_delay}s...")
-                await asyncio.sleep(retry_delay)
-                # Recreate client and stack for retry
-                mcp_client = MCPClient(lambda: streamablehttp_client(server_url))
-                exit_stack = ExitStack()
-            else:
-                logger.error(f"Failed to initialize after {attempt + 1} attempts: {e}")
-                raise
+    logger.info("✅ AWS Strands Weather Agent API ready!")
+    yield
     
     # Cleanup and show final metrics
     logger.info("\n🧹 Shutting down...")
-    
-    # Close MCP client context
-    if exit_stack:
-        exit_stack.close()
     
     # Show final session metrics if any queries were processed
     if global_metrics and global_metrics.total_queries > 0:
@@ -242,7 +209,7 @@ class AgentInfo(BaseModel):
     model: str
     region: str
     temperature: float
-    mcp_servers: list[str]
+    mcp_servers: int  # Number of tools loaded from MCP servers
     debug_logging: bool
 
 @app.get("/health")
@@ -250,16 +217,26 @@ async def health_check():
     """Health check endpoint."""
     return {
         "status": "healthy",
-        "agent_initialized": agent is not None
+        "session_manager_initialized": session_manager is not None
     }
 
 @app.get("/info", response_model=AgentInfo)
 async def get_agent_info():
     """Get information about the agent configuration."""
-    if not agent:
-        raise HTTPException(status_code=503, detail="Agent not initialized")
+    # Create a temporary agent just to get configuration info
+    mcp_client = create_mcp_client()
     
-    return agent.get_agent_info()
+    try:
+        with mcp_client:
+            tools = mcp_client.list_tools_sync()
+            agent = MCPWeatherAgent(
+                tools=tools,
+                debug_logging=debug_mode
+            )
+            return agent.get_agent_info()
+    except Exception as e:
+        logger.error(f"Failed to get agent info: {e}")
+        raise HTTPException(status_code=503, detail="Unable to connect to MCP server")
 
 
 @app.post("/query", response_model=WeatherQueryResponse)
@@ -278,8 +255,8 @@ async def process_query(request: QueryRequest):
     Returns:
         Structured WeatherQueryResponse with locations, weather data, and session metadata
     """
-    if not agent or not session_manager:
-        raise HTTPException(status_code=503, detail="Service not initialized")
+    if not session_manager:
+        raise HTTPException(status_code=503, detail="Session manager not initialized")
     
     try:
         # Log query processing start
@@ -312,62 +289,73 @@ async def process_query(request: QueryRequest):
             # No session_id and create_session is False
             raise HTTPException(status_code=400, detail="Session ID required when create_session is False")
         
-        # Process structured query with agent
-        response = await agent.query(
-            message=request.query,
-            session_id=session_id
-        )
+        # Create MCP client and agent for this request
+        mcp_client = create_mcp_client()
         
-        # Update session activity
-        await session_manager.update_activity(session_id)
-        session = await session_manager.get_session(session_id)
+        # Use the MCP client context to get tools and process query
+        with mcp_client:
+            tools = mcp_client.list_tools_sync()
+            agent = MCPWeatherAgent(
+                tools=tools,
+                debug_logging=debug_mode
+            )
+            
+            # Process structured query with agent
+            response = await agent.query(
+                message=request.query,
+                session_id=session_id
+            )
         
-        # Add session information to response
-        response.session_id = session_id
-        response.session_new = session_new
-        response.conversation_turn = session.conversation_turns if session else 1
-        
-        # Validate the response
-        validation = agent.validate_response(response)
-        if not validation.valid:
-            logger.warning(f"Response validation issues: {validation.errors}")
-        
-        # Prepare metrics data if available
-        if hasattr(agent, 'last_metrics') and agent.last_metrics:
-            try:
-                from .metrics_display import format_metrics
-            except ImportError:
-                from metrics_display import format_metrics
+            # Update session activity
+            await session_manager.update_activity(session_id)
+            session = await session_manager.get_session(session_id)
             
-            # Log formatted metrics
-            logger.info(format_metrics(agent.last_metrics))
+            # Add session information to response
+            response.session_id = session_id
+            response.session_new = session_new
+            response.conversation_turn = session.conversation_turns if session else 1
             
-            # Add to global metrics
-            if global_metrics:
-                global_metrics.add_query(agent.last_metrics)
+            # Validate the response
+            validation = agent.validate_response(response)
+            if not validation.valid:
+                logger.warning(f"Response validation issues: {validation.errors}")
             
-            # Extract metrics for response
-            total_tokens = agent.last_metrics.accumulated_usage.get('totalTokens', 0)
-            input_tokens = agent.last_metrics.accumulated_usage.get('inputTokens', 0)
-            output_tokens = agent.last_metrics.accumulated_usage.get('outputTokens', 0)
-            latency_ms = agent.last_metrics.accumulated_metrics.get('latencyMs', 0)
-            latency_seconds = latency_ms / 1000.0
-            throughput = total_tokens / latency_seconds if latency_seconds > 0 else 0
+            # Prepare metrics data if available
+            if hasattr(agent, 'last_metrics') and agent.last_metrics:
+                try:
+                    from .metrics_display import format_metrics
+                except ImportError:
+                    from metrics_display import format_metrics
             
-            model_id = os.environ.get('BEDROCK_MODEL_ID', 'unknown')
-            model_name = model_id.split('.')[-1].split('-v')[0] if '.' in model_id else model_id
-            
-            # Add metrics to structured response
-            response.metrics = PerformanceMetrics(
-                total_tokens=total_tokens,
-                input_tokens=input_tokens,
-                output_tokens=output_tokens,
-                latency_ms=latency_ms,
-                latency_seconds=latency_seconds,
-                throughput_tokens_per_second=throughput,
-                model=model_name,
-                cycles=agent.last_metrics.cycle_count
-            ).model_dump()
+                # Log formatted metrics
+                logger.info(format_metrics(agent.last_metrics))
+                
+                # Add to global metrics
+                if global_metrics:
+                    global_metrics.add_query(agent.last_metrics)
+                
+                # Extract metrics for response
+                total_tokens = agent.last_metrics.accumulated_usage.get('totalTokens', 0)
+                input_tokens = agent.last_metrics.accumulated_usage.get('inputTokens', 0)
+                output_tokens = agent.last_metrics.accumulated_usage.get('outputTokens', 0)
+                latency_ms = agent.last_metrics.accumulated_metrics.get('latencyMs', 0)
+                latency_seconds = latency_ms / 1000.0
+                throughput = total_tokens / latency_seconds if latency_seconds > 0 else 0
+                
+                model_id = os.environ.get('BEDROCK_MODEL_ID', 'unknown')
+                model_name = model_id.split('.')[-1].split('-v')[0] if '.' in model_id else model_id
+                
+                # Add metrics to structured response
+                response.metrics = PerformanceMetrics(
+                    total_tokens=total_tokens,
+                    input_tokens=input_tokens,
+                    output_tokens=output_tokens,
+                    latency_ms=latency_ms,
+                    latency_seconds=latency_seconds,
+                    throughput_tokens_per_second=throughput,
+                    model=model_name,
+                    cycles=agent.last_metrics.cycle_count
+                ).model_dump()
         
         # Log query completion
         if debug_mode:
@@ -394,12 +382,18 @@ async def validate_query_response(response: WeatherQueryResponse):
     Returns:
         ValidationResult with any errors, warnings, or suggestions
     """
-    if not agent:
-        raise HTTPException(status_code=503, detail="Agent not initialized")
+    # Create a temporary agent just for validation
+    mcp_client = create_mcp_client()
     
     try:
-        validation = agent.validate_response(response)
-        return validation
+        with mcp_client:
+            tools = mcp_client.list_tools_sync()
+            agent = MCPWeatherAgent(
+                tools=tools,
+                debug_logging=debug_mode
+            )
+            validation = agent.validate_response(response)
+            return validation
         
     except Exception as e:
         logger.error(f"Error validating response: {e}")
@@ -408,16 +402,21 @@ async def validate_query_response(response: WeatherQueryResponse):
 @app.get("/mcp/status")
 async def get_mcp_status():
     """Check the status of MCP server connections."""
-    if not agent:
-        raise HTTPException(status_code=503, detail="Agent not initialized")
+    mcp_client = create_mcp_client()
     
     try:
-        connectivity = await agent.test_connectivity()
-        return {
-            "servers": connectivity,
-            "connected_count": sum(1 for v in connectivity.values() if v),
-            "total_count": len(connectivity)
-        }
+        with mcp_client:
+            tools = mcp_client.list_tools_sync()
+            agent = MCPWeatherAgent(
+                tools=tools,
+                debug_logging=debug_mode
+            )
+            connectivity = await agent.test_connectivity()
+            return {
+                "servers": connectivity,
+                "connected_count": sum(1 for v in connectivity.values() if v),
+                "total_count": len(connectivity)
+            }
     except Exception as e:
         logger.error(f"Error checking MCP status: {e}")
         raise HTTPException(status_code=500, detail=str(e))
@@ -435,8 +434,20 @@ async def get_session_info(session_id: str):
         
         # Get additional info from agent if available
         agent_session_info = None
-        if agent:
-            agent_session_info = agent.get_session_info(session_id)
+        # Create a temporary agent to get session info
+        mcp_client = create_mcp_client()
+        
+        try:
+            with mcp_client:
+                tools = mcp_client.list_tools_sync()
+                agent = MCPWeatherAgent(
+                    tools=tools,
+                    debug_logging=debug_mode
+                )
+                agent_session_info = agent.get_session_info(session_id)
+        except Exception as e:
+            logger.warning(f"Could not get agent session info: {e}")
+            # Continue without agent session info
         
         # Combine session manager and agent info
         session_info = session_manager.get_session_info(session)
@@ -461,8 +472,20 @@ async def clear_session(session_id: str):
         cleared = await session_manager.delete_session(session_id)
         
         # Also clear from agent if available
-        if agent and cleared:
-            agent.clear_session(session_id)
+        if cleared:
+            mcp_client = create_mcp_client()
+            
+            try:
+                with mcp_client:
+                    tools = mcp_client.list_tools_sync()
+                    agent = MCPWeatherAgent(
+                        tools=tools,
+                        debug_logging=debug_mode
+                    )
+                    agent.clear_session(session_id)
+            except Exception as e:
+                logger.warning(f"Could not clear agent session: {e}")
+                # Continue - session was cleared from manager at least
         
         if not cleared:
             raise HTTPException(status_code=404, detail="Session not found")

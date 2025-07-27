@@ -51,14 +51,14 @@ class PromptManager:
         
         return available
     
-    def get_prompt(self, prompt_name: str = "default") -> str:
+    def get_prompt(self, prompt_name: str = "agriculture_structured") -> str:
         """
         Get a system prompt by name with caching and fallback handling.
         
-        Only supports 'default' and 'agriculture_structured' prompts.
+        Only supports 'simple_prompt' and 'agriculture_structured' prompts.
         
         Args:
-            prompt_name: Name of the prompt to load (default or agriculture_structured)
+            prompt_name: Name of the prompt to load (simple_prompt or agriculture_structured)
             
         Returns:
             The system prompt content as a string
@@ -67,13 +67,13 @@ class PromptManager:
             ValueError: If prompt_name is invalid
         """
         if not prompt_name:
-            prompt_name = "default"
+            prompt_name = "agriculture_structured"
         
-        # Only allow default and agriculture_structured
-        allowed_prompts = ["default", "agriculture_structured"]
+        # Only allow simple_prompt and agriculture_structured
+        allowed_prompts = ["simple_prompt", "agriculture_structured"]
         if prompt_name not in allowed_prompts:
-            logger.warning(f"Prompt '{prompt_name}' not allowed, using default")
-            prompt_name = "default"
+            logger.warning(f"Prompt '{prompt_name}' not allowed, using agriculture_structured")
+            prompt_name = "agriculture_structured"
         
         # Return cached prompt if available
         if prompt_name in self._prompt_cache:
@@ -89,16 +89,13 @@ class PromptManager:
             logger.info(f"Loaded system prompt: {prompt_name}")
             return prompt_content
         
-        # Fallback to default if requested prompt not found
-        if prompt_name != "default":
-            logger.warning(f"Prompt '{prompt_name}' not found, falling back to default")
-            return self.get_prompt("default")
+        # Fallback to agriculture_structured if requested prompt not found
+        if prompt_name != "agriculture_structured":
+            logger.warning(f"Prompt '{prompt_name}' not found, falling back to agriculture_structured")
+            return self.get_prompt("agriculture_structured")
         
-        # If even default is missing, use hardcoded fallback
-        logger.warning("No prompt files found, using hardcoded fallback")
-        fallback = self._get_fallback_prompt()
-        self._prompt_cache[prompt_name] = fallback
-        return fallback
+        # If agriculture_structured is missing, raise an error
+        raise FileNotFoundError(f"Required prompt file 'agriculture_structured.txt' not found in {self.prompts_dir}")
     
     def _load_prompt_from_file(self, prompt_name: str) -> Optional[str]:
         """Load prompt content from file."""
@@ -125,34 +122,6 @@ class PromptManager:
         except Exception as e:
             logger.error(f"Error reading prompt file {prompt_file}: {e}")
             return None
-    
-    def _get_fallback_prompt(self) -> str:
-        """Get hardcoded fallback prompt when no files are available."""
-        return """You are a helpful weather and agricultural assistant powered by AI.
-
-IMPORTANT: When users ask about weather, ALWAYS use the available tools to get data. The tools provide:
-- Weather forecasts (current conditions and predictions up to 16 days)
-- Historical weather data (past weather patterns and trends)
-- Agricultural conditions (soil moisture, evapotranspiration, growing degree days)
-
-For every weather query:
-1. ALWAYS call the appropriate tool(s) first to get real data
-2. Use the data from tools to provide accurate, specific answers
-3. Focus on agricultural applications like planting decisions, irrigation scheduling, frost warnings, and harvest planning
-
-Tool Usage Guidelines:
-- For current/future weather → use get_weather_forecast tool
-- For past weather → use get_historical_weather tool
-- For soil/agricultural conditions → use get_agricultural_conditions tool
-- For complex queries → use multiple tools to gather comprehensive data
-
-COORDINATE HANDLING:
-- When users mention coordinates (lat/lon, latitude/longitude), ALWAYS pass them to tools
-- For faster responses, provide latitude/longitude coordinates for any location you know
-- You have extensive geographic knowledge - use it to provide coordinates for cities worldwide
-- If you're unsure of exact coordinates, let the tools handle geocoding instead
-
-If asked about non-weather or non-agricultural topics, politely decline and redirect to weather/agriculture questions."""
     
     def get_available_prompts(self) -> list[str]:
         """Get list of available prompt names."""

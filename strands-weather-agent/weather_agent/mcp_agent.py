@@ -130,13 +130,13 @@ class MCPWeatherAgent:
         self.tools = tools or []
         self.debug_logging = debug_logging
         
-        # Prompt management - always use default unless agriculture_structured is specified
+        # Prompt management - use agriculture_structured by default
         self.prompt_manager = PromptManager()
-        # Only allow default or agriculture_structured
-        if prompt_type == "agriculture_structured":
-            self.prompt_type = "agriculture_structured"
+        # Use agriculture_structured as default
+        if prompt_type == "simple_prompt":
+            self.prompt_type = "simple_prompt"
         else:
-            self.prompt_type = "default"  # Always default, ignore env var
+            self.prompt_type = "agriculture_structured"  # Default to agriculture_structured
         
         # Session management configuration
         self.session_storage_dir = session_storage_dir
@@ -539,7 +539,7 @@ class MCPWeatherAgent:
             "model": self.model_id,
             "region": self.region,
             "temperature": self.temperature,
-            "mcp_servers": len(self.mcp_clients),
+            "mcp_servers": len(self.tools),
             "debug_logging": self.debug_logging,
             "session_management": {
                 "active_sessions": len(self.sessions),

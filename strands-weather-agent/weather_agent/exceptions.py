@@ -35,8 +35,18 @@ class StructuredOutputError(WeatherAgentError):
     - The LLM doesn't return valid JSON
     - Required fields are missing
     - Data types don't match schema
+    
+    Attributes:
+        message: Description of the error
+        original_error: The underlying exception that caused this error
     """
-    pass
+    def __init__(self, message: str, original_error: Exception = None):
+        self.message = message
+        self.original_error = original_error
+        if original_error:
+            super().__init__(f"{message}: {original_error}")
+        else:
+            super().__init__(message)
 
 
 class ModelInvocationError(WeatherAgentError):
