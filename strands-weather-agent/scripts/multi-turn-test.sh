@@ -45,13 +45,15 @@ BLUE='\033[0;34m'
 CYAN='\033[0;36m'
 NC='\033[0m' # No Color
 
-# API endpoint - different for local vs Docker
+# API endpoint - both local and Docker use same port
 if [ "$LOCAL_MODE" = "true" ]; then
-    API_URL="${API_URL:-http://localhost:8000}"
-    echo -e "${YELLOW}Testing against LOCAL server (http://localhost:8000)${NC}"
+    API_URL="${API_URL:-http://localhost:7777}"
+    echo -e "${YELLOW}Testing against LOCAL server (http://localhost:7777)${NC}"
+    echo -e "${YELLOW}Make sure you started the server with: ./scripts/start_server.sh${NC}"
 else
     API_URL="${API_URL:-http://localhost:7777}"
     echo -e "${BLUE}Testing against DOCKER containers (http://localhost:7777)${NC}"
+    echo -e "${BLUE}Make sure you started Docker with: ./scripts/start_docker.sh${NC}"
 fi
 echo ""
 
@@ -115,7 +117,14 @@ display_result() {
     
     echo -e "${CYAN}Turn $turn:${NC}"
     echo -e "${BLUE}Query:${NC} $query"
-    echo -e "${GREEN}Response:${NC} $response_text"
+    
+    # Check if this is an error response
+    if echo "$response_text" | grep -q "An unexpected error occurred"; then
+        echo -e "${RED}Response:${NC} $response_text"
+    else
+        echo -e "${GREEN}Response:${NC} $response_text"
+    fi
+    
     echo -e "${YELLOW}Session:${NC} ${session_id:0:8}... | New: $session_new | Turn: $conversation_turn"
     
     # Display metrics if available
@@ -416,6 +425,8 @@ echo "- Context is maintained for follow-up questions"
 echo "- Invalid sessions are properly handled"
 echo "- Structured query endpoint supports full session management"
 echo ""
+
+
 echo "To test further:"
 echo "- Wait 60+ minutes to test session expiration"
 echo "- Run concurrent tests to verify session isolation"

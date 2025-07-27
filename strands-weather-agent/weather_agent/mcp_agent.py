@@ -302,16 +302,10 @@ class MCPWeatherAgent:
             # Create agent with session context - no MCP context needed!
             agent = await self.create_agent(session_messages)
             
-            # For structured output, use agriculture_structured if specified, otherwise default
-            structured_prompt_type = "agriculture_structured" if self.prompt_type == "agriculture_structured" else "default"
-            
-            # Get base prompt and append the user's message
-            base_prompt = self.prompt_manager.get_prompt(structured_prompt_type)
-            structured_prompt = f"{base_prompt}\n\nUser Query: {message}"
-            
             # Use async structured output directly
             try:
                 # Use the native async version - no thread pool needed!
+                # The agent already has the correct system prompt from create_agent
                 response = await agent.structured_output_async(
                     WeatherQueryResponse,
                     message  # Just pass the user's message

@@ -294,5 +294,3 @@ class NewResponseModel(BaseModel):
 - Ensure correct Python version: `python --version`
 - Install dependencies: `pip install -r requirements.txt`
 - Check PYTHONPATH: `echo $PYTHONPATH`
-
-For more troubleshooting help, see the [Troubleshooting Guide](troubleshooting.md).

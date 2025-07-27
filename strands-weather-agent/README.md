@@ -237,7 +237,6 @@ export BEDROCK_MODEL_ID="meta.llama3-70b-instruct-v1:0"
 - **[Architecture](docs/ARCHITECTURE.md)** - System design and component details
 - **[AWS Deployment](docs/AWS_DEPLOYMENT.md)** - Deploy to AWS ECS with auto-scaling
 - **[Langfuse Integration](docs/LANGFUSE.md)** - Observability and metrics with Langfuse
-- **[Troubleshooting](docs/troubleshooting.md)** - Common issues and solutions
 
 ## Clean Up
 
