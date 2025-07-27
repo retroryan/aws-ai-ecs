@@ -1,7 +1,7 @@
 #!/bin/bash
 
 # FastMCP Server Startup Script
-# This script starts all FastMCP servers in the background with logging
+# This script starts the unified FastMCP server in the background with logging
 
 # Colors for output
 GREEN='\033[0;32m'
@@ -16,7 +16,7 @@ PROJECT_ROOT="$( cd "$SCRIPT_DIR/.." && pwd )"
 # Create logs directory if it doesn't exist
 mkdir -p "$PROJECT_ROOT/logs"
 
-echo -e "${GREEN}Starting FastMCP servers...${NC}"
+echo -e "${GREEN}Starting unified FastMCP weather server...${NC}"
 echo ""
 
 # Function to start a server
@@ -55,22 +55,20 @@ start_server() {
     fi
 }
 
-# Start all servers
-start_server "forecast" "mcp_servers/forecast_server.py" "7071"
-start_server "historical" "mcp_servers/historical_server.py" "7072" 
-start_server "agricultural" "mcp_servers/agricultural_server.py" "7073"
+# Start the unified weather server
+start_server "weather" "mcp_servers/weather_server.py" "7071"
 
 echo ""
-echo -e "${GREEN}All servers have been started.${NC}"
+echo -e "${GREEN}Unified weather server has been started.${NC}"
 echo ""
-echo "Server endpoints:"
-echo "  - Forecast:     http://127.0.0.1:7071/mcp"
-echo "  - Historical:   http://127.0.0.1:7072/mcp"
-echo "  - Agricultural: http://127.0.0.1:7073/mcp"
+echo "Server endpoint: http://127.0.0.1:7071/mcp"
+echo "Health check:    http://127.0.0.1:7071/health"
 echo ""
-echo "Logs are available in the logs/ directory:"
-echo "  - logs/forecast.log"
-echo "  - logs/historical.log"
-echo "  - logs/agricultural.log"
+echo "Available tools:"
+echo "  - get_weather_forecast"
+echo "  - get_historical_weather"
+echo "  - get_agricultural_conditions"
 echo ""
-echo "To stop all servers, run: ./scripts/stop_servers.sh"
+echo "Logs are available in: logs/weather.log"
+echo ""
+echo "To stop the server, run: ./scripts/stop_servers.sh"

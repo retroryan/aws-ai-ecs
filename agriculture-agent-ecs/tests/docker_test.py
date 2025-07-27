@@ -26,9 +26,7 @@ class DockerIntegrationTest:
         self.base_url = "http://localhost:7075"
         self.services = {
             "Weather Agent": "http://localhost:7075/health",
-            "Forecast Server": "http://localhost:7071/health",
-            "Historical Server": "http://localhost:7072/health",
-            "Agricultural Server": "http://localhost:7073/health"
+            "Weather Server": "http://localhost:7071/health"
         }
         self.test_queries = [
             ("What's the weather forecast for Des Moines, Iowa?", "forecast"),

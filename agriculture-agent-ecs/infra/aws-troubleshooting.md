@@ -5,9 +5,7 @@
 ### ✅ Completed Items
 1. **ECR Repository Setup** - All repositories created and accessible
    - agriculture-agent-main
-   - agriculture-agent-forecast
-   - agriculture-agent-historical
-   - agriculture-agent-agricultural
+   - agriculture-agent-weather
 
 2. **Docker Images Built and Pushed** - All images successfully deployed to ECR
    - Images tagged with: a0bdd93-20250622-184247
@@ -125,7 +123,7 @@ curl -X POST http://$ALB_URL/query \
 **Symptoms**: Main agent cannot reach MCP servers
 **Cause**: Security group rules or DNS resolution
 **Solution**: 
-- Verify security group allows ports 7071-7073
+- Verify security group allows port 7071
 - Check service discovery namespace is created
 - Ensure services register with Cloud Map
 
@@ -142,7 +140,7 @@ curl -X POST http://$ALB_URL/query \
 ### Template Project vs Agriculture Agent
 1. **Service Architecture**:
    - Template: Simple client-server (2 services)
-   - Agriculture: Multi-service with discovery (4 services)
+   - Agriculture: Multi-service with discovery (2 services - main + weather)
 
 2. **Network Configuration**:
    - Template: Private subnets (MapPublicIpOnLaunch: false)

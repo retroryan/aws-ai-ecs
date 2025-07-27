@@ -92,7 +92,7 @@ class TestCoordinateExtraction:
         ]
         
         for query, expected_lat, expected_lon in test_cases:
-            response = await weather_agent.query_structured(query)
+            response = await weather_agent.query(query)
             assert len(response.locations) > 0
             
             location = response.locations[0]
@@ -111,7 +111,7 @@ class TestCoordinateExtraction:
         ]
         
         for query in queries:
-            response = await weather_agent.query_structured(query)
+            response = await weather_agent.query(query)
             assert len(response.locations) > 0
             assert response.locations[0].source in ["explicit", "llm_knowledge"]
     
@@ -119,7 +119,7 @@ class TestCoordinateExtraction:
     async def test_ambiguous_locations(self, weather_agent):
         """Test handling of ambiguous city names."""
         for city in AMBIGUOUS_CITIES[:3]:  # Test first 3
-            response = await weather_agent.query_structured(f"Weather in {city}")
+            response = await weather_agent.query(f"Weather in {city}")
             
             # Should either have clarification options or lower confidence
             location = response.locations[0]
@@ -140,7 +140,7 @@ class TestGlobalCityCoverage:
         """Test coordinate extraction for global cities."""
         city_name, expected_lat, expected_lon, timezone, country_code = city_info
         
-        response = await weather_agent.query_structured(f"What's the weather in {city_name}?")
+        response = await weather_agent.query(f"What's the weather in {city_name}?")
         
         assert len(response.locations) > 0
         location = response.locations[0]
@@ -163,7 +163,7 @@ class TestGlobalCityCoverage:
         ]
         
         for query in queries:
-            response = await weather_agent.query_structured(query)
+            response = await weather_agent.query(query)
             assert response.query_type == "agricultural"
             assert len(response.locations) > 0
             
@@ -181,12 +181,12 @@ class TestPerformanceComparison:
         """Compare performance of coordinate vs location name queries."""
         # Test with location name (may require geocoding)
         start = time.time()
-        response1 = await weather_agent.query_structured("Weather in Chicago")
+        response1 = await weather_agent.query("Weather in Chicago")
         name_time = time.time() - start
         
         # Test with coordinates (no geocoding needed)
         start = time.time()
-        response2 = await weather_agent.query_structured(
+        response2 = await weather_agent.query(
             "Weather at 41.8781, -87.6298"
         )
         coord_time = time.time() - start
@@ -217,7 +217,7 @@ class TestEdgeCases:
         ]
         
         for query in invalid_queries:
-            response = await weather_agent.query_structured(query)
+            response = await weather_agent.query(query)
             # Should either correct or warn about invalid coordinates
             validation = weather_agent.validate_response(response)
             assert len(validation.errors) > 0 or len(validation.warnings) > 0
@@ -225,7 +225,7 @@ class TestEdgeCases:
     @pytest.mark.asyncio
     async def test_empty_location_with_coordinates(self, weather_agent):
         """Test empty location string with valid coordinates."""
-        response = await weather_agent.query_structured(
+        response = await weather_agent.query(
             "Weather at location '' with coordinates 40.7128, -74.0060"
         )
         
@@ -245,7 +245,7 @@ class TestEdgeCases:
         ]
         
         for query in custom_queries:
-            response = await weather_agent.query_structured(query)
+            response = await weather_agent.query(query)
             assert len(response.locations) > 0
             # Custom names might be preserved or replaced with geographic names
     
@@ -259,7 +259,7 @@ class TestEdgeCases:
         ]
         
         for query in fictional:
-            response = await weather_agent.query_structured(query)
+            response = await weather_agent.query(query)
             # Should indicate low confidence or need clarification
             if len(response.locations) > 0:
                 location = response.locations[0]
@@ -269,7 +269,7 @@ class TestEdgeCases:
     async def test_multiple_locations(self, weather_agent):
         """Test queries with multiple locations."""
         query = "Compare weather between New York and London"
-        response = await weather_agent.query_structured(query)
+        response = await weather_agent.query(query)
         
         # Should extract both locations
         assert len(response.locations) >= 2
@@ -285,7 +285,7 @@ class TestEdgeCases:
         for city_info in SPECIAL_CHAR_CITIES[:3]:  # Test first 3
             city_name, expected_lat, expected_lon, _, _ = city_info
             
-            response = await weather_agent.query_structured(
+            response = await weather_agent.query(
                 f"What's the weather in {city_name}?"
             )
             
@@ -369,7 +369,7 @@ async def test_coordinates_simple():
         
         try:
             # Use structured output for better visibility
-            response = await agent.query_structured(test['query'])
+            response = await agent.query(test['query'])
             print(f"✅ Query Type: {response.query_type}")
             print(f"✅ Locations Found: {len(response.locations)}")
             
@@ -394,14 +394,14 @@ async def test_coordinates_simple():
     
     # Test with location name
     start = time.time()
-    response1 = await agent.query_structured("Weather in Berlin, Germany")
+    response1 = await agent.query("Weather in Berlin, Germany")
     name_time = time.time() - start
     print(f"With location name: {name_time:.2f} seconds")
     print(f"  Source: {response1.locations[0].source if response1.locations else 'unknown'}")
     
     # Test with coordinates
     start = time.time()
-    response2 = await agent.query_structured("Weather at 52.5200, 13.4050")
+    response2 = await agent.query("Weather at 52.5200, 13.4050")
     coord_time = time.time() - start
     print(f"With coordinates: {coord_time:.2f} seconds")
     print(f"  Source: {response2.locations[0].source if response2.locations else 'unknown'}")
@@ -424,7 +424,7 @@ async def run_all_coordinate_tests():
     print("\n📍 Testing Global City Coverage...")
     for city_info in GLOBAL_CITIES[:5]:  # Test first 5 cities
         city_name = city_info[0]
-        response = await agent.query_structured(f"Weather in {city_name}")
+        response = await agent.query(f"Weather in {city_name}")
         if response.locations:
             loc = response.locations[0]
             print(f"✅ {city_name}: ({loc.latitude}, {loc.longitude}) - {loc.timezone}")
@@ -434,7 +434,7 @@ async def run_all_coordinate_tests():
     # Test 2: Ambiguous locations
     print("\n🤔 Testing Ambiguous Locations...")
     for city in AMBIGUOUS_CITIES[:3]:
-        response = await agent.query_structured(f"Weather in {city}")
+        response = await agent.query(f"Weather in {city}")
         if response.locations:
             loc = response.locations[0]
             if loc.needs_clarification:
@@ -446,7 +446,7 @@ async def run_all_coordinate_tests():
     print("\n🌏 Testing Special Character Cities...")
     for city_info in SPECIAL_CHAR_CITIES[:3]:
         city_name = city_info[0]
-        response = await agent.query_structured(f"Weather in {city_name}")
+        response = await agent.query(f"Weather in {city_name}")
         if response.locations:
             loc = response.locations[0]
             print(f"✅ {city_name}: Successfully handled")
@@ -469,7 +469,7 @@ async def run_all_coordinate_tests():
     for query in test_queries:
         total_tests += 1
         try:
-            response = await agent.query_structured(query)
+            response = await agent.query(query)
             if response.locations and response.locations[0].latitude:
                 successful_tests += 1
         except:
@@ -480,7 +480,7 @@ async def run_all_coordinate_tests():
     
     # Test 5: Validation  
     print("\n✔️  Testing Response Validation...")
-    response = await agent.query_structured("Weather at invalid coordinates 91, 181")
+    response = await agent.query("Weather at invalid coordinates 91, 181")
     validation = agent.validate_response(response)
     if validation.errors or validation.warnings:
         print(f"✅ Validation caught issues: {validation.errors or validation.warnings}")

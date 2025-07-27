@@ -61,7 +61,10 @@ if [ ! -d "$PROJECT_ROOT/logs" ]; then
     exit 0
 fi
 
-# Stop all servers
+# Stop the unified weather server
+stop_server "weather"
+
+# Also check for old server PIDs in case of migration
 stop_server "forecast"
 stop_server "historical"
 stop_server "agricultural"

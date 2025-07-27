@@ -1,22 +1,41 @@
 # Strands Weather Agent - Model-Agnostic AI Agent with AWS Strands
 
-## 🚀 A Different Approach: Declarative Agent Orchestration
+## 🚀 A Different Approach: Simplified Agent Implementation
 
-This example demonstrates how to implement structured output with AWS Strands Agents, showcasing a **declarative approach to AI development** that contrasts with explicit orchestration frameworks like LangGraph.
+This example demonstrates how to implement structured output with AWS Strands Agents, showcasing a **streamlined approach to AI development** with even less boilerplate than other declarative frameworks like LangGraph.
 
-### Explicit Orchestration Approach (e.g., LangGraph)
-You define explicit workflows with:
-- State graphs and nodes for each step
-- Checkpointing for state persistence
-- Manual tool binding and execution
-- Error handling at each transition
-- Cross-thread memory management
+### Both Are Declarative - Different Levels of Abstraction
 
-### Declarative Approach (AWS Strands)
-You declare the desired output structure, and the agent handles orchestration:
+Both LangGraph and AWS Strands use declarative approaches, but at different abstraction levels:
+
+**LangGraph's Declarative Pattern**:
+```python
+# Declarative agent creation with explicit tool binding
+self.agent = create_react_agent(
+    self.llm.bind_tools(self.tools),
+    self.tools,
+    checkpointer=self.checkpointer
+)
+```
+
+**AWS Strands' Higher Abstraction**:
+```python
+# Even more streamlined - tools are bound automatically
+self.agent = Agent(
+    name="weather-assistant",
+    foundation_model_config={"model_id": model_id},
+    mcp_servers=mcp_servers
+)
+```
+
+The key difference is **abstraction level**:
+- **LangGraph**: Requires explicit tool binding and configuration
+- **AWS Strands**: Handles tool binding and session management automatically
+
+### Example Usage
 
 ```python
-# That's it - one line replaces hundreds of lines of orchestration code!
+# One line for structured output
 response = agent.structured_output(WeatherResponse, "What's the weather in Chicago?")
 ```
 
@@ -27,23 +46,16 @@ The agent automatically:
 - Formats the response according to your schema
 - Validates all data types and constraints
 
-### Key Differences in Approaches
-
-**Declarative Simplicity**: Minimal orchestration code, focusing on output schemas  
-**Built-in Knowledge**: Leverages LLM's inherent geographic understanding  
-**Type Safety**: Pydantic models ensure structured, validated responses  
-**Trade-offs**: Less explicit control compared to graph-based orchestration
-
 ### Key Insights
 
 1. **Agent as Orchestrator**: The agent handles the entire workflow internally - no manual tool calling needed
 2. **Comprehensive Models**: Use single Pydantic models that describe the complete desired output
 3. **Trust Model Intelligence**: Foundation models have extensive knowledge - let them use it
 4. **Single API Call**: One structured output call replaces complex multi-stage pipelines
-5. **Declarative Design**: Focus on desired outcomes rather than process steps
-6. **Model Intelligence**: Trust the model's existing knowledge and capabilities
+5. **Focus on Outcomes**: Define what you want, not how to get it
+6. **Maximum Simplification**: Less code means fewer bugs and faster development
 
-This declarative approach offers a different way to build AI applications, prioritizing simplicity and rapid development.
+This streamlined approach makes it easier to build AI applications quickly.
 
 ## Overview
 
@@ -65,17 +77,17 @@ This demonstration showcases:
 - **Deep Observability**: AWS Strands debug logging for insights into agent orchestration internals
 - **Production Metrics**: Langfuse integration for token usage, latency tracking, and cost monitoring
 
-## Why AWS Strands? A Declarative Approach
+## Why AWS Strands? Maximum Simplification
 
-### 🚀 Declarative Agent Development
+### 🚀 Highest-Level Agent Abstraction
 
-**AWS Strands**: Native MCP integration with automatic tool discovery and declarative agent creation.
+**AWS Strands**: Native MCP integration with the most streamlined agent creation API.
 
-AWS Strands provides a different philosophy:
+AWS Strands provides maximum simplification:
 - Built-in MCP client support - no custom wrappers needed
-- Automatic tool discovery from MCP servers
-- Native streaming and session management
-- Trade-off: Less explicit control over workflow steps
+- Automatic tool binding - no explicit bind_tools() call
+- Native streaming and session management built-in
+- Trade-off: Less control over workflow inspection and debugging
 
 ### Core Simplification
 
@@ -322,7 +334,7 @@ graph TB
 2. **Native MCP**: No custom HTTP clients or tool wrappers
 3. **Automatic Discovery**: Tools found at runtime
 4. **Built-in Features**: Streaming, sessions, error handling
-5. **Trade-offs**: Less control over state persistence and workflow inspection
+5. **Trade-offs**: Less control over workflow inspection and debugging
 
 ### Key Capabilities
 
@@ -496,15 +508,28 @@ python -m pytest tests/test_coordinates_consolidated.py -v
 # Health check
 curl http://localhost:7777/health
 
-# Simple query
+# Query endpoint (returns structured output)
 curl -X POST http://localhost:7777/query \
   -H "Content-Type: application/json" \
   -d '{"query": "What is the weather like in Chicago?"}'
 
-# Structured output query
-curl -X POST http://localhost:7777/query/structured \
-  -H "Content-Type: application/json" \
-  -d '{"query": "What is the weather like in Seattle?"}'
+# Example response:
+# {
+#   "query_type": "current",
+#   "locations": [{
+#     "name": "Chicago, Illinois, US",
+#     "latitude": 41.8781,
+#     "longitude": -87.6298
+#   }],
+#   "weather_data": {
+#     "current_temperature": 22.5,
+#     "conditions": "Partly cloudy"
+#   },
+#   "summary": "Current weather in Chicago: 22.5°C, partly cloudy...",
+#   "session_id": "abc123...",
+#   "session_new": true,
+#   "conversation_turn": 1
+# }
 
 # Multi-turn conversation with session
 curl -X POST http://localhost:7777/query \
@@ -727,67 +752,3 @@ This demonstration project requires several enhancements for production use:
 - [FastMCP Documentation](https://github.com/jlowin/fastmcp)
 - [AWS Bedrock Models](https://docs.aws.amazon.com/bedrock/)
 - [Open-Meteo API](https://open-meteo.com/)
-
----
-
-## Appendix: Comparing Approaches - LangGraph vs AWS Strands
-
-### Code Philosophy
-
-**LangGraph: Explicit Control**
-```python
-# Explicit workflow definition with state management
-self.llm = get_bedrock_llm(...)
-self.tools = await self._discover_tools()
-self.agent = create_react_agent(
-    self.llm.bind_tools(self.tools),
-    self.tools,
-    checkpointer=self.checkpointer  # Enables state persistence
-)
-```
-
-**AWS Strands: Declarative Simplicity**
-```python
-# Declarative setup with automatic orchestration
-self.agent = Agent(
-    name="weather-assistant",
-    foundation_model_config={"model_id": model_id},
-    mcp_servers=mcp_servers
-)
-```
-
-### Feature Comparison: Different Strengths for Different Needs
-
-| Feature | LangGraph | AWS Strands |
-|---------|-----------|-------------|
-| **Philosophy** | Explicit workflow control | Declarative orchestration |
-| **MCP Integration** | Custom HTTP client | Native support |
-| **Tool Discovery** | Manual implementation | Automatic |
-| **Streaming** | Manual setup | Built-in |
-| **Session Management** | Persistent checkpointers | In-memory sessions |
-| **State Persistence** | Database-backed (PostgreSQL, SQLite) | Memory-only |
-| **Time Travel Debugging** | Yes, via checkpoint history | No |
-| **Human-in-the-Loop** | Built-in with state inspection | Requires custom implementation |
-| **Cross-Thread Memory** | Store interface for sharing | Single-thread focused |
-| **Workflow Visibility** | Full graph introspection | Black-box agent |
-| **Error Recovery** | Checkpoint-based recovery | Restart required |
-
-### When to Choose Each Approach
-
-**Choose LangGraph when you need:**
-- Durable state persistence across restarts
-- Human-in-the-loop workflows with approval steps
-- Time-travel debugging for complex workflows
-- Cross-thread or cross-session memory sharing
-- Fine-grained control over execution flow
-- Audit trails and compliance requirements
-
-**Choose AWS Strands when you need:**
-- Rapid prototyping and development
-- Minimal boilerplate code
-- Native MCP protocol support
-- Autonomous agent execution
-- Simple request-response patterns
-- Quick deployment with less configuration
-
-

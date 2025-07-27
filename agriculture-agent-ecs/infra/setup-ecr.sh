@@ -5,7 +5,7 @@ SCRIPT_DIR="$( cd "$( dirname "${BASH_SOURCE[0]}" )" && pwd )"
 source "${SCRIPT_DIR}/common.sh"
 
 # Script configuration
-REPOS=("${ECR_MAIN_REPO}" "${ECR_FORECAST_REPO}" "${ECR_HISTORICAL_REPO}" "${ECR_AGRICULTURAL_REPO}")
+REPOS=("${ECR_MAIN_REPO}" "${ECR_WEATHER_REPO}")
 DELETE_MODE=false
 
 # Parse command line arguments

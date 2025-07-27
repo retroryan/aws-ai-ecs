@@ -1,0 +1,250 @@
+AWSTemplateFormatVersion: '2010-09-09'
+Description: 'Agriculture Agent ECS Services - Consolidated MCP Server Architecture'
+
+Parameters:
+  BaseStackName:
+    Type: String
+    Description: Name of the base infrastructure stack
+    Default: agriculture-base
+  
+  MainImageTag:
+    Type: String
+    Description: Docker image tag for main service
+    Default: latest
+  
+  WeatherImageTag:
+    Type: String
+    Description: Docker image tag for unified weather service
+    Default: latest
+  
+  BedrockModelId:
+    Type: String
+    Description: Bedrock model ID to use
+    Default: amazon.nova-lite-v1:0
+  
+  BedrockRegion:
+    Type: String
+    Description: AWS region for Bedrock
+    Default: us-east-1
+  
+  ServiceCpu:
+    Type: Number
+    Description: CPU units for each service (256 = 0.25 vCPU)
+    Default: 512
+  
+  ServiceMemory:
+    Type: Number
+    Description: Memory for each service in MB
+    Default: 1024
+
+Resources:
+  # CloudWatch Log Groups
+  MainLogGroup:
+    Type: AWS::Logs::LogGroup
+    Properties:
+      LogGroupName: /ecs/agriculture-main
+      RetentionInDays: 7
+  
+  WeatherLogGroup:
+    Type: AWS::Logs::LogGroup
+    Properties:
+      LogGroupName: /ecs/agriculture-weather
+      RetentionInDays: 7
+  
+  # ECS Task Definitions
+  MainTaskDefinition:
+    Type: AWS::ECS::TaskDefinition
+    Properties:
+      Family: agriculture-main
+      Cpu: !Ref ServiceCpu
+      Memory: !Ref ServiceMemory
+      NetworkMode: awsvpc
+      RequiresCompatibilities:
+        - FARGATE
+      ExecutionRoleArn:
+        Fn::ImportValue: !Sub ${BaseStackName}-exec-role
+      TaskRoleArn:
+        Fn::ImportValue: !Sub ${BaseStackName}-task-role
+      ContainerDefinitions:
+        - Name: main
+          Image: !Sub ${AWS::AccountId}.dkr.ecr.${AWS::Region}.amazonaws.com/agriculture-agent-main:${MainImageTag}
+          PortMappings:
+            - ContainerPort: 7075
+              Protocol: tcp
+              Name: http
+              AppProtocol: http
+          Environment:
+            - Name: BEDROCK_MODEL_ID
+              Value: !Ref BedrockModelId
+            - Name: BEDROCK_REGION
+              Value: !Ref BedrockRegion
+            - Name: BEDROCK_TEMPERATURE
+              Value: "0"
+            - Name: LOG_LEVEL
+              Value: INFO
+            - Name: MCP_SERVER_URL
+              Value: http://weather.agriculture.local:7071/mcp
+          LogConfiguration:
+            LogDriver: awslogs
+            Options:
+              awslogs-group: !Ref MainLogGroup
+              awslogs-region: !Ref AWS::Region
+              awslogs-stream-prefix: ecs
+          HealthCheck:
+            Command:
+              - CMD-SHELL
+              - curl -f http://localhost:7075/health || exit 1
+            Interval: 30
+            Timeout: 5
+            Retries: 3
+            StartPeriod: 60
+  
+  WeatherTaskDefinition:
+    Type: AWS::ECS::TaskDefinition
+    Properties:
+      Family: agriculture-weather
+      Cpu: !Ref ServiceCpu
+      Memory: !Ref ServiceMemory
+      NetworkMode: awsvpc
+      RequiresCompatibilities:
+        - FARGATE
+      ExecutionRoleArn:
+        Fn::ImportValue: !Sub ${BaseStackName}-exec-role
+      TaskRoleArn:
+        Fn::ImportValue: !Sub ${BaseStackName}-task-role
+      ContainerDefinitions:
+        - Name: weather-server
+          Image: !Sub ${AWS::AccountId}.dkr.ecr.${AWS::Region}.amazonaws.com/agriculture-agent-weather:${WeatherImageTag}
+          PortMappings:
+            - ContainerPort: 7071
+              Protocol: tcp
+              Name: mcp
+              AppProtocol: http
+          Environment:
+            - Name: LOG_LEVEL
+              Value: INFO
+            - Name: MCP_PORT
+              Value: "7071"
+          LogConfiguration:
+            LogDriver: awslogs
+            Options:
+              awslogs-group: !Ref WeatherLogGroup
+              awslogs-region: !Ref AWS::Region
+              awslogs-stream-prefix: ecs
+          # Note: No health check for MCP servers in ECS
+  
+  # ECS Services
+  WeatherService:
+    Type: AWS::ECS::Service
+    Properties:
+      ServiceName: agriculture-weather
+      Cluster:
+        Fn::ImportValue: !Sub ${BaseStackName}-cluster
+      TaskDefinition: !Ref WeatherTaskDefinition
+      DesiredCount: 1
+      LaunchType: FARGATE
+      CapacityProviderStrategy:
+        - Base: 0
+          Weight: 1
+          CapacityProvider: FARGATE_SPOT
+      NetworkConfiguration:
+        AwsvpcConfiguration:
+          Subnets:
+            - Fn::ImportValue: !Sub ${BaseStackName}-subnet1
+            - Fn::ImportValue: !Sub ${BaseStackName}-subnet2
+          SecurityGroups:
+            - Fn::ImportValue: !Sub ${BaseStackName}-container-sg
+          AssignPublicIp: ENABLED
+      ServiceConnectConfiguration:
+        Enabled: true
+        Namespace:
+          Fn::ImportValue: !Sub ${BaseStackName}-namespace-arn
+        Services:
+          - PortName: mcp
+            ClientAliases:
+              - DnsName: weather
+                Port: 7071
+  
+  MainService:
+    Type: AWS::ECS::Service
+    DependsOn: MainALBListener
+    Properties:
+      ServiceName: agriculture-main
+      Cluster:
+        Fn::ImportValue: !Sub ${BaseStackName}-cluster
+      TaskDefinition: !Ref MainTaskDefinition
+      DesiredCount: 1
+      LaunchType: FARGATE
+      CapacityProviderStrategy:
+        - Base: 0
+          Weight: 1
+          CapacityProvider: FARGATE_SPOT
+      NetworkConfiguration:
+        AwsvpcConfiguration:
+          Subnets:
+            - Fn::ImportValue: !Sub ${BaseStackName}-subnet1
+            - Fn::ImportValue: !Sub ${BaseStackName}-subnet2
+          SecurityGroups:
+            - Fn::ImportValue: !Sub ${BaseStackName}-container-sg
+          AssignPublicIp: ENABLED
+      LoadBalancers:
+        - ContainerName: main
+          ContainerPort: 7075
+          TargetGroupArn: !Ref MainTargetGroup
+      ServiceConnectConfiguration:
+        Enabled: true
+        Namespace:
+          Fn::ImportValue: !Sub ${BaseStackName}-namespace-arn
+  
+  # Target Group for ALB
+  MainTargetGroup:
+    Type: AWS::ElasticLoadBalancingV2::TargetGroup
+    Properties:
+      Name: agriculture-main-tg
+      Port: 7075
+      Protocol: HTTP
+      TargetType: ip
+      VpcId:
+        Fn::ImportValue: !Sub ${BaseStackName}-vpc
+      HealthCheckEnabled: true
+      HealthCheckIntervalSeconds: 30
+      HealthCheckPath: /health
+      HealthCheckProtocol: HTTP
+      HealthCheckTimeoutSeconds: 5
+      HealthyThresholdCount: 2
+      UnhealthyThresholdCount: 3
+      Matcher:
+        HttpCode: 200
+  
+  # ALB Listener
+  MainALBListener:
+    Type: AWS::ElasticLoadBalancingV2::Listener
+    Properties:
+      LoadBalancerArn:
+        Fn::ImportValue: !Sub ${BaseStackName}-alb
+      Port: 80
+      Protocol: HTTP
+      DefaultActions:
+        - Type: forward
+          TargetGroupArn: !Ref MainTargetGroup
+
+Outputs:
+  MainServiceArn:
+    Description: ARN of the main service
+    Value: !Ref MainService
+    Export:
+      Name: !Sub ${AWS::StackName}-main-service
+  
+  WeatherServiceArn:
+    Description: ARN of the weather service
+    Value: !Ref WeatherService
+    Export:
+      Name: !Sub ${AWS::StackName}-weather-service
+  
+  LoadBalancerUrl:
+    Description: URL of the load balancer
+    Value:
+      Fn::Sub:
+        - http://${DNSName}
+        - DNSName:
+            Fn::ImportValue: !Sub ${BaseStackName}-alb-dns

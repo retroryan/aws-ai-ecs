@@ -97,6 +97,7 @@ class MCPWeatherAgent:
     """
     
     def __init__(self, 
+                 tools: Optional[List[Any]] = None,
                  debug_logging: bool = False, 
                  prompt_type: Optional[str] = None, 
                  session_storage_dir: Optional[str] = None):
@@ -104,8 +105,9 @@ class MCPWeatherAgent:
         Initialize the weather agent.
         
         Args:
+            tools: List of MCP tools (if None, agent will need to be created with tools)
             debug_logging: Enable detailed debug logging for tool calls
-            prompt_type: System prompt type (default, agriculture, simple)
+            prompt_type: System prompt type (default or agriculture_structured only)
             session_storage_dir: Directory for file-based session storage
         """
         # Validate environment variables first
@@ -124,13 +126,17 @@ class MCPWeatherAgent:
             temperature=self.temperature
         )
         
-        # Initialize MCP clients using native Strands pattern
-        self.mcp_clients = self._create_mcp_clients()
+        # Store tools directly instead of MCP clients
+        self.tools = tools or []
         self.debug_logging = debug_logging
         
-        # Prompt management
+        # Prompt management - always use default unless agriculture_structured is specified
         self.prompt_manager = PromptManager()
-        self.prompt_type = prompt_type or os.getenv("SYSTEM_PROMPT", "default")
+        # Only allow default or agriculture_structured
+        if prompt_type == "agriculture_structured":
+            self.prompt_type = "agriculture_structured"
+        else:
+            self.prompt_type = "default"  # Always default, ignore env var
         
         # Session management configuration
         self.session_storage_dir = session_storage_dir
@@ -161,7 +167,7 @@ class MCPWeatherAgent:
         logger.info(f"Model: {self.model_id}")
         logger.info(f"Region: {self.region}")
         logger.info(f"Temperature: {self.temperature}")
-        logger.info(f"MCP Servers: {len(self.mcp_clients)} configured")
+        logger.info(f"Tools: {len(self.tools)} loaded")
         logger.info(f"Debug Mode: {'✅ ENABLED' if self.debug_logging else '❌ DISABLED'}")
         logger.info(f"Prompt Type: {self.prompt_type}")
         
@@ -188,72 +194,32 @@ class MCPWeatherAgent:
         pass
     
     
-    def _create_mcp_clients(self) -> List[MCPClient]:
-        """
-        Create MCP client using Strands native support.
-        
-        This is the way to create MCP clients in Strands:
-        - Use MCPClient wrapper with lambda factory
-        - Support for streamable HTTP transport
-        - Automatic session management by Strands
-        
-        Returns:
-            List containing the single MCP client
-        """
-        # Get server URL from environment with default
-        server_url = os.getenv("MCP_SERVER_URL", "http://localhost:7778/mcp")
-        
-        clients = []
-        try:
-            # Create MCP client with streamable HTTP transport for HTTP-based server
-            # The lambda is required to defer connection until context entry
-            client = MCPClient(lambda: streamablehttp_client(server_url))
-            clients.append(client)
-            logger.info(f"Created MCP client for unified weather server at {server_url}")
-        except Exception as e:
-            logger.warning(f"Failed to create weather server client: {e}")
-        
-        return clients
-    
     async def test_connectivity(self) -> Dict[str, bool]:
         """
-        Test connectivity to all MCP servers with caching.
+        Test connectivity by checking if tools are available.
         
         Returns:
             Dict mapping server names to connectivity status
         """
-        # Check cache (valid for 30 seconds)
-        now = datetime.utcnow()
-        if (self._last_connectivity_check and 
-            (now - self._last_connectivity_check).total_seconds() < 30):
-            return self._connectivity_cache
+        # Since we now receive tools directly, we just check if we have them
+        results = {
+            "weather-server": len(self.tools) > 0
+        }
         
-        results = {}
-        
-        if self.mcp_clients:
-            try:
-                # Test connection by listing tools
-                with self.mcp_clients[0]:
-                    tools = self.mcp_clients[0].list_tools_sync()
-                    results["weather-server"] = True
-                    logger.info(f"✅ weather server: {len(tools)} tools available")
-            except Exception as e:
-                results["weather-server"] = False
-                logger.error(f"❌ weather server: {e}")
-        
-        # Update cache
-        self._connectivity_cache = results
-        self._last_connectivity_check = now
+        if len(self.tools) > 0:
+            logger.info(f"✅ weather server: {len(self.tools)} tools available")
+        else:
+            logger.warning("❌ weather server: No tools available")
         
         return results
     
     async def create_agent(self, 
                           session_messages: Optional[List[Dict[str, Any]]] = None) -> Agent:
         """
-        Create agent with native MCP support - much simpler!
+        Create agent with pre-loaded tools - much simpler!
         
         This demonstrates the Strands pattern:
-        - Tools are collected from MCP servers
+        - Tools are passed in at initialization
         - Agent is created with all configuration
         - No manual session or context management needed
         - Simple trace attributes for telemetry when enabled
@@ -264,22 +230,10 @@ class MCPWeatherAgent:
         Returns:
             Configured Agent instance
         """
-        # Collect all tools from MCP servers
-        all_tools = []
-        
-        for client in self.mcp_clients:
-            try:
-                # Assume clients are already in context when this is called
-                tools = client.list_tools_sync()
-                all_tools.extend(tools)
-                if self.debug_logging:
-                    logger.debug(f"Loaded {len(tools)} tools from MCP server")
-            except Exception as e:
-                logger.warning(f"Failed to load tools from MCP server: {e}")
-        
-        if not all_tools:
-            raise MCPConnectionError("No MCP servers available", 
-                                   Exception("All MCP servers failed to provide tools"))
+        # Use the tools provided at initialization
+        if not self.tools:
+            raise MCPConnectionError("No tools available", 
+                                   Exception("No tools were provided to the agent"))
         
         # Simple trace attributes when telemetry is enabled
         trace_attributes = None
@@ -299,7 +253,7 @@ class MCPWeatherAgent:
         agent = Agent(
             model=self.bedrock_model,
             system_prompt=self.prompt_manager.get_prompt(self.prompt_type),
-            tools=all_tools,
+            tools=self.tools,
             messages=session_messages or [],
             conversation_manager=self.conversation_manager,
             trace_attributes=trace_attributes
@@ -307,100 +261,22 @@ class MCPWeatherAgent:
         
         return agent
     
-    async def query(self, message: str, session_id: Optional[str] = None) -> str:
-        """        
-        This demonstrates the async pattern:
-        - Direct async/await usage
-        - Proper error handling
-        - Session management
-        - Streaming response collection
-        
-        Args:
-            message: User's query
-            session_id: Optional session ID for conversation tracking
-            
-        Returns:
-            Agent's response as string
-        """
-        # Generate session ID if not provided
-        if session_id is None:
-            session_id = str(uuid.uuid4())
-        
-        # Store session_id for telemetry
-        self.session_id = session_id
-        
-        logger.info(f"Processing query (session: {session_id[:8]}...): {message[:50]}...")
-        
-        try:
-            # Load session messages
-            session_messages = self._get_session_messages(session_id)
-            
-            # Use ExitStack to keep MCP clients open during agent execution
-            from contextlib import ExitStack
-            with ExitStack() as stack:
-                # Enter all MCP client contexts
-                for client in self.mcp_clients:
-                    stack.enter_context(client)
-                
-                # Create agent with session context while clients are open
-                agent = await self.create_agent(session_messages)
-                
-                # Process query with streaming
-                response_text = ""
-                self.last_metrics = None  # Reset metrics
-                
-                # Use async streaming for better performance
-                # Note: stream_async yields callback events, not the full event structure
-                async for event in agent.stream_async(message):
-                    if "data" in event:
-                        response_text += event["data"]
-                        if self.debug_logging:
-                            print(event["data"], end="", flush=True)
-                    elif "current_tool_use" in event:
-                        tool_info = event["current_tool_use"]
-                        tool_name = tool_info.get('name', 'unknown')
-                        
-                        # Always log tool calls for coordinate debugging
-                        if self.debug_logging:
-                            print(f"\n🔧 [AGENT DEBUG - Tool Call]: {tool_name}")
-                            if 'input' in tool_info:
-                                print(f"   📥 [AGENT DEBUG - Tool Input]: {tool_info['input']}")
-                
-                # After streaming completes, get metrics from the agent's event loop
-                if hasattr(agent, 'event_loop_metrics'):
-                    self.last_metrics = agent.event_loop_metrics
-                
-                # Update session with new messages
-                if session_id:
-                    self._save_session_messages(session_id, agent.messages)
-                
-                
-                return response_text
-            
-        except MCPConnectionError as e:
-            logger.error(f"MCP connection error: {e}")
-            return f"I'm unable to connect to the weather services: {e.server_name}"
-        except Exception as e:
-            logger.error(f"Error processing query: {e}", exc_info=True)
-            return f"I encountered an error while processing your request: {str(e)}"
     
-    async def query_structured(self, 
-                             message: str, 
-                             session_id: Optional[str] = None) -> WeatherQueryResponse:
+    async def query(self, 
+                    message: str, 
+                    session_id: Optional[str] = None) -> WeatherQueryResponse:
         """
-        Pure async structured output with proper error handling.
+        Process a weather query and return structured output.
         
-        This demonstrates:
-        - Structured output with Pydantic models
-        - Specific error handling for different failure modes
-        - Graceful degradation with informative responses
+        Uses AWS Strands native structured output to extract location information,
+        call weather tools, and return a validated response with session management.
         
         Args:
             message: User's weather query
-            session_id: Optional session ID
+            session_id: Optional session ID for conversation tracking
             
         Returns:
-            Structured WeatherQueryResponse
+            Structured WeatherQueryResponse with locations, weather data, and session info
         """
         # Generate session ID if not provided
         if session_id is None:
@@ -423,53 +299,41 @@ class MCPWeatherAgent:
             # Load session messages
             session_messages = self._get_session_messages(session_id)
             
-            # Use ExitStack to keep MCP clients open during agent execution
-            from contextlib import ExitStack
-            with ExitStack() as stack:
-                # Enter all MCP client contexts
-                for client in self.mcp_clients:
-                    stack.enter_context(client)
-                
-                # Create agent with session context while clients are open
-                agent = await self.create_agent(session_messages)
-                
-                # Get the appropriate structured prompt from PromptManager
-                # Use a structured variant if available, otherwise use regular prompt
-                structured_prompt_type = f"{self.prompt_type}_structured"
-                if structured_prompt_type not in self.prompt_manager.get_available_prompts():
-                    structured_prompt_type = "structured"
-                
-                # Get base prompt and append the user's message
-                base_prompt = self.prompt_manager.get_prompt(structured_prompt_type)
-                structured_prompt = f"{base_prompt}\n\nUser Query: {message}"
-                
-                # Use async structured output directly
-                try:
-                    # Use the native async version - no thread pool needed!
-                    response = await agent.structured_output_async(
-                        WeatherQueryResponse,
-                        message  # Just pass the user's message
-                    )
-                except Exception as e:
-                    logger.warning(f"Structured output failed: {e}, falling back to streaming")
-                    # Fallback: Use streaming and parse response
-                    response_text = ""
-                    async for event in agent.stream_async(message):
-                        if "data" in event:
-                            response_text += event["data"]
-                    response = self._parse_structured_response(response_text)
-                
-                # Update session
-                if session_id:
-                    self._save_session_messages(session_id, agent.messages)
-                
-                # Add processing time
-                end_time = datetime.utcnow()
-                response.processing_time_ms = int(
-                    (end_time - start_time).total_seconds() * 1000
+            # Create agent with session context - no MCP context needed!
+            agent = await self.create_agent(session_messages)
+            
+            # For structured output, use agriculture_structured if specified, otherwise default
+            structured_prompt_type = "agriculture_structured" if self.prompt_type == "agriculture_structured" else "default"
+            
+            # Get base prompt and append the user's message
+            base_prompt = self.prompt_manager.get_prompt(structured_prompt_type)
+            structured_prompt = f"{base_prompt}\n\nUser Query: {message}"
+            
+            # Use async structured output directly
+            try:
+                # Use the native async version - no thread pool needed!
+                response = await agent.structured_output_async(
+                    WeatherQueryResponse,
+                    message  # Just pass the user's message
                 )
-                
-                return response
+            except Exception as e:
+                logger.error(f"Structured output failed: {e}")
+                raise StructuredOutputError(
+                    "Failed to generate structured output",
+                    original_error=e
+                )
+            
+            # Update session
+            if session_id:
+                self._save_session_messages(session_id, agent.messages)
+            
+            # Add processing time
+            end_time = datetime.utcnow()
+            response.processing_time_ms = int(
+                (end_time - start_time).total_seconds() * 1000
+            )
+            
+            return response
             
         except ValidationError as e:
             logger.error(f"Structured output validation failed: {e}")
@@ -538,7 +402,7 @@ class MCPWeatherAgent:
     def _create_connection_error_response(self, server_name: str) -> WeatherQueryResponse:
         """Create error response for connection failures."""
         return WeatherQueryResponse(
-            query_type="error",
+            query_type="general",  # Using 'general' for error cases
             query_confidence=0.0,
             locations=[ExtractedLocation(
                 name="Unknown",
@@ -557,7 +421,7 @@ class MCPWeatherAgent:
     def _create_validation_error_response(self, error_details: str) -> WeatherQueryResponse:
         """Create error response for validation failures."""
         return WeatherQueryResponse(
-            query_type="error",
+            query_type="general",  # Using 'general' for error cases
             query_confidence=0.0,
             locations=[ExtractedLocation(
                 name="Unknown",
@@ -576,7 +440,7 @@ class MCPWeatherAgent:
     def _create_generic_error_response(self, error_msg: str) -> WeatherQueryResponse:
         """Create generic error response."""
         return WeatherQueryResponse(
-            query_type="error",
+            query_type="general",  # Using 'general' for error cases
             query_confidence=0.0,
             locations=[ExtractedLocation(
                 name="Unknown",
@@ -592,84 +456,6 @@ class MCPWeatherAgent:
             processing_time_ms=0
         )
     
-    def _parse_structured_response(self, response_text: str) -> WeatherQueryResponse:
-        """
-        Parse structured response from agent text output.
-        Enhanced fallback method with better location extraction.
-        """
-        import re
-        
-        # Try to extract JSON first
-        try:
-            json_match = re.search(r'\{.*\}', response_text, re.DOTALL)
-            if json_match:
-                data = json.loads(json_match.group())
-                return WeatherQueryResponse(**data)
-        except Exception as e:
-            logger.debug(f"JSON parsing failed: {e}")
-        
-        # Enhanced fallback: Extract location and query type from text
-        locations = []
-        query_type = "general"
-        
-        # Look for location mentions
-        location_patterns = [
-            r"(?:in|for|at)\s+([A-Z][a-zA-Z\s]+(?:,\s*[A-Z][a-zA-Z\s]+)?)",
-            r"([A-Z][a-zA-Z\s]+(?:,\s*[A-Z][a-zA-Z\s]+)?)\s+(?:weather|temperature|forecast)",
-        ]
-        
-        for pattern in location_patterns:
-            matches = re.findall(pattern, response_text)
-            for match in matches:
-                location_name = match.strip()
-                if len(location_name) > 2:  # Skip very short matches
-                    locations.append(ExtractedLocation(
-                        name=location_name,
-                        latitude=0.0,
-                        longitude=0.0,
-                        timezone="UTC",
-                        country_code="XX",
-                        confidence=0.5,
-                        source="llm_fallback",
-                        needs_clarification=True
-                    ))
-                    break
-            if locations:
-                break
-        
-        # Determine query type from keywords
-        if any(word in response_text.lower() for word in ["forecast", "next", "tomorrow", "week"]):
-            query_type = "forecast"
-        elif any(word in response_text.lower() for word in ["current", "now", "today"]):
-            query_type = "current"
-        elif any(word in response_text.lower() for word in ["history", "past", "yesterday", "last"]):
-            query_type = "historical"
-        elif any(word in response_text.lower() for word in ["crop", "plant", "agriculture", "farming"]):
-            query_type = "agricultural"
-        
-        # If no locations found, add unknown
-        if not locations:
-            locations.append(ExtractedLocation(
-                name="Unknown",
-                latitude=0.0,
-                longitude=0.0,
-                timezone="UTC",
-                country_code="XX",
-                confidence=0.0,
-                needs_clarification=True
-            ))
-        
-        # Extract summary (first paragraph or first 500 chars)
-        summary = response_text.split('\n\n')[0][:500] if '\n\n' in response_text else response_text[:500]
-        
-        return WeatherQueryResponse(
-            query_type=query_type,
-            query_confidence=0.6,
-            locations=locations,
-            summary=summary,
-            warnings=["Response parsed from unstructured text"],
-            processing_time_ms=0
-        )
     
     # === Utility Methods ===
     
@@ -788,19 +574,34 @@ class MCPWeatherAgent:
 
 # === Convenience Functions ===
 
+def _create_mcp_client() -> MCPClient:
+    """
+    Create MCP client for the weather server.
+    
+    Returns:
+        MCPClient instance
+    """
+    server_url = os.getenv("MCP_SERVER_URL", "http://localhost:7778/mcp")
+    return MCPClient(lambda: streamablehttp_client(server_url))
+
+
 async def create_weather_agent(
     debug_logging: bool = False, 
     prompt_type: Optional[str] = None
 ) -> MCPWeatherAgent:
     """
-    Create and initialize a weather agent.
+    Create and initialize a weather agent with Single Context Entry pattern.
     
-    This follows the Strands best practice of testing connectivity
-    before returning the agent.
+    This follows the Strands best practice:
+    - Create MCP client
+    - Enter context once
+    - Get tools from MCP server
+    - Create agent with tools
+    - Keep context open for agent lifetime
     
     Args:
         debug_logging: Enable debug logging
-        prompt_type: System prompt type
+        prompt_type: System prompt type (default or agriculture_structured only)
         
     Returns:
         Initialized MCPWeatherAgent
@@ -810,28 +611,42 @@ async def create_weather_agent(
     """
     logger.info("🌟 Creating Weather Agent...")
     
-    agent = MCPWeatherAgent(
-        debug_logging=debug_logging, 
-        prompt_type=prompt_type
-    )
+    # Create MCP client
+    mcp_client = _create_mcp_client()
     
-    # Test connectivity as best practice
-    logger.info("🔌 Testing MCP server connectivity...")
-    connectivity = await agent.test_connectivity()
-    
-    # Log connectivity status
-    connected_count = sum(1 for v in connectivity.values() if v)
-    logger.info(f"📡 MCP servers: {connected_count}/{len(connectivity)} connected")
-    
-    for server, is_connected in connectivity.items():
-        if is_connected:
-            logger.info(f"  ✅ {server}: connected")
-        else:
-            logger.warning(f"  ❌ {server}: disconnected")
-    
-    if not any(connectivity.values()):
-        logger.error("❌ No MCP servers are available - agent cannot function")
-        raise RuntimeError("No MCP servers are available")
-    
-    logger.info("✅ Weather Agent initialized successfully")
-    return agent
+    # Enter MCP context and get tools
+    logger.info("🔌 Connecting to MCP server and loading tools...")
+    try:
+        with mcp_client:
+            tools = mcp_client.list_tools_sync()
+            logger.info(f"✅ Loaded {len(tools)} tools from MCP server")
+            
+            # Create agent with tools
+            agent = MCPWeatherAgent(
+                tools=tools,
+                debug_logging=debug_logging, 
+                prompt_type=prompt_type
+            )
+            
+            # Test connectivity as best practice
+            connectivity = await agent.test_connectivity()
+            
+            # Log connectivity status
+            connected_count = sum(1 for v in connectivity.values() if v)
+            logger.info(f"📡 MCP servers: {connected_count}/{len(connectivity)} connected")
+            
+            for server, is_connected in connectivity.items():
+                if is_connected:
+                    logger.info(f"  ✅ {server}: connected")
+                else:
+                    logger.warning(f"  ❌ {server}: disconnected")
+            
+            if not any(connectivity.values()):
+                logger.error("❌ No MCP servers are available - agent cannot function")
+                raise RuntimeError("No MCP servers are available")
+            
+            logger.info("✅ Weather Agent initialized successfully")
+            return agent
+    except Exception as e:
+        logger.error(f"Failed to create weather agent: {e}")
+        raise RuntimeError(f"Failed to create weather agent: {e}")

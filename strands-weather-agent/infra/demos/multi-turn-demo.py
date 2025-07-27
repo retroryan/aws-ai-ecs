@@ -107,23 +107,6 @@ class WeatherAgentDemo:
             print(f"{Colors.RED}Error making query: {e}{Colors.RESET}")
             return {}
     
-    def make_structured_query(self, query: str, session_id: Optional[str] = None) -> Dict[str, Any]:
-        """Make a structured query to the Weather Agent API."""
-        payload = {"query": query}
-        if session_id:
-            payload["session_id"] = session_id
-            
-        try:
-            response = self.session.post(
-                f"{self.api_url}/query/structured",
-                json=payload,
-                timeout=30
-            )
-            response.raise_for_status()
-            return response.json()
-        except requests.exceptions.RequestException as e:
-            print(f"{Colors.RED}Error making structured query: {e}{Colors.RESET}")
-            return {}
     
     def get_session_info(self, session_id: str) -> Optional[Dict[str, Any]]:
         """Get session information."""
@@ -153,7 +136,7 @@ class WeatherAgentDemo:
         """Display query results in a formatted way."""
         self.total_queries += 1
         
-        response_text = response.get("response", "No response")
+        response_text = response.get("summary", "No response")
         session_id = response.get("session_id", "No session")
         session_new = response.get("session_new", False)
         conversation_turn = response.get("conversation_turn", 0)
@@ -323,20 +306,20 @@ class WeatherAgentDemo:
         print()
         
         # Test 5: Structured Output with Sessions
-        print("5. Testing Structured Output with Sessions")
-        print("-----------------------------------------")
+        print("5. Testing Session Persistence")
+        print("-----------------------------")
         print()
         
-        structured_response = self.make_structured_query("Weather forecast for Chicago")
+        structured_response = self.make_query("Weather forecast for Chicago")
         if structured_response and "session_id" in structured_response:
-            print(f"{Colors.GREEN}✓{Colors.RESET} Structured endpoint includes session info")
+            print(f"{Colors.GREEN}✓{Colors.RESET} Query endpoint includes session info")
             struct_session_id = structured_response["session_id"]
             
-            # Follow-up structured query
-            followup_response = self.make_structured_query("How about the weekend?", struct_session_id)
+            # Follow-up query
+            followup_response = self.make_query("How about the weekend?", struct_session_id)
             if followup_response and "conversation_turn" in followup_response:
                 turn = followup_response["conversation_turn"]
-                print(f"{Colors.GREEN}✓{Colors.RESET} Structured follow-up worked (turn: {turn})")
+                print(f"{Colors.GREEN}✓{Colors.RESET} Session follow-up worked (turn: {turn})")
         else:
             print(f"{Colors.RED}✗{Colors.RESET} Structured endpoint missing session info")
         print()

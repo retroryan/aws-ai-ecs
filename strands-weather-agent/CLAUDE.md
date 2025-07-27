@@ -124,7 +124,7 @@ healthcheck:
   - `debug_telemetry.py`: Telemetry configuration debugging
   - `inspect_traces.py`: Trace inspection utility
   - `monitor_performance.py`: Performance impact analysis
-- `scripts/start_servers.sh` / `stop_servers.sh`: Server lifecycle management
+- `scripts/start_server.sh` / `stop_server.sh`: Server lifecycle management
 
 ## Development Setup
 
@@ -198,7 +198,7 @@ This command:
 
 1. Start the MCP server:
 ```bash
-./scripts/start_servers.sh
+./scripts/start_server.sh
 ```
 
 2. Run the main application:
@@ -221,7 +221,7 @@ python main.py
 
 4. Stop servers when done:
 ```bash
-./scripts/stop_servers.sh
+./scripts/stop_server.sh
 ```
 
 ## Testing
@@ -399,6 +399,13 @@ Key environment variables (configured in `.env`):
 - `LOG_LEVEL`: Logging verbosity (default: INFO)
 - `WEATHER_AGENT_DEBUG`: Enable debug logging (true/false)
 
+### Prompt Configuration
+- The system now uses only two prompts:
+  - `default`: The standard weather and agricultural assistant prompt (always used by default)
+  - `agriculture_structured`: An optional agricultural-focused prompt for structured output
+- The `SYSTEM_PROMPT` environment variable is no longer used
+- To use the agriculture prompt, pass `prompt_type='agriculture_structured'` when creating the agent
+
 ### Langfuse Telemetry Configuration
 - `LANGFUSE_PUBLIC_KEY`: Public key for Langfuse API
 - `LANGFUSE_SECRET_KEY`: Secret key for Langfuse API
@@ -466,7 +473,7 @@ To add new capabilities:
 1. **Add a new MCP server**:
    - Create a new server file in `mcp_servers/`
    - Implement tools using FastMCP decorators
-   - Add server startup to `start_servers.sh`
+   - Add server startup to `start_server.sh`
 
 2. **Add new tools to existing servers**:
    - Add new methods with `@weather_server.tool()` decorator
@@ -474,7 +481,7 @@ To add new capabilities:
    - Tools are automatically discovered by the agent
 
 3. **Customize agent behavior**:
-   - Modify prompts in `mcp_agent.py`
+   - Modify prompts in `weather_agent/prompts/default.txt` or `weather_agent/prompts/agriculture_structured.txt`
    - Add new response transformations
    - Implement custom tool selection logic
 
@@ -500,10 +507,10 @@ To add new capabilities:
 
 ### Local Testing Steps
 
-#### 1. Start MCP Servers
+#### 1. Start MCP Server
 ```bash
 # Start the unified weather MCP server
-./scripts/start_servers.sh
+./scripts/start_server.sh
 
 # Verify server is running
 curl http://localhost:7778/health  # Weather server
@@ -565,14 +572,23 @@ from weather_agent.prompts import PromptManager
 
 pm = PromptManager()
 print('Available prompts:', pm.get_available_prompts())
+# Should show: ['default', 'agriculture_structured']
 
-# Test environment variable control
-import os
-os.environ['SYSTEM_PROMPT'] = 'agriculture'
-
+# Test creating agent with different prompts
 from weather_agent.mcp_agent import MCPWeatherAgent
-agent = MCPWeatherAgent()
-print('Agent using prompt type:', agent.prompt_type)
+
+# Default prompt
+agent_default = MCPWeatherAgent()
+print('Default agent using prompt:', agent_default.prompt_type)  # Shows: default
+
+# Agriculture structured prompt
+agent_ag = MCPWeatherAgent(prompt_type='agriculture_structured')
+print('Agriculture agent using prompt:', agent_ag.prompt_type)  # Shows: agriculture_structured
+
+# Invalid prompt falls back to default
+agent_invalid = MCPWeatherAgent(prompt_type='simple')
+print('Invalid prompt agent using:', agent_invalid.prompt_type)  # Shows: default
+
 print('✅ Prompt loading test PASSED')
 "
 ```
@@ -589,7 +605,7 @@ python -m weather_agent.structured_output_demo
 #### 6. Clean Up
 ```bash
 # Stop all servers when done
-./scripts/stop_servers.sh
+./scripts/stop_server.sh
 ```
 
 ### Testing Different Components

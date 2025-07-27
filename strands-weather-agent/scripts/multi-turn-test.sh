@@ -65,7 +65,7 @@ display_result() {
     ((total_queries++))
     
     # Extract fields
-    local response_text=$(echo "$response" | jq -r '.response // "No response"')
+    local response_text=$(echo "$response" | jq -r '.summary // "No response"')
     local session_id=$(echo "$response" | jq -r '.session_id // "No session"')
     local session_new=$(echo "$response" | jq -r '.session_new // false')
     local conversation_turn=$(echo "$response" | jq -r '.conversation_turn // 0')
@@ -235,30 +235,30 @@ else
 fi
 echo ""
 
-echo "5. Testing Structured Output with Sessions"
-echo "-----------------------------------------"
+echo "5. Testing Session Persistence"
+echo "-----------------------------"
 echo ""
 
-# Make structured query
-structured_response=$(curl -s -X POST "$API_URL/query/structured" \
+# Make query to test session functionality
+structured_response=$(curl -s -X POST "$API_URL/query" \
     -H "Content-Type: application/json" \
     -d '{"query": "Weather forecast for Chicago"}' 2>/dev/null)
 
 if echo "$structured_response" | jq -e '.session_id' &> /dev/null; then
-    echo -e "${GREEN}✓${NC} Structured endpoint includes session info"
+    echo -e "${GREEN}✓${NC} Query endpoint includes session info"
     struct_session_id=$(echo "$structured_response" | jq -r '.session_id')
     
-    # Follow-up structured query
-    followup_response=$(curl -s -X POST "$API_URL/query/structured" \
+    # Follow-up query
+    followup_response=$(curl -s -X POST "$API_URL/query" \
         -H "Content-Type: application/json" \
         -d "{\"query\": \"How about the weekend?\", \"session_id\": \"$struct_session_id\"}" 2>/dev/null)
     
     if echo "$followup_response" | jq -e '.conversation_turn' &> /dev/null; then
         turn=$(echo "$followup_response" | jq -r '.conversation_turn')
-        echo -e "${GREEN}✓${NC} Structured follow-up worked (turn: $turn)"
+        echo -e "${GREEN}✓${NC} Session follow-up worked (turn: $turn)"
     fi
 else
-    echo -e "${RED}✗${NC} Structured endpoint missing session info"
+    echo -e "${RED}✗${NC} Query endpoint missing session info"
 fi
 echo ""
 
@@ -380,7 +380,7 @@ echo "Key findings:"
 echo "- Sessions persist across multiple queries"
 echo "- Context is maintained for follow-up questions"
 echo "- Invalid sessions are properly handled"
-echo "- Both regular and structured endpoints support sessions"
+echo "- Structured query endpoint supports full session management"
 echo ""
 echo "To test further:"
 echo "- Wait 60+ minutes to test session expiration"

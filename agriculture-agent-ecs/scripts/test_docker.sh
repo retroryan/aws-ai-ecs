@@ -97,16 +97,8 @@ echo ""
 # Check each service
 services_ok=true
 
-# Check MCP servers (they don't have /health endpoints)
-if ! check_mcp_service "Forecast Server" "http://localhost:7071/mcp/"; then
-    services_ok=false
-fi
-
-if ! check_mcp_service "Historical Server" "http://localhost:7072/mcp/"; then
-    services_ok=false
-fi
-
-if ! check_mcp_service "Agricultural Server" "http://localhost:7073/mcp/"; then
+# Check unified MCP server (has /health endpoint)
+if ! check_service "Weather Server" "http://localhost:7071/health"; then
     services_ok=false
 fi
 
@@ -165,10 +157,8 @@ echo "   - Weather Agent API: http://localhost:7075"
 echo "   - API Docs: http://localhost:7075/docs"
 echo "   - Health Check: http://localhost:7075/health"
 echo ""
-echo "   MCP Servers (internal):"
-echo "   - Forecast: http://localhost:7071/mcp/"
-echo "   - Historical: http://localhost:7072/mcp/"
-echo "   - Agricultural: http://localhost:7073/mcp/"
+echo "   MCP Server (internal):"
+echo "   - Weather Server: http://localhost:7071/mcp/"
 echo ""
 
 echo -e "${GREEN}✅ All tests passed!${NC}"

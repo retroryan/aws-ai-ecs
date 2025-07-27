@@ -97,7 +97,8 @@ async def run_mcp_multi_turn_demo(structured: bool = False):
             print(f"📝 Query: {turn['query']}\n")
             
             # Process the query with session context
-            response = await agent.query(turn['query'], session_id=session_id)
+            response_obj = await agent.query(turn['query'], session_id=session_id)
+            response = response_obj.summary
             
             # Display metrics if available
             if hasattr(agent, 'last_metrics') and agent.last_metrics:
@@ -217,7 +218,8 @@ async def run_context_switching_demo(structured: bool = False):
             # Process the query with session context
             print(f"🤖 Assistant: ", end="", flush=True)
             
-            response = await agent.query(scenario['query'], session_id=session_id)
+            response_obj = await agent.query(scenario['query'], session_id=session_id)
+            response = response_obj.summary
             
             # Print the response
             if hasattr(response, 'content'):

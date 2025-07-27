@@ -132,19 +132,11 @@ class MCPWeatherAgent:
         
     def initialize(self):
         """Initialize MCP connections and create the LangGraph agent."""
-        # Configure MCP servers with HTTP endpoints
-        # Use environment variables with fallback to local development URLs
+        # Configure unified MCP server with HTTP endpoint
+        # Use environment variable with fallback to local development URL
         server_config = {
-            "forecast": {
-                "url": os.getenv("MCP_FORECAST_URL", "http://127.0.0.1:7071/mcp"),
-                "transport": "streamable_http"
-            },
-            "historical": {
-                "url": os.getenv("MCP_HISTORICAL_URL", "http://127.0.0.1:7072/mcp"),
-                "transport": "streamable_http"
-            },
-            "agricultural": {
-                "url": os.getenv("MCP_AGRICULTURAL_URL", "http://127.0.0.1:7073/mcp"),
+            "weather": {
+                "url": os.getenv("MCP_SERVER_URL", "http://127.0.0.1:7071/mcp"),
                 "transport": "streamable_http"
             }
         }

@@ -22,6 +22,8 @@ export DEFAULT_CLUSTER_NAME="${CLUSTER_NAME:-agriculture-agent-cluster}"
 # ECR configuration for agriculture agent
 export ECR_REPO_PREFIX="agriculture-agent"
 export ECR_MAIN_REPO="${ECR_REPO_PREFIX}-main"
+export ECR_WEATHER_REPO="${ECR_REPO_PREFIX}-weather"
+# Legacy repos for cleanup
 export ECR_FORECAST_REPO="${ECR_REPO_PREFIX}-forecast"
 export ECR_HISTORICAL_REPO="${ECR_REPO_PREFIX}-historical"
 export ECR_AGRICULTURAL_REPO="${ECR_REPO_PREFIX}-agricultural"

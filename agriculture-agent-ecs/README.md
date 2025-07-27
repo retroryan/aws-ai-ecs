@@ -138,18 +138,21 @@ User Request → Application Load Balancer → Weather Agent (FastAPI)
                                             LangGraph Agent
                                                     ↓
                                          MCP Service Discovery
+                                                    ↓
+                                         Unified Weather Server
+                                              (Port 7071)
+                                                    ↓
                                     ┌───────────────┴────────────────┐
                                     ↓               ↓                ↓
-                            Forecast Server  Historical Server  Agricultural Server
-                              (Port 7071)      (Port 7072)        (Port 7073)
+                            Weather Forecast  Historical Data  Agricultural Conditions
                                     ↓               ↓                ↓
-                            Open-Meteo API   Open-Meteo API    Custom Logic
+                                         Open-Meteo API & Custom Logic
 ```
 
 **Key Components:**
 - **Weather Agent**: Main application handling user queries via FastAPI
 - **LangGraph Agent**: Orchestrates tool selection and execution
-- **MCP Servers**: Specialized tools for different data domains
+- **MCP Server**: Unified server providing all weather-related tools
 - **Service Discovery**: ECS Service Connect for internal communication
 
 ### API Endpoints
@@ -163,11 +166,12 @@ User Request → Application Load Balancer → Weather Agent (FastAPI)
 | `/docs` | GET | Interactive API documentation |
 
 #### MCP Server Tools (Internal)
-Each server provides specialized tools discovered dynamically:
+The unified weather server provides all tools discovered dynamically:
 
-- **Forecast Server**: `get_weather_forecast` - 5-day forecasts
-- **Historical Server**: `get_historical_weather` - Past 7 days data  
-- **Agricultural Server**: `get_agricultural_conditions`, `get_frost_risk_assessment`
+- **Weather Tools**: 
+  - `get_weather_forecast` - 5-day forecasts
+  - `get_historical_weather` - Past 7 days data  
+  - `get_agricultural_conditions` - Soil moisture and crop conditions
 
 
 ### Working with AWS Credentials in Docker
@@ -230,12 +234,10 @@ Test coverage includes:
 ```bash
 # Docker logs
 docker-compose logs -f weather-agent
-docker-compose logs -f forecast-server
+docker-compose logs -f weather-server
 
 # Python server logs (non-Docker)
-tail -f logs/forecast_server.log
-tail -f logs/historical_server.log
-tail -f logs/agricultural_server.log
+tail -f logs/weather.log
 ```
 
 #### Debugging Tips
@@ -254,8 +256,8 @@ All scripts in the `scripts/` directory:
 | `start_docker.sh` | Start Docker Compose with AWS credentials |
 | `stop_docker.sh` | Stop all Docker containers |
 | `test_docker.sh` | Run comprehensive Docker tests |
-| `start_servers.sh` | Start MCP servers locally (Python) |
-| `stop_servers.sh` | Stop local MCP servers |
+| `start_servers.sh` | Start unified MCP server locally (Python) |
+| `stop_servers.sh` | Stop local MCP server |
 | `run_tests.sh` | Execute the full test suite |
 
 ## AWS Deployment Guide
@@ -272,7 +274,7 @@ The deployment creates a production-ready infrastructure using AWS best practice
 - IAM roles with least-privilege permissions
 
 #### Services Infrastructure (`infra/services.cfn`)
-- 4 ECS Services (1 agent + 3 MCP servers)
+- 2 ECS Services (1 agent + 1 unified MCP server)
 - Task definitions with resource limits
 - Service Connect for internal networking
 - CloudWatch log groups with retention

@@ -222,9 +222,9 @@ Internet → ALB (Public Subnets)
     Main Agent Service (Private Subnets)
             ↓
     Service Discovery (agriculture.local)
-       ↙    ↓    ↘
-Forecast  Historical  Agricultural
-(7071)    (7072)      (7073)
+            ↓
+    Unified Weather Server
+         (7071)
 ```
 
 ### Service Communication
@@ -238,9 +238,7 @@ Forecast  Historical  Agricultural
 | Service | CPU | Memory | Count |
 |---------|-----|--------|--------|
 | Main Agent | 512 | 1024 MB | 1-3 (auto-scaling) |
-| Forecast | 256 | 512 MB | 1 |
-| Historical | 256 | 512 MB | 1 |
-| Agricultural | 256 | 512 MB | 1 |
+| Weather Server | 512 | 1024 MB | 1 |
 
 ## Monitoring and Logs
 
@@ -250,8 +248,8 @@ Forecast  Historical  Agricultural
 # View logs for a specific service
 aws logs tail /ecs/agriculture-agent-main --follow
 
-# View all MCP server logs
-aws logs tail /ecs/agriculture-agent-forecast --follow
+# View weather server logs
+aws logs tail /ecs/agriculture-agent-weather --follow
 aws logs tail /ecs/agriculture-agent-historical --follow
 aws logs tail /ecs/agriculture-agent-agricultural --follow
 ```
@@ -282,7 +280,7 @@ Container Insights is enabled by default. Access via:
 3. **Cannot Connect to MCP Servers**
    ```
    Verify service discovery is working
-   Check security group rules allow ports 7071-7073
+   Check security group rules allow port 7071
    Ensure all services are running: ./infra/deploy.sh status
    ```
 

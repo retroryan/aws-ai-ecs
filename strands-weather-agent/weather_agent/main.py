@@ -15,15 +15,17 @@ import argparse
 from datetime import datetime
 from pathlib import Path
 try:
-    from .mcp_agent import create_weather_agent, MCPWeatherAgent
+    from .mcp_agent import MCPWeatherAgent
     from .models.structured_responses import WeatherQueryResponse, ValidationResult
     from .session_manager import SessionManager, SessionData
 except ImportError:
-    from mcp_agent import create_weather_agent, MCPWeatherAgent
+    from mcp_agent import MCPWeatherAgent
     from models.structured_responses import WeatherQueryResponse, ValidationResult
     from session_manager import SessionManager, SessionData
-from contextlib import asynccontextmanager
+from contextlib import asynccontextmanager, ExitStack
 import logging
+from mcp.client.streamable_http import streamablehttp_client
+from strands.tools.mcp import MCPClient
 
 # Configure logging
 logging.getLogger("strands").setLevel(logging.INFO)
@@ -34,6 +36,8 @@ agent: Optional[MCPWeatherAgent] = None
 session_manager: Optional[SessionManager] = None
 debug_mode: bool = False
 global_metrics: Optional['SessionMetrics'] = None
+mcp_client: Optional[MCPClient] = None
+exit_stack: Optional[ExitStack] = None
 
 
 def configure_debug_logging(enable_debug: bool = False):
@@ -94,18 +98,18 @@ def configure_debug_logging(enable_debug: bool = False):
     logging.getLogger("uvicorn").setLevel(logging.DEBUG)
     logging.getLogger("uvicorn.access").setLevel(logging.DEBUG)
     
-    print(f"\n🔍 Debug logging enabled. Logs will be written to: {log_file}")
-    print("📊 Console will show INFO level, file will contain DEBUG details.")
-    print("\n🔍 DEBUG MODE ENABLED:")
-    print("   - Model's natural language will appear as it streams")
-    print("   - 🔧 [AGENT DEBUG - Tool Call] = Our agent's tool usage logging")
-    print("   - 📥 [AGENT DEBUG - Tool Input] = Tool parameters being sent")
-    print("   - Strands internal debug logs = Framework's internal processing\n")
+    logger.debug(f"\n🔍 Debug logging enabled. Logs will be written to: {log_file}")
+    logger.debug("📊 Console will show INFO level, file will contain DEBUG details.")
+    logger.debug("\n🔍 DEBUG MODE ENABLED:")
+    logger.debug("   - Model's natural language will appear as it streams")
+    logger.debug("   - 🔧 [AGENT DEBUG - Tool Call] = Our agent's tool usage logging")
+    logger.debug("   - 📥 [AGENT DEBUG - Tool Input] = Tool parameters being sent")
+    logger.debug("   - Strands internal debug logs = Framework's internal processing\n")
 
 @asynccontextmanager
 async def lifespan(app: FastAPI):
     """Initialize the agent and session manager on startup and cleanup on shutdown."""
-    global agent, session_manager, debug_mode, global_metrics
+    global agent, session_manager, debug_mode, global_metrics, mcp_client, exit_stack
     
     # Check debug mode from environment variable
     debug_mode = os.getenv("WEATHER_AGENT_DEBUG", "false").lower() == "true"
@@ -113,7 +117,7 @@ async def lifespan(app: FastAPI):
     # Configure debug logging if enabled
     configure_debug_logging(debug_mode)
     
-    print("🚀 Starting AWS Strands Weather Agent API...")
+    logger.info("🚀 Starting AWS Strands Weather Agent API...")
     
     # Log telemetry status with enhanced debugging
     telemetry_enabled = os.getenv("ENABLE_TELEMETRY", "true").lower() == "true"
@@ -124,25 +128,25 @@ async def lifespan(app: FastAPI):
         host = os.getenv("LANGFUSE_HOST", "https://us.cloud.langfuse.com")
         
         if pk and sk:
-            print(f"📊 Telemetry: ✅ ENABLED")
-            print(f"   - Langfuse Host: {host}")
-            print(f"   - Service: {os.getenv('OTEL_SERVICE_NAME', 'weather-agent')}")
-            print(f"   - Environment: {os.getenv('DEPLOYMENT_ENVIRONMENT', 'demo')}")
+            logger.info(f"📊 Telemetry: ✅ ENABLED")
+            logger.info(f"   - Langfuse Host: {host}")
+            logger.info(f"   - Service: {os.getenv('OTEL_SERVICE_NAME', 'weather-agent')}")
+            logger.info(f"   - Environment: {os.getenv('DEPLOYMENT_ENVIRONMENT', 'demo')}")
             
             # Enhanced debugging information
             if debug_mode:
-                print(f"   - Public Key (first/last 8): {pk[:8]}...{pk[-8:]}" if len(pk) > 16 else f"   - Public Key: {pk}")
-                print(f"   - Secret Key (first/last 8): {sk[:8]}...{sk[-8:]}" if len(sk) > 16 else f"   - Secret Key: {sk}")
-                print(f"   - OTEL Endpoint: {os.getenv('OTEL_EXPORTER_OTLP_TRACES_ENDPOINT', 'NOT SET')}")
-                print(f"   - OTEL Headers (length): {len(os.getenv('OTEL_EXPORTER_OTLP_TRACES_HEADERS', ''))}")
+                logger.info(f"   - Public Key (first/last 8): {pk[:8]}...{pk[-8:]}" if len(pk) > 16 else f"   - Public Key: {pk}")
+                logger.info(f"   - Secret Key (first/last 8): {sk[:8]}...{sk[-8:]}" if len(sk) > 16 else f"   - Secret Key: {sk}")
+                logger.info(f"   - OTEL Endpoint: {os.getenv('OTEL_EXPORTER_OTLP_TRACES_ENDPOINT', 'NOT SET')}")
+                logger.info(f"   - OTEL Headers (length): {len(os.getenv('OTEL_EXPORTER_OTLP_TRACES_HEADERS', ''))}")
         else:
-            print(f"📊 Telemetry: ⚠️  CONFIGURED but missing Langfuse credentials")
-            print(f"   - LANGFUSE_PUBLIC_KEY: {'SET' if pk else 'NOT SET'}")
-            print(f"   - LANGFUSE_SECRET_KEY: {'SET' if sk else 'NOT SET'}")
-            print(f"   - LANGFUSE_HOST: {host}")
-            print(f"   - Set LANGFUSE_PUBLIC_KEY and LANGFUSE_SECRET_KEY to enable")
+            logger.info(f"📊 Telemetry: ⚠️  CONFIGURED but missing Langfuse credentials")
+            logger.info(f"   - LANGFUSE_PUBLIC_KEY: {'SET' if pk else 'NOT SET'}")
+            logger.info(f"   - LANGFUSE_SECRET_KEY: {'SET' if sk else 'NOT SET'}")
+            logger.info(f"   - LANGFUSE_HOST: {host}")
+            logger.info(f"   - Set LANGFUSE_PUBLIC_KEY and LANGFUSE_SECRET_KEY to enable")
     else:
-        print(f"📊 Telemetry: ❌ DISABLED (ENABLE_TELEMETRY=false)")
+        logger.info(f"📊 Telemetry: ❌ DISABLED (ENABLE_TELEMETRY=false)")
     
     # Import and initialize global metrics tracker
     try:
@@ -152,14 +156,29 @@ async def lifespan(app: FastAPI):
     
     global_metrics = SessionMetrics()
     
+    # Create MCP client
+    server_url = os.getenv("MCP_SERVER_URL", "http://localhost:7778/mcp")
+    mcp_client = MCPClient(lambda: streamablehttp_client(server_url))
+    
+    # Create ExitStack to manage MCP client context for app lifetime
+    exit_stack = ExitStack()
+    
     # Add retry logic for MCP server connectivity
     max_retries = 5
     retry_delay = 10  # seconds
     
     for attempt in range(max_retries):
         try:
-            # Initialize agent with debug mode
-            agent = await create_weather_agent(
+            # Enter MCP context once for the entire app lifetime
+            exit_stack.enter_context(mcp_client)
+            
+            # Get tools from MCP server
+            tools = mcp_client.list_tools_sync()
+            logger.info(f"✅ Loaded {len(tools)} tools from MCP server")
+            
+            # Initialize agent with tools
+            agent = MCPWeatherAgent(
+                tools=tools,
                 debug_logging=debug_mode
             )
             
@@ -167,27 +186,32 @@ async def lifespan(app: FastAPI):
             default_ttl = int(os.getenv("SESSION_DEFAULT_TTL_MINUTES", "60"))
             session_manager = SessionManager(default_ttl_minutes=default_ttl)
             
-            print("✅ AWS Strands Weather Agent API ready!")
+            logger.info("✅ AWS Strands Weather Agent API ready!")
             yield
             break
-        except RuntimeError as e:
-            if "No MCP servers are available" in str(e) and attempt < max_retries - 1:
-                logger.warning(f"MCP servers not ready, attempt {attempt + 1}/{max_retries}. Retrying in {retry_delay}s...")
+        except Exception as e:
+            exit_stack.close()  # Clean up on error
+            if "list_tools_sync" in str(e) and attempt < max_retries - 1:
+                logger.warning(f"MCP server not ready, attempt {attempt + 1}/{max_retries}. Retrying in {retry_delay}s...")
                 await asyncio.sleep(retry_delay)
+                # Recreate client and stack for retry
+                mcp_client = MCPClient(lambda: streamablehttp_client(server_url))
+                exit_stack = ExitStack()
             else:
                 logger.error(f"Failed to initialize after {attempt + 1} attempts: {e}")
                 raise
-        except Exception as e:
-            logger.error(f"Failed to initialize: {e}")
-            raise
     
     # Cleanup and show final metrics
-    print("\n🧹 Shutting down...")
+    logger.info("\n🧹 Shutting down...")
+    
+    # Close MCP client context
+    if exit_stack:
+        exit_stack.close()
     
     # Show final session metrics if any queries were processed
     if global_metrics and global_metrics.total_queries > 0:
-        print("\n📊 Final Usage Statistics:")
-        print(global_metrics.get_summary())
+        logger.info("\n📊 Final Usage Statistics:")
+        logger.info(global_metrics.get_summary())
 
 # Create FastAPI app
 app = FastAPI(
@@ -212,12 +236,7 @@ class PerformanceMetrics(BaseModel):
     model: str
     cycles: int
 
-class QueryResponse(BaseModel):
-    response: str
-    session_id: str  # Always included
-    session_new: bool  # True if newly created
-    conversation_turn: int
-    metrics: Optional[PerformanceMetrics] = None
+# QueryResponse removed - using structured WeatherQueryResponse for all queries
 
 class AgentInfo(BaseModel):
     model: str
@@ -242,121 +261,9 @@ async def get_agent_info():
     
     return agent.get_agent_info()
 
-@app.post("/query", response_model=QueryResponse)
-async def process_query(request: QueryRequest):
-    """
-    Process a weather query using the Strands agent with session support.
-    
-    Args:
-        request: Query request with the user's question and optional session_id
-        
-    Returns:
-        Agent's response with session information
-    """
-    if not agent or not session_manager:
-        raise HTTPException(status_code=503, detail="Service not initialized")
-    
-    try:
-        # Log query processing start
-        if debug_mode:
-            logger.info("="*60)
-            logger.info("🔄 PROCESSING YOUR QUERY")
-            logger.info("="*60)
-            logger.info(f"📝 Query: {request.query}")
-        # Handle session creation/retrieval
-        session_new = False
-        session_id = request.session_id
-        
-        if not session_id and request.create_session:
-            # Create new session
-            session = await session_manager.create_session()
-            session_id = session.session_id
-            session_new = True
-        elif session_id:
-            # Verify existing session
-            session = await session_manager.get_session(session_id)
-            if not session:
-                if request.create_session:
-                    # Session expired or not found, create new one
-                    session = await session_manager.create_session()
-                    session_id = session.session_id
-                    session_new = True
-                else:
-                    raise HTTPException(status_code=404, detail="Session not found or expired")
-        else:
-            # No session_id and create_session is False
-            raise HTTPException(status_code=400, detail="Session ID required when create_session is False")
-        
-        # Process query with agent
-        response = await agent.query(
-            message=request.query,
-            session_id=session_id
-        )
-        
-        # Update session activity
-        await session_manager.update_activity(session_id)
-        session = await session_manager.get_session(session_id)
-        
-        # Prepare metrics data if available
-        metrics_data = None
-        
-        if hasattr(agent, 'last_metrics') and agent.last_metrics:
-            try:
-                from .metrics_display import format_metrics
-            except ImportError:
-                from metrics_display import format_metrics
-            
-            # Log formatted metrics
-            logger.info(format_metrics(agent.last_metrics))
-            
-            # Add to global metrics
-            if global_metrics:
-                global_metrics.add_query(agent.last_metrics)
-            
-            # Extract metrics for response
-            total_tokens = agent.last_metrics.accumulated_usage.get('totalTokens', 0)
-            input_tokens = agent.last_metrics.accumulated_usage.get('inputTokens', 0)
-            output_tokens = agent.last_metrics.accumulated_usage.get('outputTokens', 0)
-            latency_ms = agent.last_metrics.accumulated_metrics.get('latencyMs', 0)
-            latency_seconds = latency_ms / 1000.0
-            throughput = total_tokens / latency_seconds if latency_seconds > 0 else 0
-            
-            model_id = os.environ.get('BEDROCK_MODEL_ID', 'unknown')
-            model_name = model_id.split('.')[-1].split('-v')[0] if '.' in model_id else model_id
-            
-            metrics_data = PerformanceMetrics(
-                total_tokens=total_tokens,
-                input_tokens=input_tokens,
-                output_tokens=output_tokens,
-                latency_ms=latency_ms,
-                latency_seconds=latency_seconds,
-                throughput_tokens_per_second=throughput,
-                model=model_name,
-                cycles=agent.last_metrics.cycle_count
-            )
-        
-        # Log query completion
-        if debug_mode:
-            logger.info("="*60)
-            logger.info("✅ RESPONSE COMPLETE")
-            logger.info("="*60)
-        
-        return QueryResponse(
-            response=response,
-            session_id=session_id,
-            session_new=session_new,
-            conversation_turn=session.conversation_turns if session else 1,
-            metrics=metrics_data
-        )
-        
-    except HTTPException:
-        raise
-    except Exception as e:
-        logger.error(f"Error processing query: {e}")
-        raise HTTPException(status_code=500, detail=str(e))
 
-@app.post("/query/structured", response_model=WeatherQueryResponse)
-async def process_query_structured(request: QueryRequest):
+@app.post("/query", response_model=WeatherQueryResponse)
+async def process_query(request: QueryRequest):
     """
     Process a weather query and return structured output with session support.
     
@@ -378,7 +285,7 @@ async def process_query_structured(request: QueryRequest):
         # Log query processing start
         if debug_mode:
             logger.info("="*60)
-            logger.info("🔄 PROCESSING YOUR QUERY (Structured)")
+            logger.info("🔄 PROCESSING YOUR QUERY")
             logger.info("="*60)
             logger.info(f"📝 Query: {request.query}")
         # Handle session creation/retrieval (same logic as /query)
@@ -406,7 +313,7 @@ async def process_query_structured(request: QueryRequest):
             raise HTTPException(status_code=400, detail="Session ID required when create_session is False")
         
         # Process structured query with agent
-        response = await agent.query_structured(
+        response = await agent.query(
             message=request.query,
             session_id=session_id
         )
@@ -460,12 +367,12 @@ async def process_query_structured(request: QueryRequest):
                 throughput_tokens_per_second=throughput,
                 model=model_name,
                 cycles=agent.last_metrics.cycle_count
-            )
+            ).model_dump()
         
         # Log query completion
         if debug_mode:
             logger.info("="*60)
-            logger.info("✅ RESPONSE COMPLETE (Structured)")
+            logger.info("✅ RESPONSE COMPLETE")
             logger.info("="*60)
         
         return response

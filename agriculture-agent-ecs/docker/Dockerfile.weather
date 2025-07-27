@@ -1,0 +1,30 @@
+FROM python:3.11-slim
+
+# Install curl for healthchecks
+RUN apt-get update && apt-get install -y \
+    curl \
+    && rm -rf /var/lib/apt/lists/*
+
+# Set working directory
+WORKDIR /app
+
+# Copy server files
+COPY mcp_servers/weather_server.py /app/
+COPY mcp_servers/api_utils.py /app/
+COPY mcp_servers/utils /app/utils
+
+# Install dependencies
+RUN pip install --no-cache-dir \
+    fastmcp>=0.2.0 \
+    httpx \
+    starlette
+
+# Create non-root user for security
+RUN useradd -m -u 1000 appuser && chown -R appuser:appuser /app
+USER appuser
+
+# Expose port
+EXPOSE 7071
+
+# Run the unified weather server
+CMD ["python", "weather_server.py", "--transport", "streamable-http", "--host", "0.0.0.0", "--port", "7071"]

@@ -179,7 +179,7 @@ Resources:
           SourceSecurityGroupId: !Ref ALBSecurityGroup
         - Description: Allow inter-service communication
           FromPort: 7071
-          ToPort: 7073
+          ToPort: 7071
           IpProtocol: tcp
           CidrIp: 10.0.0.0/16
       Tags:

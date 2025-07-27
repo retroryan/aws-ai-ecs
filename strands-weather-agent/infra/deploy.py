@@ -527,7 +527,7 @@ class Deployment:
             console.print(f"\nTest it with:")
             console.print(f'   curl -X POST "http://{lb_url}/query" \\')
             console.print(f'       -H "Content-Type: application/json" \\')
-            console.print(f'       -d \'{{\"question\": \"What is the weather in Chicago?\"}}\'')
+            console.print(f'       -d \'{{\"query\": \"What is the weather in Chicago?\"}}\'')
             console.print(f"\nCheck status with:")
             console.print(f"   python status.py")
     

@@ -264,7 +264,7 @@ class DeploymentStatus:
             console.print("Test the API:")
             console.print(f'  curl -X POST "http://{lb_dns}/query" \\')
             console.print('      -H "Content-Type: application/json" \\')
-            console.print('      -d \'{"question": "What is the weather in Chicago?"}\'')
+            console.print('      -d \'{"query": "What is the weather in Chicago?"}\'')
             console.print()
             
             console.print("Test health endpoint:")

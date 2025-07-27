@@ -42,13 +42,9 @@ async def startup_event():
     """Initialize the weather agent on startup."""
     global agent
     try:
-        # Override MCP server URLs from environment if provided
-        if os.getenv('MCP_FORECAST_URL'):
-            os.environ['FORECAST_URL'] = os.getenv('MCP_FORECAST_URL')
-        if os.getenv('MCP_HISTORICAL_URL'):
-            os.environ['HISTORICAL_URL'] = os.getenv('MCP_HISTORICAL_URL')
-        if os.getenv('MCP_AGRICULTURAL_URL'):
-            os.environ['AGRICULTURAL_URL'] = os.getenv('MCP_AGRICULTURAL_URL')
+        # Override MCP server URL from environment if provided
+        if os.getenv('MCP_SERVER_URL'):
+            os.environ['MCP_SERVER_URL'] = os.getenv('MCP_SERVER_URL')
         
         logger.info("Initializing Weather Agent...")
         agent = AsyncMCPWeatherAgent()

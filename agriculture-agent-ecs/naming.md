@@ -75,9 +75,7 @@ curl -X POST "http://$LB_DNS/query" \
 
 ### 5. Port References
 - Main Agent: 7075 (exposed via ALB)
-- Forecast Server: 7071 (internal)
-- Historical Server: 7072 (internal)
-- Agricultural Server: 7073 (internal)
+- Weather Server: 7071 (internal, unified)
 
 ## Implementation Summary
 

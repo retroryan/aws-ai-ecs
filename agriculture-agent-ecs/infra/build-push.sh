@@ -9,7 +9,7 @@ SCRIPT_DIR="$( cd "$( dirname "${BASH_SOURCE[0]}" )" && pwd )"
 source "${SCRIPT_DIR}/common.sh"
 
 # Script configuration
-COMPONENTS=("main" "forecast" "historical" "agricultural")
+COMPONENTS=("main" "weather")
 ECR_REPO_PREFIX="agriculture-agent"
 
 # Generate version tag based on git commit and timestamp
@@ -201,9 +201,7 @@ else
     # Save image tags to file for deploy script
     TAGS_FILE="$SCRIPT_DIR/.image-tags"
     echo "MAIN_IMAGE_TAG=${VERSION_TAG}" > "$TAGS_FILE"
-    echo "FORECAST_IMAGE_TAG=${VERSION_TAG}" >> "$TAGS_FILE"
-    echo "HISTORICAL_IMAGE_TAG=${VERSION_TAG}" >> "$TAGS_FILE"
-    echo "AGRICULTURAL_IMAGE_TAG=${VERSION_TAG}" >> "$TAGS_FILE"
+    echo "WEATHER_IMAGE_TAG=${VERSION_TAG}" >> "$TAGS_FILE"
     echo "BUILD_TIMESTAMP=$(date -u +%Y-%m-%dT%H:%M:%SZ)" >> "$TAGS_FILE"
     echo ""
     echo "💾 Saved image tags to ${TAGS_FILE}"

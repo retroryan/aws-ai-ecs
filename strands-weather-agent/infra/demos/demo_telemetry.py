@@ -88,7 +88,7 @@ class TelemetryDemo:
             if resp.status_code == 200:
                 data = resp.json()
                 print(f"✅ Response ({elapsed:.1f}s):")
-                print(f"   {data['response'][:150]}...")
+                print(f"   {data['summary'][:150]}...")
                 
                 # Track session ID
                 session_id = data.get('session_id')

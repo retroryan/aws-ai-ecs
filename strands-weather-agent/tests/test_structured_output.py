@@ -19,7 +19,7 @@ async def test_structured_output_basic():
     agent = MCPWeatherAgent(debug_logging=False)
     
     # Test basic weather query
-    response = await agent.query_structured("What's the weather in Chicago?")
+    response = await agent.query("What's the weather in Chicago?")
     
     # Validate response type
     assert isinstance(response, WeatherQueryResponse)
@@ -55,7 +55,7 @@ async def test_geographic_intelligence():
     ]
     
     for city, expected_lat, expected_lon, expected_tz in test_cases:
-        response = await agent.query_structured(f"Weather in {city}")
+        response = await agent.query(f"Weather in {city}")
         location = response.get_primary_location()
         
         assert city in location.name
@@ -71,7 +71,7 @@ async def test_ambiguous_location_handling():
     agent = MCPWeatherAgent(debug_logging=False)
     
     # Query for ambiguous location
-    response = await agent.query_structured("What's the weather in Springfield?")
+    response = await agent.query("What's the weather in Springfield?")
     
     # Should either have clarification needed or multiple options
     location = response.get_primary_location()
@@ -92,7 +92,7 @@ async def test_agricultural_query():
     """Test agricultural query with structured output."""
     agent = MCPWeatherAgent(debug_logging=False)
     
-    response = await agent.query_structured(
+    response = await agent.query(
         "Are conditions good for planting corn in Iowa?"
     )
     
@@ -116,7 +116,7 @@ async def test_coordinate_extraction():
     agent = MCPWeatherAgent(debug_logging=False)
     
     # Test explicit coordinates
-    response = await agent.query_structured(
+    response = await agent.query(
         "What's the weather at latitude 40.7128 and longitude -74.0060?"
     )
     
@@ -132,7 +132,7 @@ async def test_response_validation():
     """Test response validation functionality."""
     agent = MCPWeatherAgent(debug_logging=False)
     
-    response = await agent.query_structured("Weather in Paris, France")
+    response = await agent.query("Weather in Paris, France")
     
     # Validate the response
     validation = agent.validate_response(response)
@@ -152,7 +152,7 @@ async def test_out_of_scope_query():
     """Test handling of non-weather queries."""
     agent = MCPWeatherAgent(debug_logging=False)
     
-    response = await agent.query_structured("What's the latest news?")
+    response = await agent.query("What's the latest news?")
     
     # Should indicate it's out of scope
     assert "weather" in response.summary.lower() or "agricultural" in response.summary.lower()
@@ -164,7 +164,7 @@ async def test_multiple_locations():
     """Test handling queries with multiple locations."""
     agent = MCPWeatherAgent(debug_logging=False)
     
-    response = await agent.query_structured(
+    response = await agent.query(
         "Compare weather between New York and Los Angeles"
     )
     

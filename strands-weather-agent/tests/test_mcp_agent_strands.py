@@ -121,11 +121,14 @@ async def test_basic_query():
         
         response = await agent.query(query)
         
-        if response and len(response) > 100:
-            results.add_test("Basic Weather Query", True, f"Response length: {len(response)} chars")
-            print(f"✅ Got response: {response[:100]}...")
+        # Extract summary from structured response
+        summary = response.summary if hasattr(response, 'summary') else str(response)
+        
+        if summary and len(summary) > 100:
+            results.add_test("Basic Weather Query", True, f"Response length: {len(summary)} chars")
+            print(f"✅ Got response: {summary[:100]}...")
         else:
-            results.add_test("Basic Weather Query", False, f"Short/empty response: {response[:50] if response else 'None'}")
+            results.add_test("Basic Weather Query", False, f"Short/empty response: {summary[:50] if summary else 'None'}")
         
         return True
         
@@ -154,7 +157,7 @@ async def test_structured_output():
         print("\n1. Testing structured weather forecast...")
         forecast_query = "What's the weather forecast for Iowa City, Iowa?"
         
-        structured_response = await agent.query_structured(forecast_query)
+        structured_response = await agent.query(forecast_query)
         
         if isinstance(structured_response, WeatherQueryResponse):
             results.add_test("Structured Response Type", True, "Returned WeatherQueryResponse")
@@ -191,7 +194,7 @@ async def test_structured_output():
         print("\n2. Testing structured agricultural assessment...")
         ag_query = "Are conditions good for planting corn in Nebraska?"
         
-        ag_response = await agent.query_structured(ag_query)
+        ag_response = await agent.query(ag_query)
         
         if isinstance(ag_response, WeatherQueryResponse):
             results.add_test("Agricultural Response Type", True, "Returned WeatherQueryResponse")
@@ -246,7 +249,10 @@ async def test_error_handling():
         out_of_scope_query = "Tell me about the stock market"
         response = await agent.query(out_of_scope_query)
         
-        if response and "weather" in response.lower() and "agricultural" in response.lower():
+        # Extract summary from structured response
+        summary = response.summary if hasattr(response, 'summary') else str(response)
+        
+        if summary and "weather" in summary.lower() and "agricultural" in summary.lower():
             results.add_test("Out-of-Scope Query Handling", True, "Correctly redirected to weather/agricultural topics")
         else:
             results.add_test("Out-of-Scope Query Handling", False, "Failed to handle out-of-scope query properly")
@@ -256,7 +262,10 @@ async def test_error_handling():
         long_query = "What's the weather " + "very " * 100 + "detailed forecast for Des Moines?"
         response = await agent.query(long_query)
         
-        if response:
+        # Extract summary from structured response
+        summary = response.summary if hasattr(response, 'summary') else str(response)
+        
+        if summary:
             results.add_test("Long Query Handling", True, "Handled long query")
         else:
             results.add_test("Long Query Handling", False, "Failed to handle long query")
@@ -264,7 +273,7 @@ async def test_error_handling():
         # Test structured output with ambiguous location
         print("\n3. Testing ambiguous location handling...")
         try:
-            ambiguous_response = await agent.query_structured(
+            ambiguous_response = await agent.query(
                 "What's the weather in Springfield?"
             )
             
@@ -367,8 +376,11 @@ async def test_tool_integration():
             print(f"\nTesting: {query}")
             response = await agent.query(query)
             
-            if response and len(response) > 50:
-                results.add_test(f"Tool Integration ({expected_tool_type})", True, f"Got response: {len(response)} chars")
+            # Extract summary from structured response
+            summary = response.summary if hasattr(response, 'summary') else str(response)
+            
+            if summary and len(summary) > 50:
+                results.add_test(f"Tool Integration ({expected_tool_type})", True, f"Got response: {len(summary)} chars")
                 print(f"✅ {expected_tool_type} tool integration working")
             else:
                 results.add_test(f"Tool Integration ({expected_tool_type})", False, "No meaningful response")

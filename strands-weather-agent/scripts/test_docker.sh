@@ -142,10 +142,10 @@ test_query() {
     
     response=$(curl -s -X POST http://localhost:7777/query \
         -H "Content-Type: application/json" \
-        -d "{\"query\": \"$query\"}" 2>/dev/null || echo '{"response": "Error: Failed to connect"}')
+        -d "{\"query\": \"$query\"}" 2>/dev/null || echo '{"summary": "Error: Failed to connect"}')
     
     # Extract response and session fields
-    response_text=$(echo "$response" | jq -r '.response' 2>/dev/null || echo "Error parsing response")
+    response_text=$(echo "$response" | jq -r '.summary' 2>/dev/null || echo "Error parsing response")
     session_id=$(echo "$response" | jq -r '.session_id' 2>/dev/null || echo "")
     session_new=$(echo "$response" | jq -r '.session_new' 2>/dev/null || echo "")
     conversation_turn=$(echo "$response" | jq -r '.conversation_turn' 2>/dev/null || echo "")
@@ -291,10 +291,8 @@ echo "   - Weather Agent API: http://localhost:7777"
 echo "   - API Docs: http://localhost:7777/docs"
 echo "   - Health Check: http://localhost:7777/health"
 echo ""
-echo "   MCP Servers:"
-echo "   - Forecast: http://localhost:7778/health"
-echo "   - Historical: http://localhost:7779/health"
-echo "   - Agricultural: http://localhost:7780/health"
+echo "   MCP Server:"
+echo "   - Unified Weather Server: http://localhost:7778/health"
 echo ""
 
 echo -e "${GREEN}✅ All tests passed!${NC}"

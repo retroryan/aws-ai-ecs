@@ -3,7 +3,7 @@
 ## Network Binding Analysis
 
 All services in the Agriculture Agent project bind to `0.0.0.0`:
-- **MCP Servers**: Listen on `0.0.0.0` (ports 7071-7073)
+- **MCP Server**: Listens on `0.0.0.0` (port 7071)
 - **Main Agent**: Listens on `0.0.0.0:7075`
 
 This is necessary for Docker container networking and AWS ECS deployment but requires careful security considerations.

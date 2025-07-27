@@ -27,10 +27,11 @@ This project demonstrates how to build a model-agnostic AI agent system using La
 
 ### System Components
 
-1. **MCP Servers** (Running on separate ports):
-   - **Forecast Server** (port 7071): Weather forecast data
-   - **Historical Server** (port 7072): Historical weather information
-   - **Agricultural Server** (port 7073): Agricultural conditions and recommendations
+1. **Unified MCP Server** (Running on port 7071):
+   - **Weather Server**: Provides all weather-related tools:
+     - `get_weather_forecast`: Weather forecast data
+     - `get_historical_weather`: Historical weather information
+     - `get_agricultural_conditions`: Agricultural conditions and recommendations
 
 2. **Weather Agent**: 
    - Built with LangGraph's `create_react_agent`
@@ -47,10 +48,11 @@ This project demonstrates how to build a model-agnostic AI agent system using La
 
 - `main.py`: Application entry point (interactive chatbot)
 - `weather_agent/mcp_agent.py`: LangGraph agent implementation
-- `mcp_servers/`: FastMCP server implementations
-  - `forecast_server.py`: Weather forecast tools
-  - `historical_server.py`: Historical weather tools
-  - `agricultural_server.py`: Agricultural data tools
+- `mcp_servers/`: FastMCP server implementation
+  - `weather_server.py`: Unified server with all weather tools:
+    - Weather forecast tools
+    - Historical weather tools
+    - Agricultural data tools
 - `weather_agent/models.py`: Pydantic models for structured responses
 - `start_servers.sh` / `stop_servers.sh`: Server lifecycle management
 
@@ -75,7 +77,7 @@ cd ..
 
 ### Running the System
 
-1. Start all MCP servers:
+1. Start the unified MCP server:
 ```bash
 ./start_servers.sh
 ```
@@ -86,7 +88,7 @@ cd weather_agent
 python chatbot.py
 ```
 
-3. Stop servers when done:
+3. Stop the server when done:
 ```bash
 ./stop_servers.sh
 ```
@@ -127,10 +129,8 @@ python -m pytest tests/test_weather_agent.py -v
 ├── weather_agent/          # LangGraph agent implementation
 │   ├── mcp_agent.py       # Main agent logic
 │   └── query_classifier.py # Query intent classification
-├── mcp_servers/           # FastMCP server implementations
-│   ├── forecast_server.py
-│   ├── historical_server.py
-│   └── agricultural_server.py
+├── mcp_servers/           # FastMCP server implementation
+│   └── weather_server.py  # Unified server with all tools
 ├── models/                # Data models
 │   ├── requests.py
 │   └── responses.py
@@ -154,7 +154,8 @@ Key environment variables (configured in `.env`):
 - `BEDROCK_REGION`: AWS region for Bedrock (default: us-west-2)
 - `BEDROCK_TEMPERATURE`: Model temperature setting (default: 0)
 - `LOG_LEVEL`: Logging verbosity (default: INFO)
-- MCP server ports are configured in the server files
+- `MCP_SERVER_URL`: Unified MCP server URL (default: http://127.0.0.1:7071/mcp)
+- MCP server port is configured in the server file (default: 7071)
 
 ### Supported Bedrock Models
 - `anthropic.claude-3-5-sonnet-20240620-v1:0` (Recommended)
@@ -169,7 +170,7 @@ To add new capabilities:
 1. **Add a new MCP server**:
    - Create a new server file in `mcp_servers/`
    - Implement tools using FastMCP decorators
-   - Add server startup to `start_servers.sh`
+   - Update server startup in `start_servers.sh`
 
 2. **Add new tools to existing servers**:
    - Add new methods with `@weather_server.tool()` decorator

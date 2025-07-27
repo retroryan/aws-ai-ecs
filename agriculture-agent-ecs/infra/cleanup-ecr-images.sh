@@ -6,7 +6,7 @@ set -e
 
 # Configuration
 ECR_REPO_PREFIX="agriculture-agent"
-COMPONENTS=("main" "forecast" "historical" "agricultural")
+COMPONENTS=("main" "weather")
 
 echo "=================================================="
 echo "Cleaning up ECR Images"

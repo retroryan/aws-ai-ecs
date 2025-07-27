@@ -86,7 +86,7 @@ class ServiceTester:
             )
             if resp.status_code == 200:
                 data = resp.json()
-                print(f"✅ Response: {data['response']}")
+                print(f"✅ Response: {data['summary']}")
                 if 'session_id' in data:
                     print(f"📝 Session ID: {data['session_id']}")
                 
@@ -255,7 +255,7 @@ class ServiceTester:
                 data = resp.json()
                 all_passed &= True
                 print(f"\n🤖 Testing query: '{query}'")
-                print(f"✅ Response: {data['response']}")
+                print(f"✅ Response: {data['summary']}")
                 
                 # Collect metrics
                 if 'metrics' in data and data['metrics']:

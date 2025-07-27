@@ -55,8 +55,10 @@ class PromptManager:
         """
         Get a system prompt by name with caching and fallback handling.
         
+        Only supports 'default' and 'agriculture_structured' prompts.
+        
         Args:
-            prompt_name: Name of the prompt to load (default, agriculture, simple, etc.)
+            prompt_name: Name of the prompt to load (default or agriculture_structured)
             
         Returns:
             The system prompt content as a string
@@ -65,6 +67,12 @@ class PromptManager:
             ValueError: If prompt_name is invalid
         """
         if not prompt_name:
+            prompt_name = "default"
+        
+        # Only allow default and agriculture_structured
+        allowed_prompts = ["default", "agriculture_structured"]
+        if prompt_name not in allowed_prompts:
+            logger.warning(f"Prompt '{prompt_name}' not allowed, using default")
             prompt_name = "default"
         
         # Return cached prompt if available
