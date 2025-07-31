@@ -166,10 +166,8 @@ class DeploymentStatus:
             
             # Get service names
             services = {
-                'Weather Agent': outputs.get('WeatherAgentServiceName', f"{self.config.stacks.services_stack_name}-weather-agent"),
-                'Forecast Server': outputs.get('ForecastServerServiceName', f"{self.config.stacks.services_stack_name}-forecast-server"),
-                'Historical Server': outputs.get('HistoricalServerServiceName', f"{self.config.stacks.services_stack_name}-historical-server"),
-                'Agricultural Server': outputs.get('AgriculturalServerServiceName', f"{self.config.stacks.services_stack_name}-agricultural-server")
+                'Weather Agent': outputs.get('MainServiceName', f"{self.config.stacks.services_stack_name}-main"),
+                'Weather Server': outputs.get('WeatherServiceName', f"{self.config.stacks.services_stack_name}-weather")
             }
             
             # Display ECS Services Status
@@ -221,20 +219,16 @@ class DeploymentStatus:
                 else:
                     console.print(f"  Weather Agent: [red]UNHEALTHY[/red] ({status_code})")
                 
-                console.print("\n  MCP Servers: Internal services (not exposed via Load Balancer)")
+                console.print("\n  MCP Server: Internal service (not exposed via Load Balancer)")
                 console.print("  Access via Service Connect:")
-                console.print(f"    - Forecast Server: forecast-server.{self.config.stacks.base_stack_name}:7778")
-                console.print(f"    - Historical Server: historical-server.{self.config.stacks.base_stack_name}:7779")
-                console.print(f"    - Agricultural Server: agricultural-server.{self.config.stacks.base_stack_name}:7780")
+                console.print(f"    - Weather Server: weather.{self.config.stacks.base_stack_name}:7778")
             
             # Check recent errors
             print_section("Recent Log Errors (last 5 minutes)")
             
             log_groups = {
-                'Weather Agent': outputs.get('WeatherAgentLogGroup', '/ecs/strands-weather-agent'),
-                'Forecast Server': outputs.get('ForecastServerLogGroup', '/ecs/strands-forecast-server'),
-                'Historical Server': outputs.get('HistoricalServerLogGroup', '/ecs/strands-historical-server'),
-                'Agricultural Server': outputs.get('AgriculturalServerLogGroup', '/ecs/strands-agricultural-server')
+                'Weather Agent': outputs.get('MainLogGroup', '/ecs/strands-weather-agent-main'),
+                'Weather Server': outputs.get('WeatherLogGroup', '/ecs/strands-weather-agent-weather')
             }
             
             for service_name, log_group in log_groups.items():

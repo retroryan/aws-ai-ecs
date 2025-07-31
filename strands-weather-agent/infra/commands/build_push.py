@@ -33,7 +33,7 @@ from infrastructure.aws.ecr import ECRManager
 console = Console()
 
 # Components to build
-COMPONENTS = ["main", "forecast", "historical", "agricultural"]
+COMPONENTS = ["main", "weather"]
 
 
 class ImageBuilder:

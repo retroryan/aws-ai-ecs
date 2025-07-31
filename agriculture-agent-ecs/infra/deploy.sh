@@ -46,7 +46,7 @@ deploy_services() {
     log_info "Stack name: $SERVICES_STACK_NAME"
     log_info "Using Bedrock Model: $BEDROCK_MODEL_ID"
     
-    rain deploy "${SCRIPT_DIR}/services.cfn" $SERVICES_STACK_NAME \
+    rain deploy "${SCRIPT_DIR}/services-consolidated.cfn" $SERVICES_STACK_NAME \
         --region $REGION \
         --yes \
         --params BaseStackName=$BASE_STACK_NAME,BedrockModelId=$BEDROCK_MODEL_ID,BedrockRegion=$BEDROCK_REGION,BedrockTemperature=$BEDROCK_TEMPERATURE,LogLevel=$LOG_LEVEL

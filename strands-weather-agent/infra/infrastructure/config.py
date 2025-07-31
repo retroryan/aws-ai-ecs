@@ -55,34 +55,22 @@ class ECRConfig(BaseModel):
         return f"{self.repo_prefix}-main"
     
     @property
-    def forecast_repo(self) -> str:
-        return f"{self.repo_prefix}-forecast"
-    
-    @property
-    def historical_repo(self) -> str:
-        return f"{self.repo_prefix}-historical"
-    
-    @property
-    def agricultural_repo(self) -> str:
-        return f"{self.repo_prefix}-agricultural"
+    def weather_repo(self) -> str:
+        return f"{self.repo_prefix}-weather"
     
     @property
     def all_repos(self) -> list[str]:
-        return [self.main_repo, self.forecast_repo, self.historical_repo, self.agricultural_repo]
+        return [self.main_repo, self.weather_repo]
 
 
 class ServiceConfig(BaseModel):
     """ECS service configuration."""
     main_service_name: str = 'strands-weather-agent-main'
-    forecast_service_name: str = 'strands-weather-agent-forecast'
-    historical_service_name: str = 'strands-weather-agent-historical'
-    agricultural_service_name: str = 'strands-weather-agent-agricultural'
+    weather_service_name: str = 'strands-weather-agent-weather'
     
     # Service ports
     main_port: int = 7777
-    forecast_port: int = 7778
-    historical_port: int = 7779
-    agricultural_port: int = 7780
+    weather_port: int = 7778
     
     # Health check paths
     health_check_path: str = '/health'
@@ -91,9 +79,7 @@ class ServiceConfig(BaseModel):
     def all_services(self) -> list[str]:
         return [
             self.main_service_name,
-            self.forecast_service_name,
-            self.historical_service_name,
-            self.agricultural_service_name
+            self.weather_service_name
         ]
 
 

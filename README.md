@@ -1,121 +1,112 @@
-# AI AGENT DEMOS - The New Era of Software Development with AI Services on AWS ECS + Bedrock using AWS Strands and LangGraph
+# AWS AI on ECS: From Manual Integration to Autonomous Agents
 
-This repository demonstrates the future of software development: AI-powered applications running on AWS ECS with Bedrock integration. It features complete projects built with [AWS Strands](https://github.com/strands-agents/strands) and [LangGraph](https://github.com/langchain-ai/langgraph), both implementing MCP Servers as separate containerized services to showcase true distributed systems architecture for AI agent development. Each project demonstrates how modern AI services can be containerized and deployed at scale, highlighting different approaches to building intelligent, distributed applications.
+This repository demonstrates the evolution of AI application development on AWS, showcasing three architectures that represent different stages of AI sophistication. Each project deploys to AWS ECS with Bedrock integration, illustrating the progression from imperative programming to declarative, model-driven development.
 
-## Overview
+## The Three Approaches
 
-This repository contains four example projects that showcase the evolution of AI application development on AWS. Each project demonstrates running AI Services on ECS and Bedrock, highlighting different levels of sophistication in the new era of model-driven development. 
+### 1. [Agent ECS Template](./agent-ecs-template): Direct Integration
+A foundational Flask application that makes direct boto3 calls to AWS Bedrock. Users query domain specialists (aerospace, agriculture, etc.) through a client-server architecture. This approach requires manual orchestration of all API calls, response parsing, and error handling.
 
-**All projects use MCP (Model Context Protocol) servers as distributed services**, demonstrating how tool capabilities can be decoupled from agent logic and deployed as independent microservices. This architecture enables true scalability and reusability - the same MCP servers work seamlessly with both LangGraph and AWS Strands implementations, showcasing the power of standardized tool protocols in distributed AI systems.
+**Key Pattern**: Imperative programming where developers explicitly control every interaction with the AI model.
 
-*   **[Agent ECS Template](./agent-ecs-template)**: A foundational template using **direct `boto3` calls** to AWS Bedrock. It's a great starting point for understanding the basics of AI service integration in a client-server architecture.
-*   **[Agriculture Agent ECS](./agriculture-agent-ecs)**: A practical, real-world example using **`LangGraph`** to orchestrate a multi-tool agent system with advanced state management. It showcases MCP servers for distributed tool handling and demonstrates LangGraph's checkpointer system for durable state persistence.
-*   **[Strands Weather Agent](./strands-weather-agent)**: A powerful demonstration of model-driven development using **`AWS Strands`**. This project showcases how agents can autonomously orchestrate complex workflows with minimal code, representing the declarative approach to AI development.
-*   **[Spring AI Agent ECS](./spring-ai-agent-ecs)**: A Java-based implementation using the **`Spring AI`** framework. This is adapted with slight modifications from [jamesward's Sample-Model-Context-Protocol-Demos](https://github.com/jamesward/Sample-Model-Context-Protocol-Demos/tree/main/modules/spring-ai-agent-ecs) to add additional local Docker development and AWS deployment capabilities.
+### 2. [Agriculture Agent ECS](./agriculture-agent-ecs): Graph-Based Orchestration  
+A LangGraph implementation that introduces stateful, multi-step workflows with persistent memory. The agent autonomously selects and executes tools from MCP servers to answer weather and agricultural queries. Features include conversation checkpointing, time-travel debugging, and durable state management.
 
-## The Evolution of AI Orchestration
+**Key Pattern**: Graph-based orchestration where developers define nodes and edges, but the framework handles execution flow and state transitions.
 
-This repository showcases the transition from traditional programming to model-driven architectures where AI agents orchestrate complex workflows autonomously.
+### 3. [Strands Weather Agent](./strands-weather-agent): Model-Driven Development
+An AWS Strands implementation where the AI model itself drives the entire orchestration. Developers simply declare available tools and desired output schemas - the agent handles all planning, execution, and response formatting autonomously.
 
-1.  **Manual Control: `boto3`** (`agent-ecs-template`)
-    *   **What it is**: Low-level, direct SDK calls to the Bedrock API.
-    *   **Developer Effort**: High. Requires manual implementation of all orchestration, state management, and tool integration logic.
-    *   **Best for**: Simple, single-turn applications or learning the fundamentals of Bedrock.
+**Key Pattern**: Declarative programming where developers specify "what" they want, not "how" to achieve it.
 
-2.  **Graph-Based Orchestration: `LangGraph`** (`agriculture-agent-ecs`)
-    *   **What it is**: A framework for building stateful, multi-actor applications with advanced state persistence capabilities.
-    *   **Developer Effort**: Medium. Provides powerful checkpointer system for saving conversation state to databases (PostgreSQL, SQLite), time-travel debugging, and cross-thread memory via the Store interface.
-    *   **Best for**: Applications requiring durable state persistence, human-in-the-loop workflows, and sharing user context across multiple conversations.
+## Architectural Comparison
 
-3.  **Agent Framework: `Spring AI`** (`spring-ai-agent-ecs`)
-    *   **What it is**: A comprehensive framework for building AI applications in Java, abstracting away low-level details.
-    *   **Developer Effort**: Medium. Simplifies integration with models and tools within the Spring ecosystem.
-    *   **Best for**: Enterprise Java developers looking to incorporate AI capabilities into new or existing Spring applications.
+| Aspect | Agent ECS Template | Agriculture Agent (LangGraph) | Strands Weather Agent |
+|--------|-------------------|------------------------------|---------------------|
+| **Orchestration** | Manual via code | Framework-managed graph | Model-driven autonomy |
+| **Code Complexity** | High - explicit control flow | Medium - graph definition | Low - declarative schemas |
+| **Tool Integration** | Direct function calls | MCP servers with adapters | Native MCP protocol |
+| **State Management** | Stateless requests | Persistent checkpointer | In-memory sessions |
+| **Developer Effort** | Write all logic | Define graph structure | Define tools & schemas |
+| **Flexibility** | Complete control | Structured workflows | AI-determined paths |
+| **Error Handling** | Manual implementation | Framework patterns | Model self-correction |
+| **Best For** | Learning fundamentals | Production systems needing audit trails | Rapid prototyping & autonomous agents |
 
-4.  **Model-Driven Orchestration: `AWS Strands`** (`strands-weather-agent`)
-    *   **What it is**: A declarative framework where the **AI model itself drives the orchestration**. The developer declares the desired output, and the agent figures out how to achieve it.
-    *   **Developer Effort**: Low. Eliminates nearly all orchestration code. The developer focuses on defining tools and output schemas.
-    *   **Best for**: Building sophisticated, autonomous agents that can dynamically plan and execute complex tasks with minimal human-written code.
+## Technical Architecture
 
-### Two Powerful Approaches to AI Agent Development
+All projects share common AWS infrastructure patterns:
 
-Both **LangGraph** and **AWS Strands** represent significant advances in AI agent development, each with unique strengths:
-
-**LangGraph: Stateful Intelligence with Persistence**
-- Excels at applications requiring durable state management and human oversight
-- Checkpointer system enables saving/loading conversation state from databases
-- Time-travel debugging through checkpoint history
-- Cross-thread memory sharing via the Store interface
-- Ideal for production systems needing audit trails and state recovery
-
-**AWS Strands: Declarative Autonomous Agents**
-- Minimizes orchestration code through model-driven development
-- Agents autonomously plan and execute complex workflows
-- Developers focus on defining tools and output schemas
-- Ideal for rapid prototyping and autonomous task execution
-
-**Example: Different Approaches, Same Power**
-```python
-# LangGraph: Explicit state management with persistence
-graph = StateGraph(AgentState)
-graph.add_node("weather", weather_node)
-graph.add_node("analysis", analysis_node)
-checkpointer = PostgresSaver(connection_string)
-app = graph.compile(checkpointer=checkpointer)
-
-# Strands: Declarative approach with minimal code
-agent = Agent(name="weather-assistant", foundation_model_config={"model_id": model_id})
-response = agent.structured_output(WeatherAnalysis, "Analyze weather for Chicago farming")
+```
+User → ALB → ECS Service → AWS Bedrock
+              ↓
+         MCP Servers (for projects 2 & 3)
 ```
 
-## Key Features
+### MCP (Model Context Protocol) Integration
+Projects 2 and 3 implement MCP servers as separate containerized microservices:
+- **Distributed Architecture**: Tools run as independent services, not embedded functions
+- **Dynamic Discovery**: Agents discover available tools at runtime
+- **Protocol Standardization**: Same MCP servers work with both LangGraph and Strands
 
-- 🚀 **Quick Start**: Get AI applications running on AWS ECS in minutes.
-- 🤖 **AWS Bedrock Ready**: Pre-configured for Claude, Llama, and other Bedrock models.
-- 🛠️ **Infrastructure as Code**: Complete CloudFormation templates for reproducible deployments.
-- 🐳 **Docker-First**: Containerized applications ready for cloud deployment.
-- 📊 **Monitoring**: Built-in health checks and CloudWatch logging integration.
-- 🔧 **Extensible**: Use these templates as a starting point for your own AI projects.
+### Key Infrastructure Components
+- **ECS Fargate**: Serverless container orchestration
+- **Service Connect**: Internal service discovery
+- **CloudFormation**: Infrastructure as code
+- **IAM Roles**: Least-privilege Bedrock access
 
-## Project Highlights
+## Development Philosophy
 
-- 🔌 **MCP Support**: All projects include `.mcp.json` configuration files for seamless integration with LLM providers like Amazon Q Developer and Claude Code.
-- 📜 **Complete Development Scripts**: Each project contains comprehensive scripts for both local development and AWS deployment workflows.
-- 🏃 **Local Development**: Run and test AI agents locally before deploying to AWS.
-- ☁️ **AWS Deployment**: Production-ready deployment scripts with infrastructure automation.
-- 🛡️ **Best Practices**: Security, logging, and monitoring built into every template.
+This repository illustrates a fundamental shift in software development:
+
+1. **Traditional** (Template): Developers write explicit instructions for every operation
+2. **Transitional** (LangGraph): Developers define workflows, frameworks handle execution  
+3. **Emergent** (Strands): Developers declare capabilities, AI determines implementation
+
+The progression shows how AI is moving from being a tool we control to becoming an autonomous problem-solver that we guide through constraints and objectives.
 
 ## Getting Started
 
-1.  **Explore the sub-projects** in this repository to find the one that best fits your use case and desired level of abstraction.
-2.  **Navigate to the project's directory** and follow the detailed instructions in its local `README.md` file to run and deploy the application.
+Each project includes:
+- Local development with Docker Compose
+- Comprehensive test suites
+- One-command AWS deployment
+- Health monitoring and logging
 
-Each subproject contains detailed documentation and deployment instructions specific to its use case.
+Navigate to any project directory and follow its README for specific instructions. All projects support:
 
-## MCP (Model Context Protocol) Servers for Local Development
+```bash
+# Local development
+./scripts/start_docker.sh
+./scripts/test_docker.sh
+./scripts/stop_docker.sh
 
-Each project in this repository includes a `.mcp.json` configuration file that sets up MCP servers to help with local AI development. These servers extend AI capabilities by providing tools and resources that AI models can use during development with Claude Code or Amazon Q Developer.
+# AWS deployment  
+./infra/deploy.sh all
+./infra/deploy.sh cleanup-all
+```
 
-For detailed setup instructions and available MCP servers, see the [MCP Servers Setup Guide](./MCP_SERVERS_SETUP.md).
+## Model Support
+
+All projects work with AWS Bedrock models that support tool/function calling:
+- Amazon Nova (lite, pro)
+- Anthropic Claude (Haiku, Sonnet)
+- Meta Llama (70B, 405B)
+- Cohere Command R+
 
 ## Prerequisites
 
-- AWS Account with appropriate permissions
-- Docker installed locally
+- AWS Account with Bedrock access
+- Docker and Docker Compose
 - AWS CLI configured
-- Basic understanding of ECS and CloudFormation
+- Python 3.11+ (for local development)
 
-## Contributing
-
-This repository is designed to be a learning resource. Feel free to:
-- Use these templates as starting points for your projects
-- Adapt the patterns to your specific use cases
-- Share improvements and optimizations
-
-## Learn More
+## Resources
 
 - [AWS Bedrock Documentation](https://docs.aws.amazon.com/bedrock/)
-- [Amazon ECS Best Practices](https://docs.aws.amazon.com/AmazonECS/latest/bestpracticesguide/)
-- [AWS CloudFormation](https://aws.amazon.com/cloudformation/)
-- [MCP Servers Setup Guide](./MCP_SERVERS_SETUP.md) - Detailed guide for setting up MCP servers with Claude Code or Amazon Q Developer
+- [LangGraph Documentation](https://python.langchain.com/docs/langgraph)
+- [AWS Strands Documentation](https://github.com/awslabs/multi-agent-orchestrator)
+- [Model Context Protocol](https://modelcontextprotocol.io/)
 
+---
+
+**Note**: These are demonstration projects. Production deployments require additional security, monitoring, and error handling considerations.

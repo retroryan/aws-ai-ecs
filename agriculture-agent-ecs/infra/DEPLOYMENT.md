@@ -4,11 +4,9 @@ This guide provides comprehensive instructions for deploying the Agriculture Age
 
 ## Architecture Overview
 
-The system consists of four containerized services:
+The system consists of two containerized services:
 - **agriculture-agent-main**: FastAPI application that orchestrates the agent
-- **agriculture-agent-forecast**: MCP server for weather forecast data
-- **agriculture-agent-historical**: MCP server for historical weather data
-- **agriculture-agent-agricultural**: MCP server for agricultural conditions
+- **agriculture-agent-weather**: Unified MCP server providing weather forecast, historical weather, and agricultural condition data
 
 ## Prerequisites
 
@@ -67,11 +65,9 @@ Set up container registries:
 ./infra/deploy.sh setup-ecr
 ```
 
-This creates four ECR repositories:
+This creates two ECR repositories:
 - `agriculture-agent-main`
-- `agriculture-agent-forecast`
-- `agriculture-agent-historical`
-- `agriculture-agent-agricultural`
+- `agriculture-agent-weather`
 
 ### 3. Build and Push Images
 
@@ -110,7 +106,7 @@ Deploy the application services:
 ```
 
 This deploys:
-- Three MCP server services
+- Unified weather MCP server service
 - Main agent service with ALB integration
 - Auto-scaling configuration
 
@@ -210,6 +206,9 @@ Remove all resources:
 
 # Remove only services (keep base infrastructure)
 ./infra/deploy.sh cleanup-services
+
+# Clean up legacy ECR repositories from old architecture
+./infra/cleanup-legacy-ecr.sh
 ```
 
 ## Architecture Details
@@ -246,12 +245,10 @@ Internet → ALB (Public Subnets)
 
 ```bash
 # View logs for a specific service
-aws logs tail /ecs/agriculture-agent-main --follow
+aws logs tail /ecs/agriculture-main --follow
 
 # View weather server logs
-aws logs tail /ecs/agriculture-agent-weather --follow
-aws logs tail /ecs/agriculture-agent-historical --follow
-aws logs tail /ecs/agriculture-agent-agricultural --follow
+aws logs tail /ecs/agriculture-weather --follow
 ```
 
 ### CloudWatch Insights

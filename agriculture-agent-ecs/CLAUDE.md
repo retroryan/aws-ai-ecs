@@ -1,183 +1,125 @@
-# LangGraph + FastMCP Weather Agent Demo (Model-Agnostic with AWS Bedrock)
+# CLAUDE.md
 
-This project demonstrates how to build a model-agnostic AI agent system using LangGraph for orchestration and FastMCP for distributed tool servers. It showcases a weather and agricultural data agent that can answer questions about weather conditions, forecasts, and agricultural recommendations using any AWS Bedrock foundation model.
+This file provides guidance to Claude Code (claude.ai/code) when working with code in this repository.
 
-## Architecture Overview
+## Project Overview
 
-### Core Technologies
+This is a LangGraph + FastMCP Weather Agent Demo that implements a model-agnostic AI agent system. It uses LangGraph for orchestration and FastMCP for distributed tool servers, providing weather and agricultural data through a containerized microservices architecture deployable to AWS ECS.
 
-- **LangGraph**: Provides the agent orchestration framework with:
-  - React agent pattern for tool selection and execution
-  - Conversation memory with checkpointing
-  - Structured output transformation
-  - Multi-turn conversation support
-  - Model-agnostic design via `init_chat_model`
+## Commands
 
-- **FastMCP**: Implements Model Context Protocol servers with:
-  - HTTP-based tool serving
-  - Async request handling
-  - JSON-RPC communication
-  - Easy tool discovery and registration
-
-- **AWS Bedrock**: Provides access to foundation models with:
-  - Unified API through Converse interface
-  - Multiple model options (Claude, Llama, Cohere, etc.)
-  - Consistent tool calling across models
-  - Cost-effective scalability
-
-### System Components
-
-1. **Unified MCP Server** (Running on port 7071):
-   - **Weather Server**: Provides all weather-related tools:
-     - `get_weather_forecast`: Weather forecast data
-     - `get_historical_weather`: Historical weather information
-     - `get_agricultural_conditions`: Agricultural conditions and recommendations
-
-2. **Weather Agent**: 
-   - Built with LangGraph's `create_react_agent`
-   - Discovers and calls MCP server tools
-   - Optionally transforms responses to structured Pydantic models
-   - Maintains conversation state across interactions
-
-3. **Support Components**:
-   - Query classifier for intent detection
-   - Structured data models for type safety
-   - Logging and monitoring utilities
-
-## Key Files
-
-- `main.py`: Application entry point (interactive chatbot)
-- `weather_agent/mcp_agent.py`: LangGraph agent implementation
-- `mcp_servers/`: FastMCP server implementation
-  - `weather_server.py`: Unified server with all weather tools:
-    - Weather forecast tools
-    - Historical weather tools
-    - Agricultural data tools
-- `weather_agent/models.py`: Pydantic models for structured responses
-- `start_servers.sh` / `stop_servers.sh`: Server lifecycle management
-
-## Development Setup
-
-### Prerequisites
-- Python 3.11+
-- AWS account with Bedrock access enabled
-- AWS credentials configured
-
-### Installation
+### Local Development
 ```bash
-# Copy and configure environment variables
-cp .env.example .env
-# Edit .env and set your BEDROCK_MODEL_ID (required)
+# Start MCP servers locally
+./scripts/start_servers.sh
 
-# Install dependencies (from weather_agent directory)
-cd weather_agent
-pip install -r requirements.txt
-cd ..
+# Stop MCP servers
+./scripts/stop_servers.sh
+
+# Run the interactive chatbot
+cd weather_agent && python chatbot.py
+
+# Run main application with different modes
+python main.py                # Interactive chatbot (default)
+python main.py --demo         # Run demo queries
+python main.py --structured   # Structured output mode
+python main.py --multi-turn-demo  # Multi-turn conversation demo
 ```
 
-### Running the System
-
-1. Start the unified MCP server:
+### Docker Operations
 ```bash
-./start_servers.sh
+# Start Docker services
+./scripts/start_docker.sh
+
+# Stop Docker services
+./scripts/stop_docker.sh
+
+# Test running Docker services
+./scripts/test_docker.sh
 ```
 
-2. Run the weather agent:
-```bash
-cd weather_agent
-python chatbot.py
-```
-
-3. Stop the server when done:
-```bash
-./stop_servers.sh
-```
-
-## Testing
-
+### Testing
 ```bash
 # Run all tests
 python tests/run_all_tests.py
 
 # Run specific test modules
-python -m pytest tests/test_mcp_servers.py -v
-python -m pytest tests/test_weather_agent.py -v
+cd tests
+python -m pytest test_mcp_servers.py -v
+python -m pytest test_mcp_agent.py -v
+python -m pytest test_coordinates_consolidated.py -v
+python -m pytest test_structured_output_demo.py -v
+python docker_test.py  # Docker integration tests
 ```
 
-## How It Works
+### AWS Deployment
+```bash
+cd infra
 
-1. **User Query**: User submits a natural language query about weather or agriculture
-2. **Agent Processing**: LangGraph agent analyzes the query and determines which tools to use
-3. **Tool Discovery**: Agent discovers available tools from MCP servers via HTTP
-4. **Tool Execution**: Agent calls appropriate MCP server tools with extracted parameters
-5. **Response Transformation**: Raw tool responses are optionally transformed to structured models
-6. **User Response**: Agent formulates a natural language response with the data
+# Full deployment
+./deploy.sh all
 
-## Example Queries
+# Individual deployment steps
+./deploy.sh aws-checks    # Verify AWS setup
+./deploy.sh setup-ecr     # Create ECR repositories
+./deploy.sh build-push    # Build and push Docker images
+./deploy.sh base          # Deploy base infrastructure
+./deploy.sh services      # Deploy application services
 
-- "What's the weather like in Chicago?"
-- "Give me a 5-day forecast for Seattle"
-- "What were the temperatures in New York last week?"
-- "Are conditions good for planting corn in Iowa?"
-- "What's the frost risk for tomatoes in Minnesota?"
-
-## Project Structure
-
-```
-.
-├── main.py                 # FastAPI application entry point
-├── weather_agent/          # LangGraph agent implementation
-│   ├── mcp_agent.py       # Main agent logic
-│   └── query_classifier.py # Query intent classification
-├── mcp_servers/           # FastMCP server implementation
-│   └── weather_server.py  # Unified server with all tools
-├── models/                # Data models
-│   ├── requests.py
-│   └── responses.py
-├── utils/                 # Utility functions
-├── tests/                 # Test suite
-├── logs/                  # Server logs and PIDs
-└── requirements.txt       # Python dependencies
+# Clean up
+./deploy.sh cleanup       # Remove all AWS resources
 ```
 
-## Logging and Monitoring
+## Architecture
 
-- Server logs are written to `logs/` directory
-- Each MCP server maintains its own log file
-- PID files enable process management
-- Structured logging for debugging and monitoring
+### System Flow
+```
+User Query → Weather Agent (LangGraph) → MCP Server (FastMCP) → External APIs
+```
 
-## Environment Variables
+### Core Components
 
-Key environment variables (configured in `.env`):
-- `BEDROCK_MODEL_ID`: AWS Bedrock model to use (required)
-- `BEDROCK_REGION`: AWS region for Bedrock (default: us-west-2)
-- `BEDROCK_TEMPERATURE`: Model temperature setting (default: 0)
-- `LOG_LEVEL`: Logging verbosity (default: INFO)
-- `MCP_SERVER_URL`: Unified MCP server URL (default: http://127.0.0.1:7071/mcp)
-- MCP server port is configured in the server file (default: 7071)
+1. **Weather Agent** (`weather_agent/`):
+   - `mcp_agent.py`: LangGraph React agent that discovers and calls MCP tools
+   - `chatbot.py`: Interactive chat interface with session management
+   - `models.py`: Pydantic models for structured weather/agricultural responses
+   - Uses conversation memory with checkpointing for multi-turn support
 
-### Supported Bedrock Models
-- `anthropic.claude-3-5-sonnet-20240620-v1:0` (Recommended)
-- `anthropic.claude-3-haiku-20240307-v1:0` (Fast & cost-effective)
-- `meta.llama3-70b-instruct-v1:0`
-- `cohere.command-r-plus-v1:0`
+2. **MCP Server** (`mcp_servers/weather_server.py`):
+   - Unified FastMCP server running on port 7071
+   - Provides tools: `get_weather_forecast`, `get_historical_weather`, `get_agricultural_conditions`
+   - HTTP-based with JSON-RPC communication
 
-## Extending the System
+3. **Infrastructure**:
+   - Docker containers with health checks
+   - AWS ECS deployment via CloudFormation
+   - Service discovery through environment variables
 
-To add new capabilities:
+### Key Design Patterns
 
-1. **Add a new MCP server**:
-   - Create a new server file in `mcp_servers/`
-   - Implement tools using FastMCP decorators
-   - Update server startup in `start_servers.sh`
+- **Model-Agnostic**: Works with any AWS Bedrock model via `init_chat_model`
+- **Tool Discovery**: Agent dynamically discovers available tools from MCP servers
+- **Structured Output**: Optional transformation of tool responses to Pydantic models
+- **Session Management**: Conversation state persistence across interactions
 
-2. **Add new tools to existing servers**:
-   - Add new methods with `@weather_server.tool()` decorator
-   - Define input/output schemas
-   - Tools are automatically discovered by the agent
+## Environment Configuration
 
-3. **Customize agent behavior**:
-   - Modify prompts in `mcp_agent.py`
-   - Add new response transformations
-   - Implement custom tool selection logic
+Required environment variables (set in `.env`):
+- `BEDROCK_MODEL_ID`: AWS Bedrock model ID (e.g., `anthropic.claude-3-5-sonnet-20240620-v1:0`)
+- `BEDROCK_REGION`: AWS region (default: us-west-2)
+- `MCP_SERVER_URL`: MCP server endpoint (default: http://127.0.0.1:7071/mcp)
+
+## Development Tips
+
+1. **Adding New Tools**: Add methods with `@weather_server.tool()` decorator in `mcp_servers/weather_server.py`
+2. **Testing Changes**: Always run `tests/run_all_tests.py` before committing
+3. **Docker Development**: Use `docker-compose up` for local containerized testing
+4. **Logging**: Check `logs/` directory for server logs and debugging
+5. **Model Selection**: Test with different Bedrock models by changing `BEDROCK_MODEL_ID`
+
+## Common Issues
+
+- **Port Conflicts**: Ensure ports 7071 (MCP server) and 7075 (agent) are available
+- **AWS Credentials**: Configure AWS CLI or set AWS_PROFILE for Bedrock access
+- **Docker Memory**: Allocate sufficient Docker memory for model inference
+- **Server Startup**: Wait for "Server ready" message before making requests

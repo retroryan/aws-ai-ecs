@@ -135,9 +135,7 @@ The deployment creates:
 
 2. **Services**
    - Weather Agent API (port 7777)
-   - Forecast MCP Server (internal)
-   - Historical MCP Server (internal)
-   - Agricultural MCP Server (internal)
+   - Unified Weather MCP Server (internal, port 7778)
 
 3. **Networking**
    - Service Connect for internal communication

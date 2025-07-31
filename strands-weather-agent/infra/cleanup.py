@@ -57,12 +57,7 @@ class Cleanup:
     
     def delete_ecr_repositories(self) -> bool:
         """Delete all ECR repositories."""
-        repositories = [
-            self.config.ecr.repositories['main'],
-            self.config.ecr.repositories['forecast'],
-            self.config.ecr.repositories['historical'],
-            self.config.ecr.repositories['agricultural']
-        ]
+        repositories = self.config.ecr.all_repos
         
         all_success = True
         for repo in repositories:
@@ -119,12 +114,7 @@ class Cleanup:
         """Clean up only Docker images from ECR."""
         print_section("Cleaning Up Docker Images")
         
-        repositories = [
-            self.config.ecr.repositories['main'],
-            self.config.ecr.repositories['forecast'],
-            self.config.ecr.repositories['historical'],
-            self.config.ecr.repositories['agricultural']
-        ]
+        repositories = self.config.ecr.all_repos
         
         for repo in repositories:
             images = self.ecr_manager.list_images(repo)
